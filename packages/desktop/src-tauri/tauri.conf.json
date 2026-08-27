@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Chat Panel",
+  "version": "0.1.0",
+  "identifier": "com.streaming.chatpanel",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "chat",
+        "title": "Chat Panel",
+        "url": "http://localhost:4700/panel/chat",
+        "width": 380,
+        "height": 620,
+        "minWidth": 260,
+        "minHeight": 200,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "shadow": false,
+        "resizable": true,
+        "skipTaskbar": false,
+        "center": false
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": [
+        "panel"
+      ]
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ]
+  }
+}

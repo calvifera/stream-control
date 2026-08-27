@@ -1,0 +1,649 @@
+/* Overlay pages only. The dashboard has its own stylesheet. */
+
+body.overlay-body {
+  margin: 0;
+  height: 100vh;
+  background: transparent !important;
+  overflow: hidden;
+}
+
+/*
+ * The overlay fills its browser source.
+ *
+ * `.overlay-root` asks for `height: 100%`, which only means anything if its
+ * parent has a definite height — and #root is a bare div from index.html.
+ * Without this, #root collapses to its content, which is invisible for any
+ * overlay whose layers are absolutely positioned: the slideshow rendered at
+ * exactly 24px (its padding, and nothing else) with the image at zero height.
+ * Overlays made of text survived it by accident, growing to fit their content.
+ */
+body.overlay-body > #root {
+  height: 100%;
+}
+
+.overlay-root {
+  --stroke: var(--text-stroke);
+}
+
+.overlay-root * {
+  box-sizing: border-box;
+}
+
+.overlay-status {
+  font-family: system-ui, sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin: 12px;
+  display: inline-block;
+  font-size: 15px;
+}
+
+/* --------------------------------------------------------------- *
+ * Animations
+ * --------------------------------------------------------------- */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-left {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.82); }
+  60% { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.anim-fade { animation: fade-in 260ms ease-out both; }
+.anim-slide-left { animation: slide-left 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-slide-right { animation: slide-right 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-slide-up { animation: slide-up 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-pop { animation: pop-in 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* --------------------------------------------------------------- *
+ * Chat
+ * --------------------------------------------------------------- */
+
+.chat-widget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: 100%;
+}
+
+.chat-row {
+  display: flex;
+  /* Not `center`: a message that wraps to three lines would pull the avatar
+     down to the middle of the block, away from the name it belongs to. Pinned
+     to the top and nudged down by hand, it stays on the first line whatever
+     the message does. */
+  align-items: flex-start;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.chat-avatar,
+.chat-platform {
+  flex: none;
+}
+
+.chat-avatar {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Reserves the circle's space when there is no picture yet, so a row whose
+   avatar is still loading does not start a few pixels left of its neighbours.
+   A column of text with a ragged left edge is markedly harder to read. */
+.chat-avatar-blank {
+  display: block;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.chat-body {
+  min-width: 0;
+}
+
+.chat-name {
+  font-weight: 800;
+  margin-right: 0.35em;
+  text-shadow: var(--text-shadow);
+}
+
+.chat-text {
+  color: var(--text-color);
+  text-shadow: var(--text-shadow);
+}
+
+.chat-badges {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 0.4em;
+  vertical-align: middle;
+}
+
+.chat-badge {
+  font-size: 0.6em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border-radius: 5px;
+  /* Colours come from the platform, set inline by the widget. */
+  background: var(--accent-color);
+  color: #05050a;
+}
+
+/* --------------------------------------------------------------- *
+ * Chat: comfortable
+ *
+ * The original look. A panel behind every message and an avatar big enough to
+ * recognise a face in, which is what you want on a "just chatting" scene where
+ * chat is the content rather than a sidebar next to it.
+ * --------------------------------------------------------------- */
+
+.chat-comfortable .chat-row {
+  gap: 10px;
+  background: var(--item-bg);
+  border-radius: var(--radius);
+  padding: calc(var(--padding) * 0.6) var(--padding);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(3px);
+}
+
+.chat-comfortable .chat-avatar {
+  width: 1.9em;
+  height: 1.9em;
+}
+
+.chat-comfortable .chat-platform {
+  margin-top: 0.45em;
+}
+
+/* --------------------------------------------------------------- *
+ * Chat: compact
+ *
+ * One line per message, nothing behind it. The avatar drops to the height of
+ * the text so the row costs exactly one line, and losing the card padding
+ * takes back the rest. Measured over a 400px strip at 17px: 30.3px per
+ * message against 57.4px comfortable, so 1.9x as much chat in the same
+ * height — and every compact row is the same height, where a comfortable one
+ * is 47 or 60 depending on whether the padding pushed it onto a second line.
+ *
+ * With no panel behind the text, the stroke and shadow are doing all the work
+ * of keeping it readable over gameplay, so they are not optional here.
+ * --------------------------------------------------------------- */
+
+.chat-compact .chat-row {
+  gap: 0.35em;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  backdrop-filter: none;
+}
+
+.chat-compact .chat-avatar,
+.chat-compact .chat-platform {
+  width: 1em;
+  height: 1em;
+  /* Centres a 1em box on a 1.35 line: half the leading. Keeps the avatar and
+     the logo sitting on the text's optical centre rather than its top. */
+  margin-top: 0.175em;
+}
+
+.chat-compact .chat-text,
+.chat-compact .chat-name {
+  -webkit-text-stroke: var(--text-stroke);
+  paint-order: stroke fill;
+}
+
+/* --------------------------------------------------------------- *
+ * Chat: highlights
+ *
+ * A notable viewer's name is painted with a gradient instead of a flat
+ * palette colour, and the gradient slides. Motion is the one thing that
+ * reliably pulls attention off a game, which is exactly why it is rationed:
+ * the tiers are configured so a handful of people per stream get this.
+ *
+ * The sweep animates `background-position` over a background three times the
+ * element's width, so nothing repaints — it composites. `tierStyle` repeats
+ * the first stop at the end, so the wrap is seamless rather than flashing
+ * once per cycle.
+ * --------------------------------------------------------------- */
+
+/*
+ * -150%, and the number is not arbitrary.
+ *
+ * A background-position percentage does not offset by that share of the
+ * element — it positions the image within the difference between the two, so
+ * the offset is `(elementWidth - imageWidth) * p`. At `background-size: 300%`
+ * that difference is -2x the element, so sweeping to -200% travels 4 element
+ * widths while the image tiles every 3. The end frame therefore lands two
+ * thirds of the way through a tile and the wrap back to 0% jumps — a visible
+ * snap once per cycle.
+ *
+ * Travelling exactly one tile means `2 * p = 3`, so p = 150%. Any multiple of
+ * 150% is seamless; nothing else is. If `background-size` in `tierStyle` ever
+ * changes, this has to change with it, which is what `check:highlights`
+ * verifies rather than trusting a comment.
+ */
+@keyframes highlight-sweep {
+  from { background-position: 0% 50%; }
+  to { background-position: -150% 50%; }
+}
+
+/*
+ * Painting glyphs with a background means the fill is transparent, so a
+ * text-shadow would be cast by nothing and is dropped rather than left to do
+ * nothing.
+ *
+ * The stroke is the replacement, but it needs toning down from what plain
+ * text uses. On a normal name the stroke sits behind an opaque fill and only
+ * the outer half is ever visible; here the fill is transparent, so the whole
+ * stroke shows and a 2px opaque black one reads as a hard cartoon outline
+ * around every letter. Two thirds of the width at just over half alpha keeps
+ * the separation from a bright frame without drawing a border.
+ *
+ * The drop-shadow does the rest. Unlike text-shadow it applies to the
+ * rasterised element — gradient and all — so it works where a text-shadow
+ * cannot.
+ */
+.chat-name-tier {
+  text-shadow: none;
+  paint-order: stroke fill;
+  -webkit-text-stroke-width: calc(var(--stroke-width, 0px) * 0.66);
+  -webkit-text-stroke-color: rgba(0, 0, 0, 0.55);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+}
+
+/* Anyone who has asked their system not to animate things gets the gradient
+   without the sweep. It still marks them out; it just holds still. */
+@media (prefers-reduced-motion: reduce) {
+  .chat-name-tier {
+    animation: none !important;
+  }
+}
+
+/* --------------------------------------------------------------- *
+ * Alerts
+ * --------------------------------------------------------------- */
+
+.alerts-widget {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.alert-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--item-bg);
+  border-radius: var(--radius);
+  padding: calc(var(--padding) * 1.2) calc(var(--padding) * 1.6);
+  box-shadow: var(--shadow);
+  border: 2px solid var(--accent-color);
+  max-width: 100%;
+}
+
+.alert-avatar {
+  width: 2.4em;
+  height: 2.4em;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.alert-gift {
+  width: 2.2em;
+  height: 2.2em;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.alert-text {
+  font-weight: 800;
+  text-shadow: var(--text-shadow);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------- *
+ * TTS
+ * --------------------------------------------------------------- */
+
+.tts-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+}
+
+.tts-caption {
+  background: var(--item-bg);
+  border-radius: var(--radius);
+  padding: calc(var(--padding) * 0.7) var(--padding);
+  box-shadow: var(--shadow);
+  max-width: 100%;
+  text-align: center;
+}
+
+.tts-speaker {
+  color: var(--accent-color);
+  font-weight: 800;
+  margin-right: 0.45em;
+}
+
+.tts-text {
+  text-shadow: var(--text-shadow);
+}
+
+.tts-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0.6;
+  font-size: 0.75em;
+}
+
+.tts-queue-item {
+  background: var(--item-bg);
+  border-radius: calc(var(--radius) * 0.6);
+  padding: 4px 10px;
+}
+
+.tts-unlock {
+  font: inherit;
+  font-size: 0.8em;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 2px solid var(--accent-color);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------- *
+ * Goal
+ * --------------------------------------------------------------- */
+
+.goal-widget {
+  width: 100%;
+  background: var(--item-bg);
+  border-radius: var(--radius);
+  padding: var(--padding);
+  box-shadow: var(--shadow);
+}
+
+.goal-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  text-shadow: var(--text-shadow);
+}
+
+.goal-label { font-weight: 800; }
+.goal-value { margin-left: auto; opacity: 0.9; }
+.goal-percent { color: var(--accent-color); font-weight: 800; }
+
+.goal-track {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.goal-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color), #fe2c55);
+  border-radius: 999px;
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --------------------------------------------------------------- *
+ * Leaderboard
+ * --------------------------------------------------------------- */
+
+.leaderboard-widget {
+  width: 100%;
+  background: var(--item-bg);
+  border-radius: var(--radius);
+  padding: var(--padding);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.leaderboard-title {
+  font-weight: 800;
+  color: var(--accent-color);
+  text-shadow: var(--text-shadow);
+}
+
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.leaderboard-rank {
+  width: 1.4em;
+  font-weight: 800;
+  color: var(--accent-color);
+}
+
+.leaderboard-avatar {
+  width: 1.7em;
+  height: 1.7em;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.leaderboard-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: var(--text-shadow);
+}
+
+.leaderboard-value { font-weight: 800; }
+.leaderboard-empty { opacity: 0.55; font-size: 0.85em; }
+
+/* --------------------------------------------------------------- *
+ * Counters
+ * --------------------------------------------------------------- */
+
+.counter-widget {
+  display: flex;
+  gap: calc(var(--gap) * 2);
+  background: var(--item-bg);
+  border-radius: var(--radius);
+  padding: var(--padding);
+  box-shadow: var(--shadow);
+}
+
+.counter-column { flex-direction: column; }
+
+.counter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-shadow: var(--text-shadow);
+}
+
+.counter-value { font-weight: 800; color: var(--accent-color); }
+.counter-label { opacity: 0.75; font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* --------------------------------------------------------------- *
+ * Ticker
+ * --------------------------------------------------------------- */
+
+.ticker-widget {
+  width: 100%;
+  overflow: hidden;
+  background: var(--item-bg);
+  border-radius: var(--radius);
+  padding: calc(var(--padding) * 0.5) 0;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+
+.ticker-track {
+  display: inline-flex;
+  animation-name: ticker-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  padding-left: 100%;
+  text-shadow: var(--text-shadow);
+}
+
+/* --------------------------------------------------------------- *
+ * Custom
+ * --------------------------------------------------------------- */
+
+.custom-widget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: 100%;
+}
+
+.custom-item {
+  background: var(--item-bg);
+  border-radius: var(--radius);
+  padding: var(--padding);
+  box-shadow: var(--shadow);
+  text-shadow: var(--text-shadow);
+}
+
+/* --------------------------------------------------------------- *
+ * Slideshow
+ *
+ * Two layers are stacked; the outgoing one animates out while the
+ * incoming one animates in, which is what separates a crossfade from
+ * a blink through the background.
+ * --------------------------------------------------------------- */
+
+.slideshow {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.slideshow-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.slideshow-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* The outgoing layer paints under the incoming one. */
+.slideshow-layer[class*='-out'] { z-index: 0; }
+.slideshow-layer[class*='-in'] { z-index: 1; }
+
+.slideshow-demo {
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.85);
+  background: linear-gradient(135deg, rgba(37, 244, 238, 0.35), rgba(254, 44, 85, 0.35));
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+}
+
+.slideshow-caption {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 0.8em;
+  opacity: 0.85;
+  padding: 2px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slideshow-empty {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  opacity: 0.5;
+  font-size: 0.85em;
+  text-align: center;
+  padding: 8px;
+}
+
+/* fade: incoming fades up over a held outgoing frame */
+@keyframes ss-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.tx-fade-in { animation-name: ss-fade-in; }
+.tx-fade-out { opacity: 1; }
+
+/* crossfade: both move, so neither the background nor a hard cut shows */
+@keyframes ss-cross-out { from { opacity: 1; } to { opacity: 0; } }
+.tx-crossfade-in { animation-name: ss-fade-in; }
+.tx-crossfade-out { animation-name: ss-cross-out; }
+
+@keyframes ss-slide-left-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes ss-slide-left-out { from { transform: none; } to { transform: translateX(-100%); } }
+.tx-slide-left-in { animation-name: ss-slide-left-in; }
+.tx-slide-left-out { animation-name: ss-slide-left-out; }
+
+@keyframes ss-slide-up-in { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes ss-slide-up-out { from { transform: none; } to { transform: translateY(-100%); } }
+.tx-slide-up-in { animation-name: ss-slide-up-in; }
+.tx-slide-up-out { animation-name: ss-slide-up-out; }
+
+@keyframes ss-zoom-in { from { opacity: 0; transform: scale(1.12); } to { opacity: 1; transform: none; } }
+@keyframes ss-zoom-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.94); } }
+.tx-zoom-in { animation-name: ss-zoom-in; }
+.tx-zoom-out { animation-name: ss-zoom-out; }
+
+/* ken burns: a slow drift that outlasts the transition, so the still image
+ * keeps moving for the whole time it is on screen */
+@keyframes ss-kenburns-in {
+  from { opacity: 0; transform: scale(1.06) translate(1.5%, 1%); }
+  12%  { opacity: 1; }
+  to   { opacity: 1; transform: scale(1.14) translate(-1.5%, -1%); }
+}
+.tx-kenburns-in { animation-name: ss-kenburns-in; animation-duration: 12s !important; }
+.tx-kenburns-out { animation-name: ss-cross-out; }
+
+.tx-none-in { animation-name: none; }
+.tx-none-out { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slideshow-layer { animation: none !important; }
+}

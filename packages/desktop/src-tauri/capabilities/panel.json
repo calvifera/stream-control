@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "panel",
+  "description": "What the chat page loaded from the local server is allowed to do.",
+  "windows": [
+    "chat"
+  ],
+  "remote": {
+    "urls": [
+      "http://localhost:4700",
+      "http://127.0.0.1:4700"
+    ]
+  },
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-set-always-on-top"
+  ]
+}

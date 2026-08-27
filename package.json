@@ -1,0 +1,31 @@
+{
+  "name": "streaming",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Custom TikTok LIVE streaming backend: realtime events, TTS, filters, and OBS overlay sources exposed over ngrok.",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/overlay",
+    "packages/desktop"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,overlay -c cyan,magenta \"npm:dev:server\" \"npm:dev:overlay\"",
+    "dev:server": "npm run dev -w @streaming/server",
+    "dev:overlay": "npm run dev -w @streaming/overlay",
+    "build": "npm run build -w @streaming/shared && npm run build -w @streaming/overlay && npm run build -w @streaming/server",
+    "start": "npm run start -w @streaming/server",
+    "panel": "npm run dev -w @streaming/desktop",
+    "panel:build": "npm run build -w @streaming/desktop",
+    "typecheck": "npm run typecheck -w @streaming/shared && npm run typecheck -w @streaming/server && npm run typecheck -w @streaming/overlay",
+    "test": "npm run check:filters -w @streaming/server",
+    "test:live": "npm run check:api -w @streaming/server && npm run check:penalty -w @streaming/server && npm run check:listeners -w @streaming/server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

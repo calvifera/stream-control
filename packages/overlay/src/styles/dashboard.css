@@ -1,0 +1,2901 @@
+/* ------------------------------------------------------------------ *
+ * Stream Control — dashboard theme
+ *
+ * Deliberately CSS-only: every selector here already exists in the
+ * components, so the look can be reworked without touching a single
+ * component. Overlay styling lives in overlay.css and is left alone —
+ * those render on stream, and changing them changes what viewers see.
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* Surfaces, darkest to lightest. */
+  --bg: #07080d;
+  --bg-deep: #04050a;
+  --bg-raised: #0e111b;
+  --bg-input: #0a0c14;
+  --bg-hover: #141928;
+
+  --border: #1e2434;
+  --border-bright: #2b3348;
+
+  --text: #eaeef7;
+  --text-muted: #858da3;
+  --text-dim: #5d6478;
+
+  /* TikTok's own two colours: everything accent-coloured comes from here. */
+  --accent: #25f4ee;
+  --accent-2: #fe2c55;
+  --accent-soft: rgba(37, 244, 238, 0.12);
+  --accent-line: rgba(37, 244, 238, 0.4);
+
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --error: #f87171;
+
+  --grad-accent: linear-gradient(135deg, #25f4ee, #6ea8ff 55%, #fe2c55);
+  --grad-surface: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+
+  --radius: 14px;
+  --radius-sm: 10px;
+
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9);
+  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 26px 50px -26px rgba(0, 0, 0, 0.95);
+  --glow-accent: 0 0 0 1px rgba(37, 244, 238, 0.35), 0 0 22px -4px rgba(37, 244, 238, 0.45);
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv02', 'cv03', 'cv04';
+  min-height: 100vh;
+}
+
+/* Two fixed, non-interactive layers behind everything: a slow-drifting
+ * aurora for depth and a faint grid so large empty panels don't read as
+ * flat black. Both are pointer-events:none so they never eat a click. */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::before {
+  background:
+    radial-gradient(70ch 60ch at 12% -10%, rgba(37, 244, 238, 0.16), transparent 65%),
+    radial-gradient(60ch 55ch at 92% 4%, rgba(254, 44, 85, 0.13), transparent 62%),
+    radial-gradient(70ch 60ch at 60% 110%, rgba(110, 168, 255, 0.1), transparent 65%);
+  animation: aurora 26s var(--ease) infinite alternate;
+}
+
+body::after {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 46px 46px;
+  /* Fades the grid out toward the bottom so it reads as atmosphere. */
+  mask-image: linear-gradient(180deg, #000 0%, transparent 70%);
+}
+
+@keyframes aurora {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(0, -3%, 0) scale(1.12); }
+}
+
+.app-loading {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  position: relative;
+  z-index: 1;
+}
+
+/* A quiet pulse so a slow connect doesn't look like a hung page. */
+.app-loading::after {
+  content: '';
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(37, 244, 238, 0.16), transparent 70%);
+  animation: breathe 2.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 0.85; transform: scale(1.05); }
+}
+
+.app {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px 22px 96px;
+  position: relative;
+  z-index: 1;
+}
+
+/* --------------------------------------------------------------- *
+ * Header
+ * --------------------------------------------------------------- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.brand { display: flex; align-items: center; gap: 14px; }
+
+/* Rotating conic sweep with a dark core — reads as a live status orb
+ * rather than a static logo square. */
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  position: relative;
+  background: conic-gradient(from 0deg, var(--accent), #6ea8ff, var(--accent-2), var(--accent));
+  box-shadow: 0 0 26px -4px rgba(37, 244, 238, 0.55);
+  animation: spin 7s linear infinite;
+  flex-shrink: 0;
+}
+
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 8px;
+  background: var(--bg-deep);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.8) inset;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(100deg, #ffffff 20%, #a9b6d0);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.app-header p {
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.01em;
+}
+
+.header-status { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01));
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  transition: border-color 180ms var(--ease), transform 180ms var(--ease);
+}
+
+.header-chip:hover { border-color: var(--border-bright); }
+
+.header-chip-action {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-color: rgba(251, 191, 36, 0.5);
+  color: var(--warn);
+  animation: nudge 2.4s ease-in-out infinite;
+}
+
+.header-chip-action:hover {
+  background: rgba(251, 191, 36, 0.14);
+  transform: translateY(-1px);
+}
+
+/* Emergency stop. Deliberately the loudest control in the header — it is the
+ * one thing you need to hit without looking during an incident. */
+.header-kill {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  color: #ffc9d2;
+  border-color: rgba(254, 44, 85, 0.55);
+  background: linear-gradient(180deg, rgba(254, 44, 85, 0.22), rgba(254, 44, 85, 0.08));
+  transition: all 140ms var(--ease);
+}
+
+.header-kill:hover {
+  color: #fff;
+  border-color: var(--accent-2);
+  background: linear-gradient(180deg, rgba(254, 44, 85, 0.4), rgba(254, 44, 85, 0.18));
+  box-shadow: 0 0 20px -4px rgba(254, 44, 85, 0.8);
+  transform: translateY(-1px);
+}
+
+.header-kill:active { transform: translateY(0) scale(0.97); }
+
+.kill-count {
+  margin-left: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(254, 44, 85, 0.35);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+@keyframes nudge {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  50% { box-shadow: 0 0 18px -2px rgba(251, 191, 36, 0.5); }
+}
+
+/* --------------------------------------------------------------- *
+ * Tabs — a floating segmented control, stuck to the top so the nav
+ * stays reachable on the long panels.
+ * --------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  gap: 3px;
+  padding: 5px;
+  margin: 0 0 22px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(10, 12, 20, 0.72);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: var(--shadow-panel);
+  overflow-x: auto;
+  scrollbar-width: none;
+  position: sticky;
+  top: 10px;
+  z-index: 30;
+}
+
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  padding: 9px 17px;
+  border-radius: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+  transition: color 180ms var(--ease), background 180ms var(--ease);
+}
+
+.tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+
+.tab-on {
+  color: #04121a;
+  background: linear-gradient(135deg, var(--accent), #63e0ff);
+  box-shadow: 0 0 20px -6px rgba(37, 244, 238, 0.7);
+}
+
+.tab-on:hover { color: #04121a; background: linear-gradient(135deg, var(--accent), #63e0ff); }
+
+/* --------------------------------------------------------------- *
+ * Panels
+ * --------------------------------------------------------------- */
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+  /* Must stay visible: the user picker's dropdown is absolutely positioned
+   * inside a panel and would otherwise be cut off at the panel edge. The
+   * corners are kept clean by rounding .panel-head directly instead. */
+  overflow: visible;
+  background:
+    var(--grad-surface),
+    rgba(14, 17, 27, 0.72);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-panel);
+  transition: border-color 220ms var(--ease), box-shadow 220ms var(--ease);
+  /* Staggered entry, so switching tabs feels like content arriving
+   * rather than snapping. */
+  animation: rise 420ms var(--ease) backwards;
+  position: relative;
+}
+
+/* Hairline of accent along the top edge, brightest in the middle. Inset far
+ * enough to clear the rounded corners now that the panel no longer clips. */
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--radius);
+  right: var(--radius);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(37, 244, 238, 0.5), transparent);
+  opacity: 0.55;
+  z-index: 1;
+}
+
+/* Each panel is its own stacking context (backdrop-filter), so a dropdown
+ * inside one would paint beneath the panels that follow it. Lift whichever
+ * panel currently holds an open menu above its siblings. */
+.panel:has(.user-picker-menu) { z-index: 20; }
+
+.panel:hover {
+  border-color: var(--border-bright);
+  box-shadow: var(--shadow-lift);
+}
+
+.panel:nth-child(1) { animation-delay: 0ms; }
+.panel:nth-child(2) { animation-delay: 45ms; }
+.panel:nth-child(3) { animation-delay: 90ms; }
+.panel:nth-child(4) { animation-delay: 135ms; }
+.panel:nth-child(5) { animation-delay: 180ms; }
+.panel:nth-child(n + 6) { animation-delay: 220ms; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent);
+  /* Carries the panel's top corners itself, since the panel cannot clip. */
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.panel-head p {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  max-width: 74ch;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.panel-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.panel-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+}
+
+.panel-body h3 {
+  margin: 6px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+
+/* --------------------------------------------------------------- *
+ * Forms
+ * --------------------------------------------------------------- */
+
+.row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.row > * { flex: 1 1 200px; min-width: 0; }
+
+.field { display: flex; flex-direction: column; gap: 7px; }
+
+.field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  min-height: 1em;
+}
+
+.field-hint {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  display: block;
+  line-height: 1.5;
+}
+
+.input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease), background 160ms var(--ease);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) inset;
+}
+
+.input:hover { border-color: var(--border-bright); }
+
+.input:focus {
+  border-color: var(--accent-line);
+  background: #0b0e18;
+  box-shadow: var(--glow-accent), 0 1px 2px rgba(0, 0, 0, 0.3) inset;
+}
+
+.input::placeholder { color: var(--text-dim); }
+
+.input.mono,
+.mono {
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+}
+
+textarea.input { resize: vertical; line-height: 1.5; }
+
+select.input {
+  cursor: pointer;
+  /* Room for the caret drawn below. */
+  padding-right: 34px;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+select.input option { background: var(--bg-raised); color: var(--text); }
+
+.color-field { display: flex; gap: 8px; align-items: center; }
+
+.color-field input[type='color'] {
+  width: 40px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  transition: border-color 160ms var(--ease), transform 160ms var(--ease);
+}
+
+.color-field input[type='color']:hover { border-color: var(--accent-line); transform: scale(1.05); }
+
+/* Sliders — custom track and thumb, since the native ones ignore the theme. */
+.slider { display: flex; align-items: center; gap: 12px; }
+
+.slider input {
+  flex: 1;
+  appearance: none;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(37, 244, 238, 0.55), rgba(37, 244, 238, 0.12));
+  outline: none;
+  cursor: pointer;
+}
+
+.slider input::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #eafeff;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 12px -2px rgba(37, 244, 238, 0.9);
+  transition: transform 140ms var(--ease);
+}
+
+.slider input::-webkit-slider-thumb:hover { transform: scale(1.18); }
+.slider input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #eafeff;
+  border: 2px solid var(--accent);
+}
+
+.slider-value {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  min-width: 52px;
+  text-align: right;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.list-editor { display: flex; flex-direction: column; gap: 6px; }
+
+/* Scrub number — wheel-adjustable integer with a fill bar for scale. */
+.scrub { display: flex; flex-direction: column; gap: 6px; }
+
+.scrub-input {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  padding: 9px 8px;
+  cursor: ns-resize; /* signals that the wheel does something here */
+  color: var(--accent);
+}
+
+.scrub-input:hover {
+  border-color: var(--accent-line);
+  background: #0b0e18;
+}
+
+.scrub-meta { display: flex; align-items: center; gap: 9px; }
+
+.scrub-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: #1b2130;
+  overflow: hidden;
+}
+
+.scrub-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(37, 244, 238, 0.5), var(--accent));
+  transition: width 140ms var(--ease);
+}
+
+.scrub-caption {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: right;
+}
+
+/* Toggle */
+
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+}
+
+.toggle input { position: absolute; opacity: 0; pointer-events: none; }
+
+.toggle-track {
+  width: 40px;
+  height: 23px;
+  border-radius: 999px;
+  background: #1c2231;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+  transition: background 220ms var(--ease), border-color 220ms var(--ease), box-shadow 220ms var(--ease);
+  margin-top: 1px;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #6c7488;
+  transition: transform 260ms var(--ease), background 220ms var(--ease);
+}
+
+.toggle:hover .toggle-track { border-color: var(--border-bright); }
+
+.toggle input:checked + .toggle-track {
+  background: linear-gradient(135deg, rgba(37, 244, 238, 0.35), rgba(37, 244, 238, 0.18));
+  border-color: var(--accent-line);
+  box-shadow: 0 0 16px -4px rgba(37, 244, 238, 0.6);
+}
+
+.toggle input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(17px);
+  background: #eafeff;
+  box-shadow: 0 0 10px rgba(37, 244, 238, 0.9);
+}
+
+.toggle input:focus-visible + .toggle-track { box-shadow: var(--glow-accent); }
+
+.toggle-text { font-size: 13px; }
+
+/* Buttons */
+
+.btn {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 160ms var(--ease), transform 160ms var(--ease),
+    box-shadow 160ms var(--ease), background 160ms var(--ease);
+}
+
+/* Light sweep on hover. Sits above the background, below the label. */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.16), transparent 65%);
+  transform: translateX(-120%);
+  transition: transform 620ms var(--ease);
+}
+
+.btn:hover:not(:disabled)::after { transform: translateX(120%); }
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent-line);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -12px rgba(37, 244, 238, 0.7);
+}
+
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:focus-visible { box-shadow: var(--glow-accent); }
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), #57dcff 55%, #7ba8ff);
+  border-color: transparent;
+  color: #04121a;
+  box-shadow: 0 8px 24px -12px rgba(37, 244, 238, 0.9);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 12px 30px -12px rgba(37, 244, 238, 1);
+  border-color: transparent;
+}
+
+.btn-danger {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.14), rgba(248, 113, 113, 0.04));
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.8);
+  box-shadow: 0 8px 20px -12px rgba(248, 113, 113, 0.8);
+}
+
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Chips */
+
+.chips { display: flex; gap: 7px; flex-wrap: wrap; }
+
+.chip {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 160ms var(--ease);
+}
+
+.chip:hover { border-color: var(--border-bright); color: var(--text); transform: translateY(-1px); }
+
+.chip-on {
+  border-color: var(--accent-line);
+  color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 14px -6px rgba(37, 244, 238, 0.8);
+}
+
+.chip-static { cursor: default; }
+.chip-static:hover { transform: none; }
+
+/* --------------------------------------------------------------- *
+ * Status
+ * --------------------------------------------------------------- */
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--text-dim);
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Live states pulse; idle deliberately does not, so "nothing is
+ * happening" looks different at a glance from "connected". */
+.dot-connected {
+  background: var(--ok);
+  box-shadow: 0 0 10px var(--ok);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+.dot-connecting,
+.dot-reconnecting {
+  background: var(--warn);
+  box-shadow: 0 0 10px var(--warn);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+.dot-error { background: var(--error); box-shadow: 0 0 10px var(--error); }
+.dot-idle { background: var(--text-dim); box-shadow: none; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.banner {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  line-height: 1.55;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Coloured spine on the leading edge — faster to read than border tint. */
+.banner::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--text-dim);
+}
+
+.banner code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 11.5px;
+}
+
+.banner-error {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.07);
+  color: #fca5a5;
+}
+
+.banner-error::before { background: var(--error); }
+
+.banner-ok {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.06);
+  color: #6ee7b7;
+}
+
+.banner-ok::before { background: var(--ok); }
+
+.app-banner { margin-bottom: 16px; }
+
+.muted { color: var(--text-muted); }
+.error-text { color: var(--error); }
+.nowrap { white-space: nowrap; }
+
+/* --------------------------------------------------------------- *
+ * Stats + tables
+ * --------------------------------------------------------------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 11px;
+}
+
+.stat {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 200ms var(--ease), transform 200ms var(--ease);
+}
+
+.stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
+}
+
+.stat:hover { border-color: var(--border-bright); transform: translateY(-2px); }
+
+.stat-value {
+  font-size: 25px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(160deg, #ffffff, var(--accent) 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1.15;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  font-weight: 700;
+}
+
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+.table th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--text-dim);
+  font-weight: 700;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 11px;
+  border-bottom: 1px solid rgba(30, 36, 52, 0.7);
+  vertical-align: middle;
+}
+
+.table tbody tr { transition: background 160ms var(--ease); }
+.table tbody tr:hover { background: rgba(255, 255, 255, 0.028); }
+.table tr:last-child td { border-bottom: none; }
+
+.row-disabled { opacity: 0.4; }
+
+.url-cell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.plain-list { margin: 0; padding-left: 18px; }
+.plain-list li { margin: 3px 0; }
+
+/* --------------------------------------------------------------- *
+ * Rules + sources
+ * --------------------------------------------------------------- */
+
+.rule-layout { display: grid; grid-template-columns: minmax(190px, 268px) 1fr; gap: 20px; }
+
+@media (max-width: 860px) {
+  .rule-layout { grid-template-columns: 1fr; }
+}
+
+.rule-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+
+.rule-item,
+.source-card {
+  width: 100%;
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 180ms var(--ease), background 180ms var(--ease),
+    transform 180ms var(--ease);
+}
+
+.rule-item { padding: 11px 13px 11px 28px; }
+.source-card { padding: 13px 13px 13px 28px; }
+
+.rule-item:hover,
+.source-card:hover {
+  border-color: var(--border-bright);
+  background: var(--bg-hover);
+  transform: translateX(2px);
+}
+
+.rule-item .dot { position: absolute; left: 12px; top: 16px; }
+.source-card .dot { position: absolute; left: 12px; top: 18px; }
+
+/* Selected state: accent left edge plus a wash, so it stays obvious
+ * even when several cards are hovered in sequence. */
+.rule-item-on,
+.source-card-on {
+  border-color: var(--accent-line);
+  background: linear-gradient(100deg, var(--accent-soft), rgba(37, 244, 238, 0.03));
+  box-shadow: 0 0 20px -10px rgba(37, 244, 238, 0.8);
+}
+
+.rule-item-on::before,
+.source-card-on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.rule-item-on:hover,
+.source-card-on:hover { transform: translateX(2px); background: linear-gradient(100deg, var(--accent-soft), rgba(37, 244, 238, 0.03)); }
+
+.rule-name { font-weight: 650; }
+.rule-item .muted, .source-card .muted { font-size: 11px; }
+
+.rule-editor { min-width: 0; }
+.rule-form { display: flex; flex-direction: column; gap: 15px; }
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 11px;
+}
+
+/* --------------------------------------------------------------- *
+ * Login gate
+ * --------------------------------------------------------------- */
+
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  width: min(360px, 100%);
+  padding: 28px 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--grad-surface);
+  box-shadow: var(--shadow-panel);
+}
+
+.login-title {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.login-card .muted { margin: 0; font-size: 12.5px; }
+.login-input { font-size: 15px; }
+.login-submit { justify-content: center; }
+.login-hint { line-height: 1.55; border-top: 1px solid var(--border); padding-top: 12px; }
+
+/* --------------------------------------------------------------- *
+ * Starter word list packs
+ * --------------------------------------------------------------- */
+
+.pack-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--grad-surface);
+}
+
+/* The ones that collide with ordinary English get a warning edge, so the
+   difference is visible before you press Add rather than after. */
+.pack-row-risky {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.05);
+}
+
+.pack-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.pack-blurb {
+  margin: 4px 0 0;
+  font-size: 12px;
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------- *
+ * Source gallery
+ * --------------------------------------------------------------- */
+
+.gallery-group { display: flex; flex-direction: column; gap: 11px; }
+
+.gallery-group-head {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  width: 100%;
+}
+
+.gallery-group-head:hover { color: var(--accent); }
+.gallery-group-head strong { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; }
+.gallery-group-head .muted { font-size: 11px; margin-left: auto; }
+
+.gallery-caret {
+  display: inline-block;
+  color: var(--text-dim);
+  transition: transform 180ms var(--ease);
+}
+
+.gallery-caret-open { transform: rotate(90deg); }
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+
+.gallery-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-input);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 200ms var(--ease), transform 200ms var(--ease),
+    box-shadow 200ms var(--ease);
+}
+
+.gallery-card:hover {
+  border-color: var(--border-bright);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+.gallery-card-on {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 24px -10px rgba(37, 244, 238, 0.85);
+}
+
+/* Checkerboard so transparent overlays read as transparent, the way OBS
+ * shows them, rather than looking like they have a black background. */
+.gallery-stage {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background-color: #0a0c14;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.gallery-frame {
+  border: 0;
+  display: block;
+  transform-origin: top left;
+  /* Previews are for looking at, not clicking into. */
+  pointer-events: none;
+}
+
+.gallery-disabled {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: rgba(248, 113, 113, 0.2);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  color: #fca5a5;
+}
+
+.gallery-meta { padding: 13px; display: flex; flex-direction: column; gap: 8px; }
+
+.gallery-title { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.gallery-title .muted { font-size: 11px; white-space: nowrap; }
+
+.gallery-blurb { margin: 0; font-size: 12px; line-height: 1.5; }
+
+.gallery-url {
+  font-size: 11.5px;
+  color: var(--accent);
+  background: rgba(37, 244, 238, 0.08);
+  border: 1px solid rgba(37, 244, 238, 0.16);
+  padding: 4px 8px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 13px;
+}
+
+.test-result { display: flex; flex-direction: column; gap: 13px; }
+
+/* --------------------------------------------------------------- *
+ * People
+ * --------------------------------------------------------------- */
+
+.user-picker { position: relative; }
+
+.user-picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: rgba(14, 17, 27, 0.96);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border-bright);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.85);
+  max-height: 330px;
+  overflow-y: auto;
+  padding: 5px;
+  animation: rise 180ms var(--ease);
+}
+
+.user-picker-row {
+  width: 100%;
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  transition: background 140ms var(--ease);
+}
+
+.user-picker-row:hover { background: var(--accent-soft); }
+
+.user-picker-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border-bright);
+}
+
+.user-picker-avatar-blank {
+  background: linear-gradient(135deg, #232a3d, #161b28);
+}
+
+.user-picker-names { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.user-picker-names strong { font-size: 13px; font-weight: 600; }
+.user-picker-names .muted { font-size: 11.5px; }
+
+.user-picker-meta { display: flex; gap: 6px; align-items: center; font-size: 11px; flex-shrink: 0; }
+
+.user-picker-empty { padding: 13px; color: var(--text-dim); font-size: 12.5px; }
+.user-picker-freeform { color: var(--accent); font-size: 12.5px; font-weight: 500; }
+
+.chip-strike {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.12);
+}
+
+/*
+ * Lists that grow without limit: trusted users, the penalty box, per-user
+ * voice profiles and the sound-alike review feed all share this class. Left
+ * unbounded, one long list pushes every panel below it off the screen, so
+ * they scroll internally instead. The cap is generous enough that short
+ * lists never show a scrollbar at all.
+ */
+.people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 420px;
+  overflow-y: auto;
+  /* Room for the scrollbar so rows do not shift when one appears. */
+  padding-right: 4px;
+}
+
+/* Expanded starter-pack term lists run to 60+ chips. */
+.pack-row .chips {
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* A source per scene adds up quickly once groups are in use. */
+.gallery-group .gallery-grid {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Consistent, unobtrusive scrollbars for every internally scrolling list. */
+.people-list,
+.archive-table-wrap,
+.pack-row .chips,
+.gallery-group .gallery-grid,
+.event-log,
+.modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-bright) transparent;
+}
+
+.people-list::-webkit-scrollbar,
+.archive-table-wrap::-webkit-scrollbar,
+.pack-row .chips::-webkit-scrollbar,
+.gallery-group .gallery-grid::-webkit-scrollbar,
+.event-log::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar {
+  width: 9px;
+}
+
+.people-list::-webkit-scrollbar-thumb,
+.archive-table-wrap::-webkit-scrollbar-thumb,
+.pack-row .chips::-webkit-scrollbar-thumb,
+.gallery-group .gallery-grid::-webkit-scrollbar-thumb,
+.event-log::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--border-bright);
+  border-radius: 999px;
+}
+
+.people-list::-webkit-scrollbar-track,
+.archive-table-wrap::-webkit-scrollbar-track,
+.pack-row .chips::-webkit-scrollbar-track,
+.gallery-group .gallery-grid::-webkit-scrollbar-track,
+.event-log::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.person-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  flex-wrap: wrap;
+  transition: border-color 180ms var(--ease), background 180ms var(--ease);
+}
+
+.person-row:hover { border-color: var(--border-bright); background: var(--bg-hover); }
+
+.person-row-penalty {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: linear-gradient(100deg, rgba(248, 113, 113, 0.06), transparent 60%);
+}
+
+.person-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border-bright);
+  background: linear-gradient(135deg, #232a3d, #161b28);
+}
+
+.person-avatar-blank { border-style: dashed; }
+
+.person-detail { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.person-name { font-weight: 650; }
+.person-detail .muted { font-size: 11.5px; }
+
+.person-evidence {
+  margin-top: 5px;
+  padding: 6px 9px;
+  background: rgba(248, 113, 113, 0.1);
+  border-left: 2px solid rgba(248, 113, 113, 0.6);
+  border-radius: 0 6px 6px 0;
+  color: #fca5a5;
+  overflow-wrap: anywhere;
+}
+
+.person-block { display: flex; flex-direction: column; gap: 9px; }
+
+/* Open row joins visually to the editor beneath it, so it reads as one
+ * object rather than an unrelated panel that appeared. */
+.person-row-open {
+  border-color: var(--accent-line);
+  background: linear-gradient(100deg, var(--accent-soft), rgba(37, 244, 238, 0.03));
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+  box-shadow: 0 0 22px -12px rgba(37, 244, 238, 0.9);
+}
+
+.voice-profile-editor {
+  padding: 16px;
+  background: linear-gradient(165deg, rgba(37, 244, 238, 0.07), rgba(255, 255, 255, 0));
+  border: 1px solid var(--accent-line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  animation: rise 240ms var(--ease);
+  box-shadow: 0 0 26px -14px rgba(37, 244, 238, 0.9);
+}
+
+/* When it follows an open row, the two share one outline. */
+.person-row-open + .voice-profile-editor {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: none;
+  margin-top: -1px;
+}
+
+/* --------------------------------------------------------------- *
+ * Logs
+ * --------------------------------------------------------------- */
+
+.event-log {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 440px;
+  overflow-y: auto;
+  font-size: 12.5px;
+}
+
+.event-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  transition: border-color 140ms var(--ease), background 140ms var(--ease);
+  animation: slide-in 260ms var(--ease);
+}
+
+.event-row:hover { border-color: var(--border); background: var(--bg-hover); }
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #212839;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.tag-chat { background: rgba(37, 244, 238, 0.18); color: var(--accent); }
+.tag-gift { background: rgba(254, 44, 85, 0.2); color: #ff8aa3; }
+.tag-follow, .tag-subscribe { background: rgba(52, 211, 153, 0.18); color: var(--ok); }
+.tag-error { background: rgba(248, 113, 113, 0.2); color: var(--error); }
+.tag-warn { background: rgba(251, 191, 36, 0.18); color: var(--warn); }
+
+/* --------------------------------------------------------------- *
+ * Modal
+ * --------------------------------------------------------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 5, 10, 0.66);
+  backdrop-filter: blur(6px);
+  animation: fade-in 160ms var(--ease);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  width: min(1000px, 100%);
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  overflow: hidden;
+  animation: modal-in 220ms var(--ease);
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent);
+  flex-shrink: 0;
+}
+
+.modal-title h2 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+.modal-title p { margin: 3px 0 0; font-size: 12px; }
+
+.modal-close {
+  appearance: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 150ms var(--ease);
+}
+
+.modal-close:hover {
+  color: var(--text);
+  border-color: var(--accent-2);
+  background: rgba(254, 44, 85, 0.16);
+}
+
+.modal-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 20px 24px;
+  outline: none;
+}
+
+/* Panels inside a dialog sit on an already-raised surface, so they drop the
+ * glass treatment and the entry animation — otherwise every one of them
+ * re-animates each time the dialog opens. */
+.modal-body .panel {
+  backdrop-filter: none;
+  background: var(--bg-input);
+  animation: none;
+  box-shadow: none;
+}
+
+.modal-body .panel:hover { transform: none; box-shadow: none; }
+.modal-body .panel::before { display: none; }
+.modal-body .panel:last-child { margin-bottom: 0; }
+
+@media (max-width: 620px) {
+  .modal-backdrop { padding: 10px; }
+  .modal { max-height: 94vh; }
+  .modal-body { padding: 14px; }
+}
+
+/* --------------------------------------------------------------- *
+ * Scrollbars
+ * --------------------------------------------------------------- */
+
+* { scrollbar-width: thin; scrollbar-color: #262d40 transparent; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  background: #262d40;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover { background: #38415c; background-clip: content-box; }
+
+::selection { background: rgba(37, 244, 238, 0.3); color: #fff; }
+
+/* --------------------------------------------------------------- *
+ * Motion preference
+ *
+ * The aurora, the spinning mark and the pulsing dots are decoration.
+ * Anyone who has asked the OS for less motion gets none of it.
+ * --------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .app { padding: 18px 14px 72px; }
+  .panel-body, .panel-head { padding: 15px; }
+  .app-header h1 { font-size: 18px; }
+}
+
+/* Slideshow folder contents */
+.slide-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.slide-thumb {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  flex-shrink: 0;
+}
+
+.slide-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.slide-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(4, 5, 10, 0.75);
+  color: #fca5a5;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms var(--ease);
+}
+
+.slide-thumb:hover .slide-remove { opacity: 1; }
+.slide-remove:hover { background: rgba(248, 113, 113, 0.9); color: #fff; }
+
+/* ------------------------------------------------------------------ *
+ * Archive
+ *
+ * The one tab that renders an unbounded list, so the table body scrolls
+ * inside a fixed frame rather than growing the page. Pagination caps it at
+ * 50 rows, but 50 rows is still taller than the viewport.
+ * ------------------------------------------------------------------ */
+
+.archive-controls,
+.list-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.archive-search {
+  flex: 1 1 260px;
+  min-width: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 9px 12px;
+  font: inherit;
+}
+
+.archive-search:focus {
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: var(--glow-accent);
+}
+
+.archive-sort,
+.list-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.archive-sort select,
+.list-sort select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.archive-filters { margin-bottom: 10px; }
+.archive-count { margin: 0 0 10px; font-size: 13px; }
+
+.archive-table-wrap {
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.archive-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.archive-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* Opaque on purpose: rows scroll underneath this. */
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.archive-table th.num, .archive-table td.num { text-align: right; }
+.archive-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.archive-table tr:last-child td { border-bottom: none; }
+
+.archive-row { cursor: pointer; transition: background 140ms var(--ease); }
+.archive-row:hover { background: var(--bg-hover); }
+.archive-row-muted .archive-display { text-decoration: line-through; opacity: 0.65; }
+
+.num-bad { color: var(--error); font-weight: 600; }
+
+.archive-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+.archive-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+}
+
+.archive-avatar-big { width: 52px; height: 52px; }
+.archive-avatar-blank { display: inline-block; }
+
+.archive-names { display: flex; flex-direction: column; min-width: 0; }
+.archive-names h2 { margin: 0; }
+.archive-names p { margin: 0; }
+
+.archive-display,
+.archive-handle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+
+.archive-handle { font-size: 12px; }
+.archive-badges { display: flex; gap: 3px; flex: none; }
+.archive-badge { font-size: 12px; line-height: 1; }
+.archive-empty { text-align: center; padding: 28px 12px; }
+
+.archive-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.archive-pager button {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 7px 13px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.archive-pager button:hover:not(:disabled) { border-color: var(--border-bright); }
+.archive-pager button:disabled { opacity: 0.4; cursor: default; }
+
+.archive-note { margin: 10px 0 0; font-size: 12.5px; }
+.archive-capacity { margin-top: 14px; font-size: 12.5px; }
+
+.archive-chart { margin-top: 18px; }
+.archive-chart h3 { margin: 0 0 10px; font-size: 13px; color: var(--text-muted); }
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 128px;
+  padding-bottom: 30px;
+  position: relative;
+}
+
+.bar-col {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+}
+
+.bar {
+  width: 100%;
+  /* Keeps a single-viewer day from rendering as an invisible sliver. */
+  min-height: 3px;
+  background: var(--grad-accent);
+  border-radius: 4px 4px 0 0;
+  transition: filter 160ms var(--ease);
+}
+
+.bar-col:hover .bar { filter: brightness(1.3); }
+
+.bar-label {
+  position: absolute;
+  bottom: -28px;
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.bar-value {
+  position: absolute;
+  bottom: -15px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.archive-tops {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-top: 26px;
+}
+
+.top-list h3 { margin: 0 0 8px; font-size: 13px; color: var(--text-muted); }
+.top-list ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 5px; }
+
+.top-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.top-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-value { flex: none; font-variant-numeric: tabular-nums; }
+
+.archive-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.archive-evidence { margin-top: 18px; }
+.archive-evidence h3 { margin: 0 0 8px; font-size: 13px; color: var(--text-muted); }
+.archive-evidence li { display: flex; flex-direction: column; gap: 3px; padding: 8px 0; }
+.evidence-text { font-size: 13px; word-break: break-word; }
+.evidence-meta { font-size: 11.5px; }
+
+/* ------------------------------------------------------------------ *
+ * Unified chat log
+ *
+ * Shared by the dashboard panel and the always-on-top pop-out window, so
+ * everything here has to work at 420px wide as well as full width.
+ * ------------------------------------------------------------------ */
+
+.chatlog {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 8px;
+}
+
+/* The pop-out is the whole window: fill it and let only the list scroll. */
+.chat-popout-body {
+  margin: 0;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+}
+
+.chat-popout-body .chatlog-dense {
+  height: 100vh;
+  padding: 8px;
+  gap: 6px;
+}
+
+/* The Tauri panel sizes from its flex parent rather than the viewport, since
+   it sits below a title strip that also needs its share of the height. */
+.chat-panel .chatlog-dense {
+  padding: 8px;
+  gap: 6px;
+}
+
+.chatlog-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.chatlog-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--text-muted);
+  padding: 5px 11px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 140ms var(--ease), background 140ms var(--ease);
+}
+
+.chatlog-tab:hover { color: var(--text); background: var(--bg-hover); }
+.chatlog-tab-on { color: var(--text); border-color: var(--border-bright); background: var(--bg-raised); }
+.chatlog-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+.chatlog-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Dashboard panel gets a bounded height; the pop-out overrides to fill. */
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-bright) transparent;
+}
+
+/* Both windowed contexts fill their window instead. The 60vh cap above is
+   for the dashboard, where the log is one panel among several on a scrolling
+   page; in a window of its own it just leaves dead space below the messages. */
+.chat-popout-body .chatlog-scroll,
+.chat-panel .chatlog-scroll { max-height: none; }
+
+/*
+ * Hug the bottom when there is more room than chat.
+ *
+ * The log is bottom-anchored — new messages arrive at the bottom and push
+ * older ones up — so a half-empty window should have its gap above the
+ * messages, not below them. In the dashboard the list almost always overflows
+ * its 60vh box and this never shows; in a tall window it is immediately
+ * obvious.
+ *
+ * `margin-top: auto` on the first row rather than `justify-content: flex-end`
+ * on the container: flex-end plus overflow makes the top of the content
+ * unreachable by scrolling in several browsers, which would quietly eat the
+ * oldest messages.
+ */
+.chat-popout-body .chatlog-scroll > :first-child,
+.chat-panel .chatlog-scroll > :first-child { margin-top: auto; }
+.chatlog-scroll::-webkit-scrollbar { width: 9px; }
+.chatlog-scroll::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 999px; }
+.chatlog-scroll::-webkit-scrollbar-track { background: transparent; }
+
+.chatlog-empty { text-align: center; padding: 32px 12px; font-size: 13px; }
+.chatlog-hint { margin: 0 0 10px; font-size: 12.5px; }
+.chatlog-unsupported { font-size: 12px; }
+
+.chatrow {
+  position: relative;
+  display: flex;
+  gap: 9px;
+  padding: 7px 9px 7px 8px;
+  /* The accent bar carries the platform; see ChatLog.tsx. */
+  border-left: 3px solid transparent;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.chatrow:hover { background: var(--bg-hover); }
+.chatrow-pinned { background: var(--accent-soft); }
+
+.chatrow-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  background: var(--bg-input);
+}
+
+.chatrow-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.chatrow-body { min-width: 0; flex: 1 1 auto; }
+
+.chatrow-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chatrow-mark {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.chatrow-handle {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 20ch;
+}
+
+.chatrow-handle:hover { color: var(--accent); }
+.chatrow-handle-system { color: var(--text-muted); cursor: default; }
+.chatrow-badge { font-size: 11px; flex: none; }
+
+.chatrow-text {
+  font-size: 13.5px;
+  line-height: 1.4;
+  word-break: break-word;
+  /* Emoji-only and script-heavy messages must not stretch the row. */
+  overflow-wrap: anywhere;
+}
+
+.chatrow-actions {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: none;
+  gap: 4px;
+}
+
+.chatrow:hover .chatrow-actions { display: flex; }
+
+.chatrow-actions button {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+
+.chatrow-actions button:hover { color: var(--text); border-color: var(--border-bright); }
+
+.chatlog-pinned {
+  flex: none;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  background: var(--accent-soft);
+}
+
+.chatlog-pinned-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  padding-left: 6px;
+}
+
+.chatlog-toast {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-bright);
+  border-radius: 999px;
+  padding: 7px 15px;
+  font-size: 12.5px;
+  z-index: 50;
+}
+
+/* ---- Platform cards ---- */
+
+.platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.platform-card {
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: var(--grad-surface);
+}
+
+.platform-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.platform-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.platform-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); }
+.platform-handle { margin: 0; font-size: 13px; }
+.platform-note { margin: 0; font-size: 11.5px; line-height: 1.45; }
+
+.platform-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  width: 100%;
+}
+
+.platform-input:focus { outline: none; border-color: var(--accent-line); }
+
+/* Freeform add row: platform choice sits beside the "add anyway" button so a
+   hand-typed handle is never silently filed under the wrong service. */
+.user-picker-freeform-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.user-picker-freeform-row select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  flex: none;
+}
+
+.user-picker-freeform-row .user-picker-freeform { flex: 1 1 auto; }
+
+/* ---- Sign-in and capabilities ---- */
+
+.chip-signin {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* What each platform can do right now. Unavailable rows stay visible but
+   recede — an absent row reads as a forgotten feature, a dimmed one reads as
+   something you could turn on. */
+.capability-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+}
+
+.cap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.cap-mark { width: 9px; text-align: center; flex: none; }
+.cap-on { color: var(--text-muted); }
+.cap-on .cap-mark { color: var(--ok); }
+.cap-off { color: var(--text-dim); }
+.platform-error { color: var(--error); }
+
+/* ------------------------------------------------------------------ *
+ * Chat arrival animation
+ *
+ * Only rows flagged `chatrow-fresh` animate — see ChatLog.tsx. Applying this
+ * to every `.chatrow` would cascade the whole list on a tab switch, which
+ * reads as a glitch rather than as motion.
+ * ------------------------------------------------------------------ */
+
+@keyframes chatrow-in {
+  from {
+    opacity: 0;
+    /* Rises into place, matching the direction the list grows. */
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.chatrow-fresh {
+  /* Short and eased-out: long enough to read as motion, short enough that a
+     fast chat never has more than a couple of rows mid-animation. */
+  animation: chatrow-in 180ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Motion is a preference, not a feature. Honoured here rather than only at the
+   OS level because this window sits on top of a game — someone sensitive to
+   movement should be able to switch it off and still read chat. */
+@media (prefers-reduced-motion: reduce) {
+  .chatrow-fresh {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Archive: platform tabs, retention curve, per-platform comparison
+ * ------------------------------------------------------------------ */
+
+.platform-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.platform-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  /* Transparent rather than absent so the tab does not shift by 2px when it
+     becomes active and gains an underline. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.platform-tab:hover { color: var(--text); }
+
+.platform-tab-on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.platform-tab-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.platform-tab-on .platform-tab-count { color: var(--text-muted); }
+
+.archive-retention .retention-live {
+  margin-left: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.12);
+  color: var(--ok);
+  font-size: 11px;
+}
+
+.retention-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.retention-row {
+  display: grid;
+  /* Fixed label and value columns so the bars all start and end in line —
+     a ragged left edge makes the curve impossible to read at a glance. */
+  grid-template-columns: 58px 1fr 96px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.retention-label { color: var(--text-muted); }
+
+.retention-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.retention-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--grad-accent);
+  transition: width 260ms var(--ease);
+}
+
+.retention-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.platform-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.platform-compare-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+}
+
+.platform-compare-rows {
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.platform-compare-rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.platform-compare-rows dt { color: var(--text-muted); }
+.platform-compare-rows dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .retention-fill { transition: none; }
+}
+
+/* The trusted list carries the same controls as the archive, so it reuses the
+   same rules above rather than a lookalike set that would drift. */
+.people-count { margin-left: auto; font-size: 13px; }
+
+.person-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+}
+
+/* A gate that some targeted platform cannot satisfy. Amber rather than red:
+   the rule still works where it can, it just reaches fewer people than the
+   wording implies. */
+.banner-warn {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--warn);
+}
+
+.gate-reach p { margin: 0 0 6px; font-size: 12.5px; }
+.gate-reach p:last-child { margin-bottom: 0; }
+.gate-reach strong { color: var(--text); }
+
+/* ------------------------------------------------------------------ *
+ * Desktop chat panel
+ *
+ * The window itself is transparent, so anything painted here is the only
+ * thing between the chat and the game underneath. `background: none` on the
+ * root elements is what lets that through — a single opaque ancestor and the
+ * whole exercise is pointless.
+ * ------------------------------------------------------------------ */
+
+html.panel-root,
+body.panel-root {
+  background: none !important;
+  background-color: transparent !important;
+  /* No scroll chrome on a floating panel; the log scrolls internally. */
+  overflow: hidden;
+}
+
+/*
+ * Kill the dashboard's decorative layers.
+ *
+ * `body::before` is the aurora — three radial gradients anchored near the
+ * corners — and `body::after` is the faint grid. Both are `position: fixed;
+ * inset: 0`, so clearing the body background alone leaves them painting over
+ * a window that is supposed to be see-through. They show up most obviously in
+ * the panel's rounded corners, where the area outside the radius should be
+ * nothing at all and instead has a coloured wedge in it.
+ *
+ * Removing them also stops the 26-second aurora animation compositing behind
+ * a game, which is work nobody asked for while playing.
+ */
+body.panel-root::before,
+body.panel-root::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+}
+
+.chat-panel {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  /* A faint edge so the panel still has a boundary when the background is
+     turned right down and there is nothing else to separate it from a bright
+     game behind. */
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.chat-panel-grip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  /* The window has no title bar, so this strip is the only way to move it. */
+  cursor: grab;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  user-select: none;
+}
+
+.chat-panel-grip:active { cursor: grabbing; }
+
+.chat-panel-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+
+.chat-panel .chatlog {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: none;
+  border: none;
+}
+
+
+
+/* Window chrome the page has to draw itself, since the window is undecorated. */
+.panel-buttons {
+  display: flex;
+  gap: 2px;
+  /* Pushed to the right-hand end — the mode dot used to do this. */
+  margin-left: auto;
+}
+
+.panel-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.panel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.panel-btn-close:hover {
+  background: var(--accent-2);
+  color: #fff;
+}
+
+.panel-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  /* A little larger than it looks: while the panel is click-through the
+     cursor has to actually be inside this rectangle for the click to land,
+     so a pixel-tight target would be fiddly to grab. */
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  /* Two faint diagonal ticks, the usual grip affordance. */
+  background: linear-gradient(
+    135deg,
+    transparent 0 45%,
+    rgba(255, 255, 255, 0.25) 45% 55%,
+    transparent 55% 70%,
+    rgba(255, 255, 255, 0.25) 70% 80%,
+    transparent 80%
+  );
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-btn { transition: none; }
+}
+
+/*
+ * Controls inside the panel have to be translucent too.
+ *
+ * The tab pills use solid surface colours from the dashboard palette, which
+ * read as heavy dark blobs floating on a see-through panel — especially with
+ * the background turned down, where they end up more opaque than the panel
+ * containing them. Scoped to `.chat-panel` so the dashboard's own chat log is
+ * untouched.
+ */
+.chat-panel .chatlog-tab {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.chat-panel .chatlog-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-panel .chatlog-tab-on {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.chat-panel .chatlog-pinned {
+  background: rgba(37, 244, 238, 0.14);
+}
+
+/* The scrollbar track is invisible on a transparent panel; make the thumb
+   readable against a game rather than against a dark surface. */
+.chat-panel .chatlog-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Secondary action beside a primary chip — reachable, but visibly the lesser
+   of the two options. */
+.chip-ghost {
+  opacity: 0.55;
+  font-size: 12px;
+}
+.chip-ghost:hover { opacity: 1; }
+
+/* ------------------------------------------------------------------ *
+ * Test event outcome
+ * ------------------------------------------------------------------ */
+
+.test-outcome {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.test-outcome-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  margin-bottom: 8px;
+}
+
+.test-line { margin: 0 0 6px; font-size: 13px; }
+.test-line:last-child { margin-bottom: 0; }
+.test-good { color: var(--ok); }
+.test-bad { color: var(--error); }
+
+.test-declined {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.test-declined strong { color: var(--text); font-weight: 600; }
+
+/* --------------------------------------------------------------- *
+ * Name palette preview
+ *
+ * Sits under the chat source's colour toggles. Wraps freely so the same
+ * markup works whether it is showing one platform or all three.
+ * --------------------------------------------------------------- */
+
+.name-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 15px;
+}
+
+.name-preview.compact {
+  font-size: 13px;
+  gap: 4px 10px;
+}
+
+.name-preview-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* --------------------------------------------------------------- *
+ * Highlighted names in the chat log
+ *
+ * Same mechanism as the overlay's `.chat-name-tier`; the keyframes are
+ * repeated because the two stylesheets are loaded independently and the
+ * dashboard never pulls in overlay.css.
+ * --------------------------------------------------------------- */
+
+/*
+ * -150%, and the number is not arbitrary.
+ *
+ * A background-position percentage does not offset by that share of the
+ * element — it positions the image within the difference between the two, so
+ * the offset is `(elementWidth - imageWidth) * p`. At `background-size: 300%`
+ * that difference is -2x the element, so sweeping to -200% travels 4 element
+ * widths while the image tiles every 3. The end frame therefore lands two
+ * thirds of the way through a tile and the wrap back to 0% jumps — a visible
+ * snap once per cycle.
+ *
+ * Travelling exactly one tile means `2 * p = 3`, so p = 150%. Any multiple of
+ * 150% is seamless; nothing else is. If `background-size` in `tierStyle` ever
+ * changes, this has to change with it, which is what `check:highlights`
+ * verifies rather than trusting a comment.
+ */
+@keyframes highlight-sweep {
+  from { background-position: 0% 50%; }
+  to { background-position: -150% 50%; }
+}
+
+.chatrow-handle-tier {
+  text-shadow: none;
+  /* No stroke in the dashboard: the chat log has a solid panel behind it
+     rather than gameplay, so the gradient needs nothing to lift it off the
+     background and an outline would only make it look heavier than the names
+     around it. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatrow-handle-tier {
+    animation: none !important;
+  }
+}
+
+/* --------------------------------------------------------------- *
+ * Panel controls: kill TTS, settings popover
+ * --------------------------------------------------------------- */
+
+/* Sits just after the title rather than at the right-hand end, so the
+   emergency button is nowhere near Close. Hitting the wrong one of those two
+   in a hurry has very different consequences. */
+.panel-buttons-left {
+  margin-left: 4px;
+  margin-right: auto;
+}
+
+.panel-btn-kill:hover {
+  background: var(--accent-2);
+  color: #fff;
+}
+
+/* Confirmation is the whole point. Clearing a queue is silent by nature — the
+   sound stopping is indistinguishable from the sound having finished — so
+   without this you cannot tell whether the click registered. */
+.panel-btn-kill-on,
+.panel-btn-kill-on:hover {
+  width: auto;
+  padding: 0 7px;
+  background: var(--accent-2);
+  color: #fff;
+}
+
+.panel-kill-done {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panel-btn-on {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.panel-settings {
+  position: relative;
+  display: flex;
+}
+
+/*
+ * Anchored under the button, and allowed to escape the panel's own bounds.
+ *
+ * The panel is often only a couple of hundred pixels wide, so a menu confined
+ * inside it would be unusable. `.chat-panel` therefore drops its overflow
+ * clipping while the menu is open — see `.chat-panel:has(.panel-menu)` below.
+ */
+.panel-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -4px;
+  z-index: 50;
+  width: 214px;
+  padding: 10px;
+  border-radius: 10px;
+  /* Opaque, unlike the panel behind it: a translucent menu over translucent
+     chat over a moving game is unreadable. */
+  background: #12141c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}
+
+.panel-menu-row {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.panel-menu-row span {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.panel-menu-row em {
+  font-style: normal;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-menu-row input[type='range'] {
+  width: 100%;
+  margin: 0;
+}
+
+.panel-menu-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.panel-menu-note {
+  margin: 8px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+/* The panel clips its children so the rounded corners hold; that would also
+   clip this menu, which has to hang below the header. Lifted only while a
+   menu is actually open. */
+.chat-panel:has(.panel-menu) {
+  overflow: visible;
+}
+
+/* --------------------------------------------------------------- *
+ * Per-platform stats strip
+ * --------------------------------------------------------------- */
+
+.pstats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 7px 10px;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pstat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.pstat-value {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* "not reported" is a sentence, not a number, and styling it like one would
+   make an unknown look like a measurement. */
+.pstat-wide .pstat-value {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.pstat-label {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.pstats-note {
+  font-size: 10px;
+  color: var(--accent-2);
+}

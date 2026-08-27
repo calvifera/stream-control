@@ -1,0 +1,26 @@
+[package]
+name = "streaming-chat-panel"
+version = "0.1.0"
+description = "Always-on-top transparent chat panel"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+# A second launch focuses the window that already exists instead of opening a
+# duplicate — the dashboard button can be pressed twice.
+tauri-plugin-single-instance = "2"
+# Remembers where you put the window and how big you made it, so the panel
+# comes back where you left it rather than in the middle of the screen every
+# time.
+tauri-plugin-window-state = "2"
+
+[profile.release]
+# A local tool, not something being shipped to strangers: optimise for a small
+# binary and quick startup rather than for build time.
+opt-level = "s"
+lto = true
+strip = true
