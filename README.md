@@ -1,19 +1,42 @@
 # Stream Control
 
-A self-hosted TikTok LIVE backend: it connects to a live room, normalizes every
-event, runs comments through a filter and rules pipeline, speaks what survives
-with TikTok's own TTS voices, and serves the results as OBS browser sources.
+A self-hosted control room for live streaming to more than one platform at
+once. It connects to TikTok, Twitch and YouTube chat together, normalizes every
+event into one model, runs messages through a filter and rules pipeline, speaks
+what survives, and serves the results as OBS browser sources — plus a
+transparent always-on-top chat panel for reading chat over a game.
+
+Everything runs on your machine. There is no hosted service, no account to
+make, and no telemetry: it talks to the platforms themselves and to nothing
+else. See [Credentials](#credentials) for exactly which hosts each key reaches.
 
 Node + TypeScript on the server, React + TypeScript for the overlays and
-dashboard, ngrok for public URLs.
+dashboard, Tauri for the desktop panel.
 
 ```
-TikTok LIVE ──▶ connector ──▶ normalize ──▶ filters ──▶ rules/gates ──▶ TTS queue
-                                                │                          │
-                                                └──────▶ Socket.IO ◀───────┘
-                                                             │
-                                        overlays (OBS browser sources) + dashboard
+TikTok  ─┐
+Twitch  ─┼─▶ normalize ──▶ filters ──▶ rules/gates ──▶ TTS queue
+YouTube ─┘                     │                          │
+                               └──────▶ Socket.IO ◀───────┘
+                                            │
+                    overlays (OBS) + dashboard + desktop chat panel
 ```
+
+Identity is keyed on `platform:handle` throughout, so one trusted list, one
+penalty box and one viewer archive span all three services without a Twitch
+mute silencing a TikTok stranger who happens to share a name.
+
+## Credentials
+
+Each platform needs its own API keys, created on that platform's site. The
+**Keys** tab in the dashboard walks through every one of them, states which
+hosts the value is sent to and when, and stores them in `data/secrets.json` —
+never in `config.json`, which is broadcast to every overlay.
+
+`npm run check:network` enforces that list: it walks every hostname the source
+can reach and fails on anything not declared on that screen.
+
+Keys can also live in `.env` if you prefer; see `.env.example`.
 
 ## Quick start
 
@@ -376,3 +399,17 @@ Proto field names in particular are version-specific: this targets the v3 protos
 (`user.displayId`, `message.content`), which differ from older guides. All of
 that is confined to `server/src/tiktok/normalize.ts`, so a proto change is a
 one-file fix.
+
+## Not affiliated
+
+This project is not affiliated with, endorsed by, or connected to TikTok,
+Twitch, Google or YouTube. All trademarks belong to their respective owners.
+
+The TikTok connection uses reverse-engineered internal APIs rather than a
+public one — see [A note on the TikTok integration](#a-note-on-the-tiktok-integration).
+That is worth understanding before you rely on it, and worth checking against
+the platform's terms for your own situation.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
