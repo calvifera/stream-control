@@ -340,6 +340,42 @@ copy next to it and boots from defaults rather than refusing to start.
 Config changes are broadcast over the socket, so two open dashboards stay in
 sync and overlays restyle live without a refresh.
 
+## Updating
+
+```bash
+npm run update
+```
+
+Pulls, installs only if the lockfile moved, and rebuilds — in that order,
+stopping at the first failure rather than leaving you half-updated.
+
+Nothing it does can reach your settings. `data/` and `.env` are gitignored, and
+no tracked file is written at runtime, so a pull never conflicts with anything
+you have configured.
+
+**Settings survive version changes without a migration step.** A stored config
+is deep-merged over the current defaults, so fields added in a later version
+simply appear with their default value while everything you set is left alone.
+Arrays are replaced wholesale rather than merged, so deleting every overlay
+leaves you with none rather than quietly restoring the defaults.
+
+**The one thing to know:** the server runs from source and needs no build of
+its own, but the dashboard is served from `packages/overlay/dist`, which is
+gitignored and therefore untouched by a pull. `git pull && npm start` runs new
+server code behind the previous build of the UI. Startup warns when the build
+is older than the source it came from, and `npm run update` cannot leave you in
+that state to begin with.
+
+Doing it by hand is the same three steps:
+
+```bash
+git pull && npm install && npm run build
+```
+
+If you downloaded the ZIP rather than cloning, download it again over the same
+folder and run `npm install && npm run build`; your `data/` folder is not part
+of the download and will be left where it is.
+
 ## Tests
 
 ```bash

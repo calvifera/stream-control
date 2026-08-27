@@ -15,6 +15,7 @@
     "dev:overlay": "npm run dev -w @streaming/overlay",
     "build": "npm run build -w @streaming/shared && npm run build -w @streaming/overlay && npm run build -w @streaming/server",
     "start": "npm run start -w @streaming/server",
+    "update": "node scripts/update.mjs",
     "panel": "npm run dev -w @streaming/desktop",
     "panel:build": "npm run build -w @streaming/desktop",
     "typecheck": "npm run typecheck -w @streaming/shared && npm run typecheck -w @streaming/server && npm run typecheck -w @streaming/overlay",

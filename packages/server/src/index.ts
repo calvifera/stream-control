@@ -11,6 +11,7 @@ import { Hub } from './hub.js';
 import { createApiRouter } from './http/api.js';
 import { AVATAR_DIR } from './state/avatars.js';
 import { TunnelController } from './tunnel.js';
+import { staleUi, describeGap } from './uiFreshness.js';
 
 const log = createLogger('server');
 
@@ -52,6 +53,17 @@ async function main(): Promise<void> {
 
   if (fs.existsSync(OVERLAY_DIST)) {
     app.use(express.static(OVERLAY_DIST, { index: false }));
+
+    // A pull cannot update dist, so the most likely reason the dashboard is
+    // not behaving as the source says it should is that it was never rebuilt.
+    const stale = staleUi();
+    if (stale) {
+      log.warn(
+        `The UI served from this port was built ${describeGap(stale.behindMs)} before the newest ` +
+          'source change. Run "npm run build" to rebuild it, or "npm run update" to pull and ' +
+          'rebuild together. (Expected if you are working against the Vite dev server instead.)',
+      );
+    }
     // The dashboard and every /overlay/<id> route are client-side routes.
     app.get('*', (req, res, next) => {
       if (req.path.startsWith('/api') || req.path.startsWith('/media')) return next();
