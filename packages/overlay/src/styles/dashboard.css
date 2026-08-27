@@ -3000,3 +3000,56 @@ body.panel-root::after {
 }
 
 .cred-field-row > :first-child { flex: 1 1 auto; min-width: 0; }
+
+/* The privacy statement, and the per-key destination facts. Deliberately
+   plain: this is the part someone reads before trusting the software with an
+   account cookie, and styling it like marketing would undercut it. */
+.cred-privacy { max-width: 78ch; font-size: 13px; line-height: 1.6; }
+.cred-privacy p { margin: 0 0 10px; }
+.cred-privacy strong { color: var(--text); }
+.cred-privacy-note { color: var(--text-dim); font-size: 12px; }
+.cred-privacy code { font-size: 12px; }
+
+.cred-usage {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 78ch;
+}
+
+.cred-usage-label {
+  display: inline-block;
+  min-width: 46px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 9px;
+  opacity: 0.75;
+}
+
+/* The three-way explanation of password vs binding vs overlays. Side by side
+   because the point is that they are different things, and a stacked list
+   reads as three steps in one process. */
+.access-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 14px 0 6px;
+}
+
+.access-grid h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.access-grid p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.access-note { margin-top: 12px; max-width: 78ch; font-size: 12px; }

@@ -40,6 +40,7 @@ export const SECRET_KEYS = [
   'TWITCH_CLIENT_SECRET',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
+  'DASHBOARD_PASSWORD',
 ] as const;
 
 export type SecretKey = (typeof SECRET_KEYS)[number];

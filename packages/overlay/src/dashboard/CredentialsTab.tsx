@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, type CredentialStatus } from '../lib/api.js';
+import { api, type CredentialStatus, type ServerMeta } from '../lib/api.js';
 import { Button, CopyButton, Panel, TextInput } from './controls.js';
 
 /**
@@ -31,6 +31,17 @@ interface Field {
   placeholder: string;
   /** Roughly how long the real value is, so a bad paste is obvious. */
   expect?: number;
+  /**
+   * The exact hosts this value is transmitted to, and when.
+   *
+   * Named hosts rather than a reassurance. "We never share your data" is both
+   * unfalsifiable and untrue of a credential whose entire purpose is being
+   * sent somewhere — what someone actually needs is *which* somewhere, so
+   * they can decide whether they mind. Kept honest by `check:network`, which
+   * fails if the code ever reaches a host not listed here.
+   */
+  sentTo: string;
+  when: string;
 }
 
 interface Group {
@@ -63,8 +74,22 @@ const GROUPS: Group[] = [
       'Create, then open it again — the secret is only shown once, behind "New Secret".',
     ],
     fields: [
-      { key: 'TWITCH_CLIENT_ID', label: 'Client ID', placeholder: '30 characters', expect: 30 },
-      { key: 'TWITCH_CLIENT_SECRET', label: 'Client Secret', placeholder: '30 characters', expect: 30 },
+      {
+        key: 'TWITCH_CLIENT_ID',
+        label: 'Client ID',
+        placeholder: '30 characters',
+        expect: 30,
+        sentTo: 'id.twitch.tv, api.twitch.tv',
+        when: 'when signing in, and when looking up chat avatars',
+      },
+      {
+        key: 'TWITCH_CLIENT_SECRET',
+        label: 'Client Secret',
+        placeholder: '30 characters',
+        expect: 30,
+        sentTo: 'id.twitch.tv',
+        when: 'only when exchanging a sign-in code or refreshing a token',
+      },
     ],
   },
   {
@@ -89,8 +114,16 @@ const GROUPS: Group[] = [
         key: 'GOOGLE_CLIENT_ID',
         label: 'Client ID',
         placeholder: 'ends in .apps.googleusercontent.com',
+        sentTo: 'accounts.google.com, oauth2.googleapis.com',
+        when: 'when signing in and when refreshing the token',
       },
-      { key: 'GOOGLE_CLIENT_SECRET', label: 'Client Secret', placeholder: 'starts with GOCSPX-' },
+      {
+        key: 'GOOGLE_CLIENT_SECRET',
+        label: 'Client Secret',
+        placeholder: 'starts with GOCSPX-',
+        sentTo: 'oauth2.googleapis.com',
+        when: 'only when exchanging a sign-in code or refreshing a token',
+      },
     ],
   },
   {
@@ -106,8 +139,20 @@ const GROUPS: Group[] = [
       'Session ID: log in to tiktok.com, open DevTools (F12) → Application → Cookies → https://tiktok.com, and copy the value of "sessionid".',
     ],
     fields: [
-      { key: 'SIGN_API_KEY', label: 'Euler Stream key', placeholder: 'optional' },
-      { key: 'TIKTOK_SESSION_ID', label: 'Session ID', placeholder: 'the sessionid cookie' },
+      {
+        key: 'SIGN_API_KEY',
+        label: 'Euler Stream key',
+        placeholder: 'optional',
+        sentTo: 'api.eulerstream.com',
+        when: 'once per connection, to sign the stream URL. Carries the room being watched, not your account',
+      },
+      {
+        key: 'TIKTOK_SESSION_ID',
+        label: 'Session ID',
+        placeholder: 'the sessionid cookie',
+        sentTo: 'tiktok.com and tiktokv.com — TikTok itself, nowhere else',
+        when: 'as a cookie when connecting, and on each request for a TikTok TTS voice. It is never sent to the signing service above: that needs a setting this app does not enable, and the connector refuses to do it without a separate opt-in',
+      },
     ],
   },
   {
@@ -124,7 +169,15 @@ const GROUPS: Group[] = [
       'Credentials → Create Credentials → API key.',
       'Edit the key → Restrict key → select only "Cloud Text-to-Speech API".',
     ],
-    fields: [{ key: 'GOOGLE_TTS_API_KEY', label: 'API key', placeholder: 'starts with AIza' }],
+    fields: [
+      {
+        key: 'GOOGLE_TTS_API_KEY',
+        label: 'API key',
+        placeholder: 'starts with AIza',
+        sentTo: 'texttospeech.googleapis.com',
+        when: 'on each line of speech synthesized',
+      },
+    ],
   },
   {
     id: 'ngrok',
@@ -137,7 +190,15 @@ const GROUPS: Group[] = [
       label: 'ngrok authtoken',
     },
     steps: () => ['Make a free account and copy the authtoken.'],
-    fields: [{ key: 'NGROK_AUTHTOKEN', label: 'Authtoken', placeholder: 'optional' }],
+    fields: [
+      {
+        key: 'NGROK_AUTHTOKEN',
+        label: 'Authtoken',
+        placeholder: 'optional',
+        sentTo: 'ngrok.com',
+        when: 'only while a tunnel is running',
+      },
+    ],
   },
 ];
 
@@ -163,13 +224,31 @@ export function CredentialsTab({ origin }: Props): JSX.Element {
         title="Credentials"
         description="Keys for the services this connects to. Each one is created on that service's own site — the steps are below. Nothing here is sent anywhere except back to the service it belongs to."
       >
-        <p className="muted cred-intro">
-          Saved keys take effect immediately; no restart. They are written to{' '}
-          <code>data/secrets.json</code>, never to <code>config.json</code> — that file is
-          broadcast to every overlay. Values are never shown again once saved, including here.
-        </p>
+        <div className="cred-privacy">
+          <p>
+            <strong>This app has no server of its own.</strong> It runs entirely on this machine
+            and talks only to the platforms themselves — TikTok, Twitch, Google and, if you use a
+            tunnel, ngrok. There is no account to make, no telemetry, and nothing is reported to
+            whoever wrote this.
+          </p>
+          <p>
+            Every credential below says exactly which hosts it reaches and when, because a key is
+            useless unless it goes <em>somewhere</em> — the useful question is where. That list is
+            enforced by a test that fails if the code ever contacts a host not named on this
+            screen.
+          </p>
+          <p className="cred-privacy-note">
+            Keys are stored in <code>data/secrets.json</code> on this machine, never in{' '}
+            <code>config.json</code> — that one is broadcast to every overlay browser source. Once
+            saved a value is never displayed again, including here: the server reports only whether
+            a key is set, where it came from and how long it is. Saved keys apply immediately, with
+            no restart.
+          </p>
+        </div>
         {error ? <div className="banner banner-error">{error}</div> : null}
       </Panel>
+
+      <AccessPanel statusOf={statusOf} onSaved={reload} />
 
       {GROUPS.map((group) => (
         <CredentialGroup
@@ -321,7 +400,122 @@ function CredentialField({
         ) : null}
       </div>
 
+      <p className="cred-usage">
+        <span className="cred-usage-label">Sent to</span> {field.sentTo}
+        <br />
+        <span className="cred-usage-label">When</span> {field.when}
+      </p>
+
       {error ? <div className="banner banner-error">{error}</div> : null}
     </div>
+  );
+}
+
+/**
+ * Who can reach this dashboard, and what a password does about it.
+ *
+ * Two separate things get confused constantly, and the confusion runs in the
+ * dangerous direction — people assume a password means nobody can reach it.
+ *
+ *   - The **binding** decides who can open the page at all. `0.0.0.0` means
+ *     anyone on the same network: a flatmate, a hotel, a café.
+ *   - The **password** decides who can change anything once they have.
+ *
+ * Neither substitutes for the other, and there is a third fact that surprises
+ * people: overlay URLs stay open either way, because OBS cannot log in.
+ */
+function AccessPanel({
+  statusOf,
+  onSaved,
+}: {
+  statusOf: (key: string) => CredentialStatus | undefined;
+  onSaved: () => void;
+}): JSX.Element {
+  const [meta, setMeta] = useState<ServerMeta | null>(null);
+
+  useEffect(() => {
+    void api
+      .meta()
+      .then(setMeta)
+      .catch(() => undefined);
+  }, [statusOf('DASHBOARD_PASSWORD')?.configured]);
+
+  const net = meta?.network;
+  const exposed = net ? !net.loopbackOnly : false;
+  const passworded = statusOf('DASHBOARD_PASSWORD')?.configured ?? false;
+
+  return (
+    <Panel
+      title="Access to this dashboard"
+      description="Everything here runs on this machine. This is about who else can open it."
+    >
+      {net ? (
+        <div className={exposed && !passworded ? 'banner banner-warn' : 'banner'}>
+          {exposed ? (
+            <>
+              <strong>Anyone on your network can open this dashboard.</strong> It is bound to{' '}
+              <code>{net.host}</code>, which means every device on the same Wi-Fi or LAN can reach{' '}
+              <code>
+                {'http://<this machine>:'}
+                {net.port}
+              </code>
+              .{' '}
+              {passworded
+                ? 'They will need the password to change anything.'
+                : 'With no password set, they can change anything you can — connections, filters, the penalty box.'}
+            </>
+          ) : (
+            <>
+              <strong>Only this machine can open this dashboard.</strong> It is bound to{' '}
+              <code>{net.host}</code>, so nothing on your network can reach it at all. A password
+              adds little on top of that.
+            </>
+          )}
+        </div>
+      ) : null}
+
+      <div className="access-grid">
+        <div>
+          <h4>A password</h4>
+          <p>
+            Controls who can <em>change</em> things once they can reach the page. Set one if you
+            stream from shared Wi-Fi, or if anyone else uses this machine.
+          </p>
+        </div>
+        <div>
+          <h4>The network binding</h4>
+          <p>
+            Controls who can <em>reach</em> the page at all — a stronger guarantee, and not
+            something a password can give you. Set <code>HOST=127.0.0.1</code> in your{' '}
+            <code>.env</code> and restart to close it to everything but this computer.
+          </p>
+        </div>
+        <div>
+          <h4>Overlays either way</h4>
+          <p>
+            Overlay URLs stay reachable with or without a password, because OBS has no way to log
+            in. A password protects control, never the event stream.
+          </p>
+        </div>
+      </div>
+
+      <CredentialField
+        field={{
+          key: 'DASHBOARD_PASSWORD',
+          label: 'Dashboard password',
+          placeholder: passworded ? 'enter a new password to replace it' : 'leave empty for none',
+          sentTo: 'nowhere — it never leaves this machine',
+          when: 'compared locally when someone logs in. It is the one credential here that is not sent to any service',
+        }}
+        status={statusOf('DASHBOARD_PASSWORD')}
+        onSaved={onSaved}
+      />
+
+      <p className="muted access-note">
+        Setting a password takes effect at once, and you stay signed in on this browser. Anyone
+        else — including you on another device — will be asked for it. Clearing it removes the
+        login entirely.
+      </p>
+    </Panel>
   );
 }

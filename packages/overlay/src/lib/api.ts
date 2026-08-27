@@ -68,6 +68,13 @@ export interface ServerMeta {
   overlayTypes: OverlayType[];
   ttsEndpoints: string[];
   providers: ProviderStatus[];
+  /** How reachable this server is, for the access explanation on the Keys tab. */
+  network: {
+    host: string;
+    port: number;
+    loopbackOnly: boolean;
+    passwordSet: boolean;
+  };
   env: {
     hasSignApiKey: boolean;
     hasTikTokSession: boolean;

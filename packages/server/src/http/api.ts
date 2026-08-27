@@ -189,6 +189,19 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
       ttsEndpoints: TIKTOK_TTS_ENDPOINTS,
       providers: hub.tts.providers.status(),
       // Never echo the values, just whether the server already has them.
+      /*
+       * How reachable this server is, so the dashboard can explain the
+       * difference between a password and a network binding rather than
+       * describing it in the abstract.
+       */
+      network: {
+        host: env.host,
+        port: env.port,
+        // 0.0.0.0 means every interface: anything on the same network can
+        // reach the dashboard. Loopback means only this machine can.
+        loopbackOnly: env.host === '127.0.0.1' || env.host === 'localhost' || env.host === '::1',
+        passwordSet: authEnabled(),
+      },
       env: {
         hasSignApiKey: Boolean(env.signApiKey),
         hasTikTokSession: Boolean(env.ttSessionId),
@@ -485,7 +498,22 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
         asError(res, 400, 'value must be a string');
         return;
       }
+      const hadPassword = authEnabled();
       secrets.set(key, body.value);
+
+      /*
+       * Turning the password on would otherwise lock out the person who just
+       * turned it on: `isAuthenticated` waves everything through while no
+       * password is set, so nobody holds a session until one exists. The next
+       * request after saving would bounce them to a login screen mid-click.
+       *
+       * Issuing a session here means enabling protection does not cost you
+       * access to your own dashboard. Everyone else still has to log in.
+       */
+      if (key === 'DASHBOARD_PASSWORD' && !hadPassword && authEnabled()) {
+        login(req, res, body.value);
+      }
+
       res.json({ credentials: secrets.status() });
     }),
   );

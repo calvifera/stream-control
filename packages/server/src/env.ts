@@ -96,7 +96,9 @@ export const env = {
    * Kept in .env rather than config.json because config.json is served to
    * every connected client.
    */
-  dashboardPassword: process.env.DASHBOARD_PASSWORD ?? '',
+  get dashboardPassword(): string {
+    return process.env.DASHBOARD_PASSWORD ?? '';
+  },
   logLevel: (process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error',
 } as const;
 
