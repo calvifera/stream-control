@@ -33,21 +33,22 @@ const css = sheet.slice(start, sheet.indexOf(' * Alerts', start) - 70);
 
 type Row = { p: Platform; handle: string; name: string; text: string; mod?: boolean; sub?: boolean; kind?: string; tier?: string };
 const rows: Row[] = [
+  // Invented people. Nothing here is copied from a real chat: this file is
+  // committed, and a preview fixture is a silly reason to put a stranger's
+  // display name in a public repository for ever.
   { p: 'youtube', handle: 'john_viewerson', name: 'john viewerson', text: 'Hello' },
-  { p: 'tiktok', handle: 'flowery', name: 'flowery', text: 'the parkour section was insane' },
-  { p: 'twitch', handle: 'calvifera', name: 'calvifera', text: 'testing the new overlay', mod: true },
-  { p: 'tiktok', handle: 'cybercap', name: '𑣲⋆𝙘𝙮𝙗𝙚𝙧𝙘𝙖𝙥', text: 'w stream' },
+  { p: 'tiktok', handle: 'petalstorm', name: 'petalstorm', text: 'the parkour section was insane' },
+  { p: 'twitch', handle: 'themod', name: 'TheMod', text: 'testing the new overlay', mod: true },
+  // Deliberately awkward: heavy styling and combining marks are common in
+  // real display names and are exactly what breaks a single-line layout.
+  { p: 'tiktok', handle: 'stylednick', name: '𑣲⋆𝙨𝙩𝙮𝙡𝙚𝙙 𝙣𝙞𝙘𝙠', text: 'w stream' },
+  // No display name at all — checks the handle fallback rather than "Unknown".
   { p: 'youtube', handle: 'quietwatcher', name: '', text: 'first time here, this is sick' },
-  { p: 'twitch', handle: 'nordvpnfan', name: 'NordVPNFan', text: 'what game is this', sub: true },
-  { p: 'tiktok', handle: 'violent', name: 'ദ്ദി◝ ⩊ ◜.ᐟ violeₙt', text: 'sent 5x Rose', kind: 'gift' },
+  { p: 'twitch', handle: 'longnamehere', name: 'ALongNameHere', text: 'what game is this', sub: true },
+  { p: 'tiktok', handle: 'kaomoji', name: 'ദ്ദി◝ ⩊ ◜.ᐟ kaomoji', text: 'sent 5x Rose', kind: 'gift' },
   { p: 'tiktok', handle: 'bigspender', name: 'BigSpender', text: 'sent 1x Galaxy', kind: 'gift', tier: 'tiktok-gifter' },
   { p: 'twitch', handle: 'subbedup', name: 'SubbedUp', text: 'been here since the start', sub: true, tier: 'twitch-sub' },
   { p: 'youtube', handle: 'supermember', name: 'SuperMember', text: 'take my money', tier: 'youtube-gifter' },
-  { p: 'twitch', handle: 'zebra_22', name: 'zebra_22', text: 'followed the stream', kind: 'follow' },
-  { p: 'youtube', handle: 'mkbee', name: 'mkbee', text: 'that jump scared me lol' },
-  { p: 'tiktok', handle: 'bigmike', name: 'bigmike', text: 'yo' },
-  { p: 'tiktok', handle: 'bigmike', name: 'bigmike', text: 'you should try the hard mode', kind: 'run' },
-  { p: 'twitch', handle: 'katiek', name: 'katiek', text: 'chat is moving so fast today' },
 ];
 
 const logo = (p: Platform): string => {

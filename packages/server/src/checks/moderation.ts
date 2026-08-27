@@ -41,7 +41,7 @@ interface Call {
   body: unknown;
 }
 
-function harness(cfg: TwitchModerationConfig, channel = 'calvifera') {
+function harness(cfg: TwitchModerationConfig, channel = 'yourchannel') {
   const calls: Call[] = [];
 
   const auth = {
@@ -140,7 +140,7 @@ console.log('\na timeout is a timeout, not a ban');
   check('as a POST', call?.method, 'POST');
 
   const url = new URL(call?.url ?? 'https://x/');
-  check('naming the broadcaster', url.searchParams.get('broadcaster_id'), 'id-calvifera');
+  check('naming the broadcaster', url.searchParams.get('broadcaster_id'), 'id-yourchannel');
   // Twitch requires this to match the token's own user, so a wrong value here
   // makes every call fail with a confusing 401.
   check('and the moderator', url.searchParams.get('moderator_id'), 'mod-1');

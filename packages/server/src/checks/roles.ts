@@ -126,7 +126,7 @@ console.log('\nwho still gets through an unsatisfiable gate');
   // Which is why testing from your own account proves nothing.
   check(
     'the host passing is exactly what hid this',
-    allows(followersOnly, person('twitch', { isHost: true, uniqueId: 'calvifera' })),
+    allows(followersOnly, person('twitch', { isHost: true, uniqueId: 'thehost' })),
     true,
   );
 }
