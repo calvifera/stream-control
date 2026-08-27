@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { DEFAULT_CHAT_PANEL, type ChatPanelConfig } from '@streaming/shared';
 import { identify, useLive } from '../lib/store.js';
+import { formatElapsed, useElapsed } from '../lib/useElapsed.js';
 import { inPanelShell, panelWindow } from '../lib/panelWindow.js';
 import { ChatLog } from './ChatLog.js';
 import { KillTtsButton, PanelSettingsMenu } from './PanelControls.js';
@@ -25,7 +26,7 @@ import { KillTtsButton, PanelSettingsMenu } from './PanelControls.js';
  * to see what is under it, move it.
  */
 export function ChatPanelPage(): JSX.Element {
-  const { config } = useLive();
+  const { config, stats } = useLive();
   const panel: ChatPanelConfig = config?.chatPanel ?? DEFAULT_CHAT_PANEL;
   const shell = inPanelShell();
 
@@ -78,6 +79,7 @@ export function ChatPanelPage(): JSX.Element {
         }}
       >
         <span className="chat-panel-title">Chat</span>
+        <StreamClock startedAt={stats?.startedAt ?? null} />
 
         {/* Outside the `shell` guard, unlike the window buttons: stopping
             speech and changing opacity are useful in a plain browser tab too,
@@ -156,4 +158,25 @@ function withAlpha(hex: string, alpha: number): string {
   const b = parseInt(full.slice(4, 6), 16) || 0;
   const a = Math.min(1, Math.max(0, alpha));
   return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+/**
+ * How long this session has been running.
+ *
+ * Sits in the panel's own strip because that strip is often the only thing
+ * on screen — the dashboard is behind a fullscreen game, and the one number
+ * you keep wanting while streaming is how long you have been at it.
+ *
+ * Counts from when the session started rather than from when any one platform
+ * connected, so it survives a reconnect. Per-platform connection time is a
+ * different question and lives on that platform's tab.
+ */
+function StreamClock({ startedAt }: { startedAt: number | null }): JSX.Element | null {
+  const elapsed = useElapsed(startedAt);
+  if (elapsed === null) return null;
+  return (
+    <span className="chat-panel-clock" title="Time streamed this session">
+      {formatElapsed(elapsed)}
+    </span>
+  );
 }

@@ -1,3 +1,4 @@
+import { formatElapsed, useElapsed } from '../lib/useElapsed.js';
 import {
   emptyPlatformStats,
   PLATFORM_INFO,
@@ -22,6 +23,8 @@ interface Props {
   stats: SessionStats | null;
   /** True when the platform has a live connection right now. */
   connected: boolean;
+  /** When this platform's connection came up, for the running clock. */
+  connectedAt?: number | null;
 }
 
 /**
@@ -41,7 +44,11 @@ function short(value: number): string {
   return String(Math.round(value));
 }
 
-export function PlatformStats({ platform, stats, connected }: Props): JSX.Element {
+export function PlatformStats({ platform, stats, connected, connectedAt }: Props): JSX.Element {
+  // Counts from when the connection came up, not from when the stream did —
+  // a platform that dropped and rejoined has been watching for minutes, not
+  // hours, and the difference is the whole reason to show it.
+  const connectedFor = useElapsed(connected ? connectedAt : null);
   /*
    * Defaults merged in field by field, not just when the whole slice is
    * missing.
@@ -69,6 +76,13 @@ export function PlatformStats({ platform, stats, connected }: Props): JSX.Elemen
   return (
     <div className="pstats" style={{ borderLeftColor: info.color }}>
       <Stat label="Watching" value={viewers} wide={slice.viewers === null} title="People watching right now" />
+      {connected && connectedFor !== null ? (
+        <Stat
+          label="Connected"
+          value={formatElapsed(connectedFor)}
+          title="How long this platform has been connected"
+        />
+      ) : null}
       <Stat label="Peak" value={slice.peakViewers > 0 ? short(slice.peakViewers) : '—'} />
       {/*
        * Two different totals, kept apart on purpose.

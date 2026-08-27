@@ -71,12 +71,35 @@ const INNOCENT = [
   'see you tomorrow',
   'i play piano',
   'good game everyone',
+  /*
+   * Reported from a live stream. "finally" folds to "fanala" and the term to
+   * "samala" — two edits apart on a six-character key that holds only three
+   * real consonants, f-n-l against s-m-l. The old length-based budget allowed
+   * two edits there, so it matched, and it was far from alone: 33 of 52
+   * ordinary lines were being flagged.
+   */
+  'finally',
+  'finally got it',
+  'did you see that',
+  'can you play the other one',
+  'im so tired',
+  'first time here',
+  'love this song',
+  'that was insane',
+  'not again',
+  'he made it',
+  'she said that',
+  'at a nice pace',
+  'so peaceful',
+  'pool party',
 ];
 
 const flagged = INNOCENT.filter((text) => hits(text).length > 0);
+// Tightened from 25%. A review feed that fires on a quarter of ordinary chat
+// is one nobody reads, which costs the real matches buried in it.
 check(
   'false positives stay rare enough to review',
-  flagged.length <= INNOCENT.length * 0.25,
+  flagged.length <= INNOCENT.length * 0.1,
   `${flagged.length}/${INNOCENT.length} flagged${flagged.length ? `: ${flagged.join(', ')}` : ''}`,
 );
 
@@ -125,6 +148,17 @@ check('niqqer is blocked', gEngine.apply('niqqer').text === null);
 check('faqqot is blocked', gEngine.apply('faqqot').text === null);
 check('n1qq3r is blocked', gEngine.apply('n1qq3r').text === null);
 check('ordinary words with q are untouched', gEngine.apply('quick question queue').text !== null);
+
+/*
+ * Named individually as well as counted in the rate above.
+ *
+ * A rate can be satisfied while still failing the exact phrase somebody
+ * complained about, and "finally" is the one that was actually reported from
+ * a live stream.
+ */
+for (const text of ['finally', 'did you see that', 'can you play the other one']) {
+  check(`"${text}" is not reported`, hits(text).length === 0, hits(text).join(', '));
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;

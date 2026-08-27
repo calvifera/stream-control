@@ -313,6 +313,7 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
           platform={tab}
           stats={stats}
           connected={connections[tab]?.status === 'connected'}
+          connectedAt={connections[tab]?.connectedAt ?? null}
         />
       ) : null}
 
@@ -403,6 +404,42 @@ function ChatRow({
    * rows appeared to pop in with no transition at all.
    */
   const [animate] = useState(fresh);
+
+  /*
+   * Anything that is not something a person typed renders as a notice.
+   *
+   * A follow and a message are not the same kind of thing, and giving them
+   * the same avatar, the same name weight and the same two-line block made
+   * chat read as though half of it were being said out loud. A notice is one
+   * quiet line: it stays in the stack, in order, and stops competing.
+   */
+  const notice = event.type !== 'chat';
+
+  if (notice) {
+    return (
+      <div
+        className={`chatnotice${animate ? ' chatrow-fresh' : ''}`}
+        style={{ borderLeftColor: info.color }}
+        onClick={onPin}
+      >
+        <PlatformMark platform={event.platform} />
+        {user ? (
+          <button
+            type="button"
+            className="chatnotice-who"
+            title={`Copy @${user.uniqueId}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy(user);
+            }}
+          >
+            {user.nickname}
+          </button>
+        ) : null}
+        <span className="chatnotice-text">{describe(event)}</span>
+      </div>
+    );
+  }
 
   return (
     <div

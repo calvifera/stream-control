@@ -3053,3 +3053,64 @@ body.panel-root::after {
 }
 
 .access-note { margin-top: 12px; max-width: 78ch; font-size: 12px; }
+
+/* --------------------------------------------------------------- *
+ * Notices: everything in the stack that nobody typed
+ *
+ * A follow, a gift or a system line still belongs in the chat stack — order
+ * is information, and pulling them into a separate list would break it. But
+ * they are not speech, and rendering them with the same avatar, name weight
+ * and two-line block made chat look as though half of it were being said out
+ * loud. One quiet line each: present, in sequence, not competing.
+ * --------------------------------------------------------------- */
+
+.chatnotice {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px 3px 7px;
+  border-left: 3px solid transparent;
+  /* Dimmer than a message and smaller, which is most of the work. */
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.chatnotice:hover { background: rgba(255, 255, 255, 0.03); }
+
+/* The platform mark shrinks with the row rather than staying message-sized,
+   or it becomes the loudest thing on a line that is meant to be quiet. */
+.chatnotice .chatrow-mark { opacity: 0.6; }
+
+.chatnotice-who {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+.chatnotice-who:hover { color: var(--text); text-decoration: underline; }
+
+.chatnotice-text { min-width: 0; word-break: break-word; }
+
+/* --------------------------------------------------------------- *
+ * Session clock in the panel strip
+ * --------------------------------------------------------------- */
+
+.chat-panel-clock {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  /* Sits right after the title rather than at the far end, so it reads as
+     part of the label instead of as another window button. */
+  margin-left: 2px;
+}

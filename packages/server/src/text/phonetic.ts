@@ -70,15 +70,39 @@ export function editDistance(a: string, b: string): number {
 }
 
 /**
- * How many edits a key of this length may absorb.
+ * How much of a key is actually information.
  *
- * Short keys have to be exact. Measured on ordinary chat, a four-character
- * key with one edit allowed matches roughly a third of normal messages —
- * "nice" lands on one slur's key, "did you" on another's.
+ * `phoneticKey` collapses every vowel to `a`, so a key's length badly
+ * overstates what it knows. "samala" looks like six characters of evidence
+ * and is really three — s, m, l — with filler between them.
  */
-function editBudget(keyLength: number): number {
-  if (keyLength <= 4) return 0;
-  if (keyLength === 5) return 1;
+function skeleton(key: string): string {
+  return key.replace(/a/g, '');
+}
+
+function consonants(key: string): number {
+  return skeleton(key).length;
+}
+
+/**
+ * How many edits a key may absorb.
+ *
+ * Budgeted against consonants rather than length, because budgeting against
+ * length was measurably broken: a six-character key got two edits, which for
+ * "samala" meant two of its three real characters could change. "finally"
+ * folds to "fanala", two edits away, and was reported as a slur. Measured
+ * over ordinary stream chat, the length-based rule flagged 33 of 52 innocent
+ * lines.
+ *
+ * Requiring an exact fold up to four consonants took that to 0 of 52 while
+ * catching exactly the same real bypasses. Allowing even one edit at three
+ * consonants puts it back to 22 of 52 — there is no gentle middle, because a
+ * three-consonant key with one substitution is barely a constraint at all.
+ */
+function editBudget(key: string): number {
+  const informative = consonants(key);
+  if (informative <= 4) return 0;
+  if (informative <= 6) return 1;
   return 2;
 }
 
@@ -106,15 +130,29 @@ export function findNearMatches(text: string, terms: string[]): NearMatch[] {
   const words = text.toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean);
   if (words.length === 0) return [];
 
+  /*
+   * Terms whose fold carries fewer than three consonants are dropped, not
+   * matched loosely.
+   *
+   * A key like "asa" or "kan" is one or two real sounds, and ordinary speech
+   * produces those constantly — "you see" and "can" were both landing on
+   * severe terms at distance 0. There is no threshold that separates them,
+   * because there is nothing to separate: the key genuinely does not identify
+   * a word.
+   *
+   * Those terms keep their character-level coverage, which is exact and
+   * unaffected. What they lose is sound-alike detection, which for a term
+   * this short was never functioning — it was reporting everything.
+   */
   const targets = terms
     .map((term) => ({ term, key: phoneticKey(term) }))
-    .filter((t) => t.key.length >= 3);
+    .filter((t) => consonants(t.key) >= 3);
   if (targets.length === 0) return [];
 
   const found = new Map<string, NearMatch>();
 
   for (const { term, key } of targets) {
-    const budget = editBudget(key.length);
+    const budget = editBudget(key);
 
     for (let i = 0; i < words.length; i += 1) {
       for (let span = 1; span <= MAX_SPAN && i + span <= words.length; span += 1) {
@@ -122,10 +160,30 @@ export function findNearMatches(text: string, terms: string[]): NearMatch[] {
         const candidate = phoneticKey(slice.join(''));
         // A length gap larger than the budget can't be closed by edits, and
         // skipping early keeps this cheap enough to run on every message.
-        if (Math.abs(candidate.length - key.length) > budget) continue;
+        if (Math.abs(candidate.length - key.length) > Math.max(budget, 1)) continue;
+
+        /*
+         * A dropped vowel is its own case, and the budget cannot express it.
+         *
+         * "nigr" and the real spelling share every consonant in order and
+         * differ only by a missing vowel — a one-character edit on a key
+         * whose budget is zero, so the distance rule rejects it. That is the
+         * single most common way this kind of term gets typed, so it has to
+         * survive.
+         *
+         * Identical skeletons plus near-identical length is what a dropped
+         * vowel looks like and what nothing else does: "did you" and "dildo"
+         * fold to different skeletons, "finally" and "she male" differ in two
+         * consonants of three. Measured, the escape costs three innocent
+         * lines in fifty-six and recovers both.
+         */
+        const sameSkeleton =
+          consonants(candidate) >= 3 &&
+          skeleton(candidate) === skeleton(key) &&
+          Math.abs(candidate.length - key.length) <= 1;
 
         const distance = editDistance(candidate, key);
-        if (distance > budget) continue;
+        if (!sameSkeleton && distance > budget) continue;
 
         const phrase = slice.join(' ');
         const existing = found.get(term);
