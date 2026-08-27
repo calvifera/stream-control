@@ -26,6 +26,7 @@ import { TwitchManager } from './twitch/manager.js';
 import { YouTubeManager } from './youtube/manager.js';
 import { TwitchProfiles } from './twitch/helix.js';
 import { TwitchModeration } from './twitch/moderation.js';
+import { TwitchLive } from './twitch/live.js';
 import { AuthManager } from './auth/manager.js';
 import { TtsEngine } from './tts/engine.js';
 import { createLogger } from './logger.js';
@@ -71,6 +72,7 @@ export class Hub {
   readonly auth = new AuthManager();
   readonly twitchProfiles: TwitchProfiles;
   readonly twitchModeration: TwitchModeration;
+  readonly twitchLive: TwitchLive;
 
   private io: TypedServer | null = null;
   private clients = new Map<string, ClientInfo>();
@@ -94,6 +96,16 @@ export class Hub {
       config.twitch.moderation,
       config.twitch.channel,
     );
+    this.twitchLive = new TwitchLive(this.auth, (liveSince) => {
+      this.twitch.setLive(liveSince);
+      this.broadcastConnections();
+    });
+    // Started here rather than only on a config change, or a server that boots
+    // with Twitch already configured would report no uptime until something
+    // was edited.
+    if (config.twitch.enabled && config.twitch.channel) {
+      this.twitchLive.watch(config.twitch.channel);
+    }
     this.youtube = new YouTubeManager(config.youtube, this.auth);
     // Fills in Twitch avatars once app credentials exist. Resolved profiles
     // are written back into the directory so the archive and overlays get
@@ -178,6 +190,7 @@ export class Hub {
     this.tiktok.setConfig(next.connection);
     this.twitch.setConfig(next.twitch);
     this.twitchModeration.setConfig(next.twitch.moderation, next.twitch.channel);
+    this.twitchLive.watch(next.twitch.enabled ? next.twitch.channel : '');
     this.youtube.setConfig(next.youtube);
     this.io?.emit('config', next);
   }
@@ -594,6 +607,7 @@ export class Hub {
     this.tts.dispose();
     await this.tiktok.disconnect({ silent: true });
     this.twitch.disconnect();
+    this.twitchLive.stop();
     this.youtube.disconnect();
     this.directory.flush();
     this.retention.stop();

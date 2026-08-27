@@ -88,6 +88,7 @@ export class YouTubeManager extends EventEmitter {
     hostNickname: null,
     hostAvatarUrl: null,
     connectedAt: null,
+    liveSince: null,
     lastError: null,
     reconnectAttempts: 0,
   };
@@ -169,6 +170,9 @@ export class YouTubeManager extends EventEmitter {
         roomId: found.liveChatId,
         hostNickname: found.title,
         connectedAt: Date.now(),
+        // The chat id came from a broadcast with status `active`, so this is
+        // live by construction.
+        liveSince: Date.now(),
         reconnectAttempts: 0,
         lastError: null,
       });

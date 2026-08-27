@@ -23,8 +23,13 @@ interface Props {
   stats: SessionStats | null;
   /** True when the platform has a live connection right now. */
   connected: boolean;
-  /** When this platform's connection came up, for the running clock. */
-  connectedAt?: number | null;
+  /**
+   * When the broadcast went live, or null when it is not.
+   *
+   * Not when the connection opened. On Twitch those are different questions
+   * and only one of them is worth a timer.
+   */
+  liveSince?: number | null;
 }
 
 /**
@@ -44,11 +49,11 @@ function short(value: number): string {
   return String(Math.round(value));
 }
 
-export function PlatformStats({ platform, stats, connected, connectedAt }: Props): JSX.Element {
-  // Counts from when the connection came up, not from when the stream did —
-  // a platform that dropped and rejoined has been watching for minutes, not
-  // hours, and the difference is the whole reason to show it.
-  const connectedFor = useElapsed(connected ? connectedAt : null);
+export function PlatformStats({ platform, stats, connected, liveSince }: Props): JSX.Element {
+  // Counts the broadcast, not the connection. Twitch IRC will happily sit in
+  // an idle channel for hours, and a timer running through that says only
+  // that the app has been open.
+  const liveFor = useElapsed(liveSince ?? null);
   /*
    * Defaults merged in field by field, not just when the whole slice is
    * missing.
@@ -76,11 +81,11 @@ export function PlatformStats({ platform, stats, connected, connectedAt }: Props
   return (
     <div className="pstats" style={{ borderLeftColor: info.color }}>
       <Stat label="Watching" value={viewers} wide={slice.viewers === null} title="People watching right now" />
-      {connected && connectedFor !== null ? (
+      {liveFor !== null ? (
         <Stat
-          label="Connected"
-          value={formatElapsed(connectedFor)}
-          title="How long this platform has been connected"
+          label="Live"
+          value={formatElapsed(liveFor)}
+          title="How long this platform has been broadcasting"
         />
       ) : null}
       <Stat label="Peak" value={slice.peakViewers > 0 ? short(slice.peakViewers) : '—'} />

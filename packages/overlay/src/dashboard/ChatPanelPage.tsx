@@ -1,5 +1,10 @@
 import { useEffect, useMemo } from 'react';
-import { DEFAULT_CHAT_PANEL, type ChatPanelConfig } from '@streaming/shared';
+import {
+  DEFAULT_CHAT_PANEL,
+  type ChatPanelConfig,
+  type ConnectionState,
+  type Platform,
+} from '@streaming/shared';
 import { identify, useLive } from '../lib/store.js';
 import { formatElapsed, useElapsed } from '../lib/useElapsed.js';
 import { inPanelShell, panelWindow } from '../lib/panelWindow.js';
@@ -26,7 +31,7 @@ import { KillTtsButton, PanelSettingsMenu } from './PanelControls.js';
  * to see what is under it, move it.
  */
 export function ChatPanelPage(): JSX.Element {
-  const { config, stats } = useLive();
+  const { config, snapshot } = useLive();
   const panel: ChatPanelConfig = config?.chatPanel ?? DEFAULT_CHAT_PANEL;
   const shell = inPanelShell();
 
@@ -79,7 +84,7 @@ export function ChatPanelPage(): JSX.Element {
         }}
       >
         <span className="chat-panel-title">Chat</span>
-        <StreamClock startedAt={stats?.startedAt ?? null} />
+        <StreamClock connections={snapshot?.connections ?? {}} />
 
         {/* Outside the `shell` guard, unlike the window buttons: stopping
             speech and changing opacity are useful in a plain browser tab too,
@@ -161,21 +166,35 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 /**
- * How long this session has been running.
+ * How long you have actually been live.
  *
- * Sits in the panel's own strip because that strip is often the only thing
- * on screen — the dashboard is behind a fullscreen game, and the one number
- * you keep wanting while streaming is how long you have been at it.
+ * Counts from the earliest platform that is *broadcasting*, not from when the
+ * server started and not from when a socket opened. Those were the same thing
+ * until Twitch arrived, and on Twitch they are barely related: chat is read
+ * over IRC, which joins a channel whether or not anyone is streaming to it, so
+ * a clock started on connection would run all day on an idle channel and
+ * report it as stream time.
  *
- * Counts from when the session started rather than from when any one platform
- * connected, so it survives a reconnect. Per-platform connection time is a
- * different question and lives on that platform's tab.
+ * Earliest rather than latest, because going live on a second platform an hour
+ * in does not restart the stream — and nothing at all when no platform is
+ * live, which is a truthful blank rather than a zero that looks like a
+ * measurement.
  */
-function StreamClock({ startedAt }: { startedAt: number | null }): JSX.Element | null {
-  const elapsed = useElapsed(startedAt);
+function StreamClock({
+  connections,
+}: {
+  connections: Partial<Record<Platform, ConnectionState>>;
+}): JSX.Element | null {
+  const live = Object.values(connections)
+    .map((state) => state?.liveSince)
+    .filter((value): value is number => typeof value === 'number');
+
+  const since = live.length > 0 ? Math.min(...live) : null;
+  const elapsed = useElapsed(since);
   if (elapsed === null) return null;
+
   return (
-    <span className="chat-panel-clock" title="Time streamed this session">
+    <span className="chat-panel-clock" title="Time live this session">
       {formatElapsed(elapsed)}
     </span>
   );

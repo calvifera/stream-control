@@ -62,6 +62,8 @@ export class TwitchManager extends EventEmitter {
     hostNickname: null,
     hostAvatarUrl: null,
     connectedAt: null,
+    // Filled in by the live poller, not by connecting — see ConnectionState.
+    liveSince: null,
     lastError: null,
     reconnectAttempts: 0,
   };
@@ -72,6 +74,18 @@ export class TwitchManager extends EventEmitter {
 
   getState(): ConnectionState {
     return { ...this.state };
+  }
+
+  /**
+   * Told from outside, by the Helix poller.
+   *
+   * IRC cannot answer this — joining a channel says nothing about whether
+   * anyone is broadcasting to it — so liveness arrives here rather than being
+   * inferred from the connection.
+   */
+  setLive(liveSince: number | null): void {
+    if (this.state.liveSince === liveSince) return;
+    this.patch({ liveSince });
   }
 
   setConfig(config: TwitchConnectionConfig): void {

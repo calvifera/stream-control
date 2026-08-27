@@ -88,6 +88,18 @@ export function openPanel(): { ok: true } | { ok: false; error: string } {
     });
     started.unref();
     started.on('error', (error) => log.warn(`Panel exited badly: ${String(error)}`));
+    /*
+     * Cleared on exit so `panelStatus` reports the truth immediately.
+     *
+     * `exitCode` alone would get there eventually, but the dashboard polls
+     * this to decide whether to offer the button again — and a stale handle
+     * would leave someone looking at "Panel open" with no panel on screen and
+     * no way to get one back.
+     */
+    started.on('exit', () => {
+      if (child === started) child = null;
+      log.info('The chat panel was closed');
+    });
 
     child = started;
     log.info(`Opened the chat panel (${found.release ? 'release' : 'debug'} build)`);

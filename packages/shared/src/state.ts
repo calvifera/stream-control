@@ -163,6 +163,20 @@ export interface ConnectionState {
   hostNickname: string | null;
   hostAvatarUrl: string | null;
   connectedAt: number | null;
+  /**
+   * When the broadcast itself went live, or null when it is not.
+   *
+   * Deliberately separate from `connectedAt`, because being connected is not
+   * the same as being live and on Twitch the two are barely related: chat is
+   * read over IRC, which joins a channel whether or not anyone is streaming
+   * to it. A timer counting from `connectedAt` there measures how long the
+   * socket has been open, which on a channel that has been idle all day is a
+   * number with no meaning.
+   *
+   * TikTok and YouTube cannot connect to a room that is not live, so for
+   * those the two coincide. Twitch has to be asked separately.
+   */
+  liveSince: number | null;
   lastError: string | null;
   reconnectAttempts: number;
 }

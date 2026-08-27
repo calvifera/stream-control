@@ -3114,3 +3114,45 @@ body.panel-root::after {
      part of the label instead of as another window button. */
   margin-left: 2px;
 }
+
+/* A chip reflecting live state rather than offering an action — the panel
+   button while the panel is actually open, for instance. */
+.chip-on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------- *
+ * Row actions: mute / trust
+ * --------------------------------------------------------------- */
+
+/* Already-applied state. Filled rather than outlined, so "this person is
+   muted" reads at a glance instead of needing the label to be parsed. */
+.chatrow-actions button.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The brief confirmation that replaces the buttons after a click. Occupies
+   the same corner so nothing shifts underneath the cursor. */
+.chatrow-actions-done {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Kept visible without hover, or the confirmation would vanish the moment the
+   pointer moved — which is exactly when you want to read it. */
+.chatrow .chatrow-actions-done { display: flex; }

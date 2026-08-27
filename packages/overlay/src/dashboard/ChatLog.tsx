@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  listKey,
   PLATFORM_INFO,
   PLATFORMS,
+  viewerKey,
   tierFor,
   tierStyle,
   type HighlightTier,
@@ -313,7 +315,7 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
           platform={tab}
           stats={stats}
           connected={connections[tab]?.status === 'connected'}
-          connectedAt={connections[tab]?.connectedAt ?? null}
+          liveSince={connections[tab]?.liveSince ?? null}
         />
       ) : null}
 
@@ -323,6 +325,7 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
           <ChatRow
             event={pinned}
             tier={highlightOf(pinned, tiers)}
+            showPlatform={tab === 'all'}
             onCopy={copyHandle}
             onPin={() => setPinned(null)}
             pinned
@@ -343,6 +346,7 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
               key={event.id}
               event={event}
               tier={highlightOf(event, tiers)}
+              showPlatform={tab === 'all'}
               fresh={isFresh(event.id)}
               onCopy={copyHandle}
               onPin={() => setPinned((current) => (current?.id === event.id ? null : event))}
@@ -380,6 +384,7 @@ function ChatRow({
   tier,
   onCopy,
   onPin,
+  showPlatform = true,
   pinned = false,
   fresh = false,
 }: {
@@ -387,6 +392,14 @@ function ChatRow({
   tier: HighlightTier | null;
   onCopy: (user: StreamUser) => void;
   onPin: () => void;
+  /**
+   * Whether to mark which platform this came from.
+   *
+   * Only worth anything on the merged tab. On a platform's own tab every row
+   * is from that platform by definition, so the mark repeats the tab heading
+   * once per message and costs width that the message could use.
+   */
+  showPlatform?: boolean;
   pinned?: boolean;
   /** Just arrived, so it animates in. Rows already on screen must not. */
   fresh?: boolean;
@@ -422,7 +435,7 @@ function ChatRow({
         style={{ borderLeftColor: info.color }}
         onClick={onPin}
       >
-        <PlatformMark platform={event.platform} />
+        {showPlatform ? <PlatformMark platform={event.platform} /> : null}
         {user ? (
           <button
             type="button"
@@ -453,7 +466,7 @@ function ChatRow({
 
       <div className="chatrow-body">
         <div className="chatrow-head">
-          <PlatformMark platform={event.platform} />
+          {showPlatform ? <PlatformMark platform={event.platform} /> : null}
           {user ? (
             <button
               type="button"
@@ -517,33 +530,85 @@ function PlatformMark({ platform }: { platform: Platform }): JSX.Element {
 }
 
 /** Mute / trust, revealed on hover so the row stays clean while reading. */
+/**
+ * Mute and trust, as toggles that know what they already are.
+ *
+ * The previous version was two buttons that fired and said nothing. Clicking
+ * Mute on somebody already muted did nothing visible, clicking it on somebody
+ * new did nothing visible either, and there was no way to tell those apart or
+ * to undo one — which for a moderation control is the wrong kind of quiet.
+ *
+ * So each button reads the live config rather than tracking its own idea of
+ * the world: it shows the current state, reverses it on click, and says which
+ * is which on hover. The socket pushes the new config to every client, so a
+ * mute applied here also lights up in the dashboard.
+ */
 function RowActions({ user }: { user: StreamUser }): JSX.Element {
-  const [busy, setBusy] = useState(false);
-  const key = `${user.platform}:${user.uniqueId}`;
+  const { config } = useLive();
+  const [busy, setBusy] = useState<'mute' | 'trust' | null>(null);
+  const [done, setDone] = useState<string | null>(null);
 
-  const run = (action: () => Promise<unknown>) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setBusy(true);
-    void action()
-      .catch(() => undefined)
-      .finally(() => setBusy(false));
-  };
+  const key = viewerKey(user.platform, user.uniqueId);
+  const users = config?.users;
+  const muted = users?.penaltyBox.some((entry) => listKey(entry.username) === key) ?? false;
+  const trusted = users?.trusted.some((entry) => listKey(entry) === key) ?? false;
+
+  const run =
+    (which: 'mute' | 'trust', label: string, action: () => Promise<unknown>) =>
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setBusy(which);
+      void action()
+        .then(() => {
+          // Confirmation, briefly. The config arrives over the socket a moment
+          // later and the button's own state flips — this covers the gap, and
+          // names what happened so a misclick is obvious rather than silent.
+          setDone(label);
+          window.setTimeout(() => setDone(null), 1400);
+        })
+        .catch(() => undefined)
+        .finally(() => setBusy(null));
+    };
+
+  if (done) return <div className="chatrow-actions chatrow-actions-done">{done}</div>;
 
   return (
     <div className="chatrow-actions">
       <button
         type="button"
-        disabled={busy}
-        onClick={run(() => api.penalizeUser(key, 'Muted from chat log', user.nickname))}
+        disabled={busy !== null}
+        className={muted ? 'is-on' : undefined}
+        title={
+          muted
+            ? `${user.nickname} is muted — speech is skipped. Click to unmute.`
+            : `Mute ${user.nickname}: keep them in chat but skip their speech.`
+        }
+        onClick={
+          muted
+            ? run('mute', 'unmuted', () => api.pardonUser(key))
+            : run('mute', 'muted', () =>
+                api.penalizeUser(key, 'Muted from chat log', user.nickname),
+              )
+        }
       >
-        Mute
+        {muted ? 'Muted' : 'Mute'}
       </button>
       <button
         type="button"
-        disabled={busy}
-        onClick={run(() => api.trustUser(key, user.nickname))}
+        disabled={busy !== null}
+        className={trusted ? 'is-on' : undefined}
+        title={
+          trusted
+            ? `${user.nickname} is trusted — exempt from automatic penalties. Click to remove.`
+            : `Trust ${user.nickname}: exempt them from automatic penalties.`
+        }
+        onClick={
+          trusted
+            ? run('trust', 'untrusted', () => api.untrustUser(key))
+            : run('trust', 'trusted', () => api.trustUser(key, user.nickname))
+        }
       >
-        Trust
+        {trusted ? 'Trusted' : 'Trust'}
       </button>
     </div>
   );

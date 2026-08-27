@@ -60,12 +60,45 @@ export function ChatPopoutButton(): JSX.Element {
   const supported = popoutSupported();
   const openerRef = useRef<HTMLButtonElement | null>(null);
 
+  /*
+   * Polled while the panel is open, so closing it brings the button back.
+   *
+   * The panel is a separate process with its own close button, and nothing
+   * tells the browser when it goes. Without this the dashboard kept showing
+   * whatever it learned at load — so after closing the panel there was no way
+   * to reopen it without reloading the page.
+   *
+   * Only while it is running: once it has closed there is nothing further to
+   * learn, and a dashboard left open all stream should not poll for hours to
+   * find that out.
+   */
+  const running = panel?.running ?? false;
   useEffect(() => {
-    void api
-      .panelStatus()
-      .then(setPanel)
-      .catch(() => setPanel(null));
-  }, []);
+    let cancelled = false;
+    const load = (): void => {
+      void api
+        .panelStatus()
+        .then((next) => {
+          if (!cancelled) setPanel(next);
+        })
+        .catch(() => {
+          if (!cancelled) setPanel(null);
+        });
+    };
+
+    load();
+    if (!running) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const timer = window.setInterval(load, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [running]);
 
   const openPip = useCallback(() => {
     const api = pipApi();
@@ -119,6 +152,9 @@ export function ChatPopoutButton(): JSX.Element {
   const label = (): string => {
     if (opening) return 'Opening…';
     if (pipWindow) return 'Close pop-out';
+    // Reflects the panel rather than just offering to open one, so the button
+    // is never claiming a window exists that has already been closed.
+    if (canOpenPanel && running) return '\u29c9 Panel open';
     return canOpenPanel ? '\u29c9 Open chat panel' : '\u29c9 Pop out chat';
   };
 
@@ -127,12 +163,14 @@ export function ChatPopoutButton(): JSX.Element {
       <button
         ref={openerRef}
         type="button"
-        className="chip"
+        className={canOpenPanel && running ? 'chip chip-on' : 'chip'}
         disabled={opening}
         title={
-          canOpenPanel
-            ? 'Opens the transparent always-on-top panel. Drag it by its title bar to see what is underneath.'
-            : 'Opens a floating browser window. It stays on top but is not see-through.'
+          canOpenPanel && running
+            ? 'The panel is open. Click to bring it to the front — close it and this goes back to "Open chat panel".'
+            : canOpenPanel
+              ? 'Opens the transparent always-on-top panel. Drag it by its title bar to see what is underneath.'
+              : 'Opens a floating browser window. It stays on top but is not see-through.'
         }
         onClick={pipWindow ? () => pipWindow.close() : canOpenPanel ? openPanel : openPip}
       >

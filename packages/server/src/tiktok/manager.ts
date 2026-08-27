@@ -61,6 +61,7 @@ export class TikTokManager extends EventEmitter {
     hostNickname: null,
     hostAvatarUrl: null,
     connectedAt: null,
+    liveSince: null,
     lastError: null,
     reconnectAttempts: 0,
   };
@@ -145,6 +146,9 @@ export class TikTokManager extends EventEmitter {
         status: 'connected',
         roomId: result.roomId ?? null,
         connectedAt: Date.now(),
+        // A TikTok LIVE room only exists while it is live, so connecting is
+        // itself the proof — there is nothing separate to ask.
+        liveSince: Date.now(),
         reconnectAttempts: 0,
         lastError: null,
         hostNickname: readRoomOwner(result.roomInfo)?.nickname ?? null,
