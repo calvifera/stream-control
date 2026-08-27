@@ -22,7 +22,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 const say = (text = '') => process.stdout.write(`${text}\n`);
 const step = (text) => say(`\n\x1b[36m${text}\x1b[0m`);
@@ -31,6 +30,26 @@ const bad = (text) => say(`\x1b[31m${text}\x1b[0m`);
 /** Runs a command, showing its output. Returns whether it succeeded. */
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: ROOT, stdio: 'inherit', shell: false });
+  // A command that never started leaves status null, which is not a failing
+  // exit code and would otherwise be reported as a mysterious empty failure.
+  if (result.error) bad(`  could not run ${command}: ${result.error.message}`);
+  return result.status === 0;
+}
+
+/**
+ * Runs npm.
+ *
+ * As one shell string rather than a command plus an args array, because on
+ * Windows npm is `npm.cmd` and Node refuses to spawn a `.cmd` without a shell
+ * at all — it fails with EINVAL before npm ever runs. Passing an args array
+ * alongside `shell: true` is the other way through and is deprecated, since
+ * the arguments get concatenated rather than escaped. Every argument here is
+ * a literal in this file, so the string form is both safe and the only one
+ * that behaves the same on every platform.
+ */
+function runNpm(argString) {
+  const result = spawnSync(`npm ${argString}`, { cwd: ROOT, stdio: 'inherit', shell: true });
+  if (result.error) bad(`  could not run npm: ${result.error.message}`);
   return result.status === 0;
 }
 
@@ -114,7 +133,7 @@ if (changed) {
 step('Dependencies');
 if (lockHash() !== lockBefore) {
   say('  package-lock.json moved — installing');
-  if (!run(NPM, ['install'])) {
+  if (!runNpm('install')) {
     bad('\nThe install failed. The new source is in place but its dependencies are not,');
     bad('so the app will not start. Fix the error above and run this again.');
     process.exit(1);
@@ -124,7 +143,7 @@ if (lockHash() !== lockBefore) {
 }
 
 step('Building');
-if (!run(NPM, ['run', 'build'])) {
+if (!runNpm('run build')) {
   bad('\nThe build failed. This is the half-updated state worth knowing about:');
   bad('the source is new, but the dashboard being served is still the old build.');
   say('');
