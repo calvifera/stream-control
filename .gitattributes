@@ -1,0 +1,26 @@
+# Line endings.
+#
+# Every source file here is LF, but Git on Windows defaults to checking files
+# out as CRLF — which is where the wall of "LF will be replaced by CRLF"
+# warnings on the first commit came from. Left alone it is mostly cosmetic,
+# until the day this is cloned onto a second machine and the first save
+# rewrites every line of every file into one enormous whitespace diff.
+#
+# `eol=lf` pins both sides: LF in the repository and LF in the working tree,
+# on every platform. Node, Vite, tsx and Rust are all indifferent to which,
+# so there is no reason to let it vary.
+* text=auto eol=lf
+
+# Never line-ending-process these — Git's binary detection is good, but an
+# icon mangled by a newline substitution is a corrupt file that still looks
+# like a valid path in a diff.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp3 binary
+*.wav binary
+*.exe binary
