@@ -3,7 +3,7 @@
  *   npm run check:listeners -w @streaming/server
  *
  * The rule under test: a real TTS browser source always wins over a fallback
- * listener (the dashboard), so opening the dashboard next to OBS never pulls
+ * listener (the dashboard), so opening it next to a live overlay never pulls
  * audio out of the stream — but with no source open, the dashboard still gets
  * the clip so you can hear it.
  */

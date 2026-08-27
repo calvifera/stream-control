@@ -562,7 +562,7 @@ export function createDefaultConfig(username = ''): AppConfig {
     },
     tunnel: { enabled: false, domain: '', basicAuth: '' },
     // Blank = use whatever address the dashboard was loaded from, which is
-    // what OBS wants. Set it only when your capture software is fussier.
+    // what most software wants. Set it only when yours is fussier.
     sources: { host: '' },
     overlays: DEFAULT_OVERLAYS.map((o) => ({ ...o })),
     highlights: DEFAULT_HIGHLIGHTS.map((tier) => ({ ...tier, platforms: [...tier.platforms] })),

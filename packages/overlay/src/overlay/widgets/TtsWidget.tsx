@@ -9,7 +9,7 @@ interface Props {
 /**
  * The audio sink for the whole system.
  *
- * Add this as a browser source in OBS with "control audio via OBS" enabled and
+ * Add this as a browser source with its audio routed into the stream, and
  * every TTS clip is mixed into your stream. The server sends each clip to
  * exactly one page, preferring a source like this one over the dashboard, so
  * having both open never doubles up the audio.

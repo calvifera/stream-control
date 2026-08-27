@@ -204,7 +204,7 @@ export function onTtsStop(listener: () => void): () => void {
  * Drives the widgets from invented data instead of a socket. The "instead"
  * matters: a preview must not open a connection, because an overlay that
  * identifies itself as a TTS source would be handed real clips and take audio
- * away from OBS. In demo mode no socket is ever created.
+ * away from the live sources. In demo mode no socket is ever created.
  * ------------------------------------------------------------------ */
 
 /*

@@ -13,7 +13,7 @@ interface NgrokListener {
 
 /**
  * Publishes the local server through an ngrok tunnel so overlay URLs work from
- * another machine — a phone, a second PC running OBS, or a co-host.
+ * another machine — a phone, a second PC running your encoder, or a co-host.
  *
  * The tunnel is off by default: it exposes the dashboard (which holds your
  * session id) to anyone with the URL, so `tunnel.basicAuth` should be set

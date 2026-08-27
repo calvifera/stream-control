@@ -130,7 +130,7 @@ export function SourceEditor({
         <Row>
           <ColorField label="Text" value={style.textColor} onChange={(textColor) => setStyle({ textColor })} />
           <ColorField label="Accent" value={style.accentColor} onChange={(accentColor) => setStyle({ accentColor })} />
-          <Field label="Page background" hint="Keep transparent for OBS">
+          <Field label="Page background" hint="Keep transparent for a browser source">
             <TextInput value={style.backgroundColor} onChange={(backgroundColor) => setStyle({ backgroundColor })} />
           </Field>
           <Field label="Item background">
@@ -359,7 +359,7 @@ export function SettingsEditor({
       return (
         <>
           <div className="banner">
-            This source is the audio sink. Add it in OBS once, and leave it running — it plays every
+            This source is the audio sink. Add it once as a browser source and leave it running — it plays every
             TTS clip.
           </div>
           <Row>

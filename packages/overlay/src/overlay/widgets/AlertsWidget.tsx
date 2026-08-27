@@ -45,7 +45,7 @@ export function AlertsWidget({ settings }: Props): JSX.Element {
         audioRef.current.volume = settings.soundVolume;
         audioRef.current.currentTime = 0;
         // Autoplay is blocked until the page has been interacted with in a
-        // normal browser; OBS browser sources allow it by default.
+        // normal browser; browser sources allow it by default.
         void audioRef.current.play().catch(() => undefined);
       }
 

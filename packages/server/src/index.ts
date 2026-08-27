@@ -22,7 +22,7 @@ async function main(): Promise<void> {
   const server = http.createServer(app);
 
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
-    // Overlays are loaded by OBS from a different origin than the dashboard
+    // Overlays are loaded by streaming software from a different origin than the dashboard
     // when the tunnel is on, so the socket has to accept any origin.
     cors: { origin: '*' },
     serveClient: false,

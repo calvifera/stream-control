@@ -170,7 +170,7 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
             hint={
               config.sources.host
                 ? `Copied links use http://${config.sources.host}:… instead of this page's address.`
-                : 'Leave blank for OBS. Set it if your capture software rejects the URL: TikTok LIVE Studio refuses localhost and bare IP addresses alike, and wants a hostname.'
+                : 'Leave blank for most software. Set it if yours rejects the URL — some refuse localhost and bare IP addresses alike, and want a hostname.'
             }
           >
             <TextInput
@@ -236,7 +236,7 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
 
       <Panel
         title="Public tunnel (ngrok)"
-        description="Exposes this server on a public URL so OBS on another machine — or a co-host — can load the overlays."
+        description="Exposes this server on a public URL so streaming software on another machine — or a co-host — can load the overlays."
         actions={
           <Button variant={tunnel?.url ? 'danger' : 'primary'} onClick={toggleTunnel} disabled={busy}>
             {tunnel?.url ? 'Stop tunnel' : 'Start tunnel'}

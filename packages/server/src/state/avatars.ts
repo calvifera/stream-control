@@ -22,7 +22,7 @@ const ALLOWED_TYPES = new Map([
  *
  * Caching rather than storing the remote URL is not an optimisation — TikTok's
  * avatar URLs are signed and carry `x-expires` about 48 hours out. Handing one
- * to an OBS browser source means the picture silently 403s two days later,
+ * to a browser source means the picture silently 403s two days later,
  * usually mid-stream. A local copy keeps `/avatars/<user>.jpg` stable forever,
  * and overlays never depend on TikTok being reachable at render time.
  */

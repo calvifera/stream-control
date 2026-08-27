@@ -94,7 +94,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
     <>
       <Panel
         title="Sources"
-        description="Every browser source, previewed against invented data — the same components OBS renders. Previews never connect to the room, so nothing here competes with your live sources for audio."
+        description="Every browser source, previewed against invented data — the same components your streaming software renders. Previews never connect to the room, so nothing here competes with your live sources for audio."
         actions={
           <Button onClick={() => setNudge((n) => n + 1)} title="Reload every preview">
             Refresh previews
@@ -181,7 +181,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
       {open ? (
         <Modal
           title={open.name}
-          subtitle={`${open.type} source · add in OBS at ${open.width}×${open.height}`}
+          subtitle={`${open.type} source · add as a browser source at ${open.width}×${open.height}`}
           onClose={() => setOpenId(null)}
           actions={
             <CopyButton

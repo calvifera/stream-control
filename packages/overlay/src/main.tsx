@@ -25,7 +25,7 @@ createRoot(root).render(
         <Route path="/overlay/:overlayId" element={<OverlayPage />} />
         {/* The desktop panel. Ungated like an overlay — the native shell has
             no way to present a login form — but it registers as a
-            non-listener, so it can never take TTS audio away from OBS. */}
+            non-listener, so it can never take TTS audio off the stream. */}
         <Route path="/panel/chat" element={<ChatPanelPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

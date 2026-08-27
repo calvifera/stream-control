@@ -1174,7 +1174,7 @@ select.input option { background: var(--bg-raised); color: var(--text); }
   box-shadow: 0 0 24px -10px rgba(37, 244, 238, 0.85);
 }
 
-/* Checkerboard so transparent overlays read as transparent, the way OBS
+/* Checkerboard so transparent overlays read as transparent, the way streaming software
  * shows them, rather than looking like they have a black background. */
 .gallery-stage {
   position: relative;

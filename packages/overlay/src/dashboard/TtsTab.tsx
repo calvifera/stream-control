@@ -108,7 +108,7 @@ export function TtsTab({ config, patch, meta }: Props): JSX.Element {
     <>
       <Panel
         title="Speech engine"
-        description="Clips are synthesized on the server and played by the TTS browser source, so OBS captures the audio."
+        description="Clips are synthesized on the server and played by the TTS browser source, so your streaming software captures the audio."
         actions={
           <Toggle label="Enabled" checked={tts.enabled} onChange={(enabled) => setTts({ enabled })} />
         }
@@ -333,7 +333,7 @@ export function TtsTab({ config, patch, meta }: Props): JSX.Element {
         {(ttsState?.overlayListeners ?? 0) === 0 ? (
           <div className="banner">
             No TTS browser source is open, so speech plays through this dashboard tab instead. Fine
-            for testing — but add the <strong>TTS audio</strong> source in OBS before going live, or
+            for testing — but add the <strong>TTS audio</strong> browser source before going live, or
             your viewers won't hear any of it.
           </div>
         ) : null}

@@ -261,7 +261,7 @@ export function normalizeRoomStats(msg: WebcastRoomUserSeqMessage, host: string)
      *
      * Preferring `totalUser` was the bug: it only ever rises, it is always
      * larger than the number of people actually watching, and it does not
-     * match what TikTok's own LIVE Studio shows.
+     * match what TikTok's own dashboard shows.
      */
     viewerCount: toInt(msg.total, 0),
     // Kept rather than discarded, because it answers a question the

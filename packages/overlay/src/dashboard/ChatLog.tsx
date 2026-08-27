@@ -42,7 +42,7 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
   const frameRef = useRef(0);
 
   const connections = snapshot?.connections ?? {};
-  // The same list every chat overlay reads, so a viewer marked notable in OBS
+  // The same list every chat overlay reads, so a viewer marked notable on stream
   // is marked notable here too.
   const tiers = config?.highlights ?? [];
   // A tab appears when the platform is connected, or when the buffer already

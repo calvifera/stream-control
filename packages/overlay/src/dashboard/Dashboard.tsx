@@ -36,7 +36,7 @@ export function Dashboard(): JSX.Element {
 
   // Registering as a fallback listener means speech is audible here before any
   // TTS browser source exists. A real source always takes priority, so this
-  // never pulls audio out of the stream once OBS is set up.
+  // never pulls audio out of the stream once a live overlay is running.
   useEffect(() => {
     identify({ role: 'dashboard', listener: true, fallback: true });
     void api.meta().then(setMeta).catch(() => undefined);
@@ -99,7 +99,7 @@ export function Dashboard(): JSX.Element {
             <StatusDot status={playingHere ? 'connecting' : 'connected'} />
             {playingHere
               ? 'audio: this tab'
-              : `audio: ${tts?.overlayListeners} OBS source${tts?.overlayListeners === 1 ? '' : 's'}`}
+              : `audio: ${tts?.overlayListeners} browser source${tts?.overlayListeners === 1 ? '' : 's'}`}
           </span>
 
           {/* Lives in the header, not the Chat tab: mounted there it was
@@ -150,7 +150,7 @@ export function Dashboard(): JSX.Element {
         <div className="banner app-banner">
           No TTS browser source is open, so speech is playing through this tab —
           handy for testing, but <strong>your stream won't hear it</strong>. Add the{' '}
-          <strong>TTS audio</strong> source in OBS and it takes over automatically.
+          <strong>TTS audio</strong> browser source and it takes over automatically.
         </div>
       ) : null}
 
@@ -187,5 +187,5 @@ export function Dashboard(): JSX.Element {
 function audioHint(overlayListeners: number): string {
   return overlayListeners === 0
     ? 'No TTS browser source is open — speech plays in this tab so you can hear it, but it is not going into your stream.'
-    : 'Speech is going to your TTS browser source, so OBS captures it.';
+    : 'Speech is going to your TTS browser source, so your streaming software captures it.';
 }

@@ -30,7 +30,7 @@ export function SlideshowWidget({ settings }: { settings: SlideshowOverlaySettin
   const demo = isDemoMode();
 
   // Reload whenever the folder changes. Polled slowly as well, so images
-  // dropped in while the source is live appear without touching OBS.
+  // dropped in while the source is live appear without touching the source.
   // The gallery preview loads the real folder too. Listing images is a plain
   // HTTP call with no socket behind it, so this still honours the rule that a
   // preview never competes with a live source — and a slideshow preview that

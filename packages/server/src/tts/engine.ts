@@ -39,7 +39,7 @@ function estimateDurationMs(text: string): number {
  * Owns the speech queue.
  *
  * Playback happens in the browser (an overlay page with an <audio> element),
- * not on the server — OBS captures the browser source's audio, so routing
+ * not on the server — streaming software captures the browser source's audio, so routing
  * sound through the machine's speakers isn't needed and would be harder to
  * mix. The server synthesizes, queues, and tells exactly one listener what to
  * play next; the listener acks when it finishes.

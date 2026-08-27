@@ -86,7 +86,7 @@ export interface ServerMeta {
 export interface OverlayWithUrls extends OverlaySource {
   localUrl: string;
   publicUrl: string | null;
-  /** What to paste into OBS or LIVE Studio; honours `sources.host`. */
+  /** What to paste into your streaming software; honours `sources.host`. */
   sourceUrl: string;
 }
 

@@ -41,7 +41,7 @@ function Widget({ overlay }: { overlay: OverlaySource }): JSX.Element {
 }
 
 /**
- * One browser-source page. Add `/overlay/<id>` to OBS as a Browser Source at
+ * One browser-source page. Add `/overlay/<id>` as a browser source at
  * the width and height shown in the dashboard.
  */
 export function OverlayPage(): JSX.Element {
@@ -49,7 +49,7 @@ export function OverlayPage(): JSX.Element {
   const [params] = useSearchParams();
   // `?demo=1` renders the source against invented data, for the gallery in the
   // dashboard. It deliberately never connects: a preview that identified as a
-  // TTS source would be handed real clips and mute OBS.
+  // TTS source would be handed real clips and mute the stream.
   const demo = params.get('demo') === '1';
   const { config, socketConnected } = useLive();
   const overlay = config?.overlays.find((item) => item.id === overlayId);

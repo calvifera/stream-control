@@ -391,10 +391,10 @@ export class Hub {
   /**
    * Sends the clip to exactly one listener. Broadcasting would make every open
    * TTS overlay speak the same line at once — an echo chamber if the source is
-   * open in both OBS and a preview tab.
+   * open in both a live source and a preview tab.
    *
    * A real TTS source always wins over a fallback listener, so opening the
-   * dashboard alongside OBS never pulls audio out of the stream and into your
+   * dashboard alongside a live overlay never pulls audio out of the stream and into your
    * desktop speakers.
    */
   private dispatchPlayback(item: TtsQueueItem): void {

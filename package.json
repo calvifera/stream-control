@@ -2,7 +2,7 @@
   "name": "streaming",
   "version": "1.0.0",
   "private": true,
-  "description": "Custom TikTok LIVE streaming backend: realtime events, TTS, filters, and OBS overlay sources exposed over ngrok.",
+  "description": "Self-hosted multi-platform live chat control room: TikTok, Twitch and YouTube in one event stream, with filters, text-to-speech, browser-source overlays and a desktop chat panel.",
   "workspaces": [
     "packages/shared",
     "packages/server",

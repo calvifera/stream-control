@@ -9,7 +9,7 @@ import { KillTtsButton, PanelSettingsMenu } from './PanelControls.js';
  * The chat log as a standalone page, for the desktop panel to load.
  *
  * Served at `/panel/chat`. Deliberately not the same thing as an overlay:
- * overlays are built to be captured by OBS and shown to viewers, this is built
+ * overlays are built to be captured by streaming software and shown to viewers, this is built
  * to sit on top of a game and be read by one person, so it keeps the
  * dashboard's controls (pin, copy a handle, mute) rather than the broadcast
  * styling.
@@ -34,7 +34,7 @@ export function ChatPanelPage(): JSX.Element {
    *
    * The dashboard registers itself as a listener of last resort, and an
    * overlay registers as a real one. This page must be neither: it is open for
-   * hours while a game runs, and if it took a clip that OBS should have
+   * hours while a game runs, and if it took a clip an overlay should have
    * played, the audio would come out of the desktop instead of the stream —
    * silently, and only for the one person who cannot hear the difference.
    */

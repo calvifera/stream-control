@@ -20,7 +20,7 @@ export interface TtsPlayerState {
 /**
  * Plays TTS clips pushed from the server.
  *
- * Shared by the TTS overlay (the OBS audio sink) and the dashboard (which acts
+ * Shared by the TTS overlay (the captured audio sink) and the dashboard (which acts
  * as a fallback so speech is audible before any browser source is set up).
  * The server decides which single page receives a clip, so mounting this in
  * both places never doubles the audio.
@@ -102,7 +102,7 @@ export function useTtsPlayer(loudness: LoudnessOptions = { enabled: true, gainDb
 
       const fail = (error: unknown): void => {
         // A normal browser tab blocks autoplay until the user interacts.
-        // OBS browser sources don't, so this is only seen in the dashboard
+        // Browser sources don't, so this is only seen in the dashboard
         // and in preview tabs.
         const message = error instanceof Error ? error.message : String(error);
         setBlocked(true);

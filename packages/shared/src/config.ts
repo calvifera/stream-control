@@ -525,7 +525,7 @@ export interface OverlayStyle {
   fontWeight: number;
   textColor: string;
   accentColor: string;
-  /** Any CSS color, including `transparent` for OBS browser sources. */
+  /** Any CSS color, including `transparent` for browser sources. */
   backgroundColor: string;
   /** Per-item background (chat rows, alert cards). */
   itemBackground: string;
@@ -748,7 +748,7 @@ export interface OverlaySource {
    */
   group: string;
   enabled: boolean;
-  /** Recommended OBS browser-source dimensions. */
+  /** Recommended browser-source dimensions. */
   width: number;
   height: number;
   align: 'start' | 'center' | 'end';
@@ -782,7 +782,7 @@ export interface SourcesConfig {
    * have pinned in your hosts file) makes every copied URL acceptable to it
    * without involving a tunnel.
    *
-   * Blank keeps the dashboard's own origin, which is right for OBS.
+   * Blank keeps the dashboard's own origin, which is right for most software.
    */
   host: string;
 }

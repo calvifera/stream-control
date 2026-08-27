@@ -119,7 +119,7 @@ export function logout(req: Request, res: Response): void {
  *
  * Kept deliberately short. `/ping` is the identity probe used by the source
  * host check, and `/slideshows/:folder` is the one API call a browser source
- * makes — OBS cannot log in, so gating it would break the overlay it serves.
+ * makes — streaming software cannot log in, so gating it would break the overlay it serves.
  */
 /**
  * The few paths that must work before you are signed in.

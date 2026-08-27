@@ -3,7 +3,8 @@
 A self-hosted control room for live streaming to more than one platform at
 once. It connects to TikTok, Twitch and YouTube chat together, normalizes every
 event into one model, runs messages through a filter and rules pipeline, speaks
-what survives, and serves the results as OBS browser sources — plus a
+what survives, and serves the results as browser sources for whatever software
+you stream with — plus a
 transparent always-on-top chat panel for reading chat over a game.
 
 Everything runs on your machine. There is no hosted service, no account to
@@ -19,7 +20,7 @@ Twitch  ─┼─▶ normalize ──▶ filters ──▶ rules/gates ──▶
 YouTube ─┘                     │                          │
                                └──────▶ Socket.IO ◀───────┘
                                             │
-                    overlays (OBS) + dashboard + desktop chat panel
+                overlays (browser sources) + dashboard + chat panel
 ```
 
 Identity is keyed on `platform:handle` throughout, so one trusted list, one
@@ -65,7 +66,7 @@ Then everything — dashboard and overlays — is served from
 Enter your TikTok @handle on the **Connect** tab and hit Connect. You do not
 need credentials to read a room, and you do not have to be the host.
 
-## Adding overlays to OBS
+## Adding overlays to your streaming software
 
 Every source in the **Sources** tab has its own URL:
 
@@ -73,7 +74,9 @@ Every source in the **Sources** tab has its own URL:
 http://localhost:4700/overlay/<id>
 ```
 
-Add it in OBS as a **Browser Source** at the width and height shown next to it.
+Add it as a **browser source** at the width and height shown next to it. Every
+major streaming application has one, though the name varies — some call it a
+webpage or web source.
 Copy buttons for each URL are on the Connect tab.
 
 Built-in source types:
@@ -98,7 +101,8 @@ normal setup. Each has its own fonts, colours, animation and custom CSS.
 >
 > If no TTS source is open, clips play through the **dashboard** instead, so you
 > can hear TTS while setting things up. A real TTS source always takes priority,
-> so opening the dashboard next to OBS never steals audio out of the stream. The
+> so opening the dashboard next to a live overlay never steals audio out of the
+stream. The
 > dashboard says which of the two is currently happening, and warns you when
 > sound is only reaching your desktop.
 
@@ -313,7 +317,8 @@ There's also a **Test voices** button on the People tab for a quick in-app check
 ## Public URLs (ngrok)
 
 Put an `NGROK_AUTHTOKEN` in `.env`, then start the tunnel from the Connect tab.
-Overlay URLs become reachable from another machine — useful when OBS runs
+Overlay URLs become reachable from another machine — useful when your encoder
+runs
 somewhere other than this server.
 
 **Set `tunnel.basicAuth` to `user:password` when you do.** The tunnel exposes

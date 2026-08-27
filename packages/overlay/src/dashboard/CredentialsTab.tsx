@@ -422,7 +422,8 @@ function CredentialField({
  *   - The **password** decides who can change anything once they have.
  *
  * Neither substitutes for the other, and there is a third fact that surprises
- * people: overlay URLs stay open either way, because OBS cannot log in.
+ * people: overlay URLs stay open either way, because streaming software cannot
+ * log in.
  */
 function AccessPanel({
   statusOf,
@@ -493,8 +494,8 @@ function AccessPanel({
         <div>
           <h4>Overlays either way</h4>
           <p>
-            Overlay URLs stay reachable with or without a password, because OBS has no way to log
-            in. A password protects control, never the event stream.
+            Overlay URLs stay reachable with or without a password, because streaming software has no
+            way to log in. A password protects control, never the event stream.
           </p>
         </div>
       </div>
