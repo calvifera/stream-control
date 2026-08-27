@@ -40,6 +40,7 @@
     "check:twitch": "tsx src/checks/twitch.ts",
     "check:youtube": "tsx src/checks/youtube.ts",
     "check:moderation": "tsx src/checks/moderation.ts",
+    "check:secrets": "tsx src/checks/secrets.ts",
     "check:twitch-live": "tsx src/checks/twitch-live.ts",
     "check:auth-platforms": "tsx src/checks/auth-platforms.ts"
   },

@@ -38,6 +38,7 @@ import type { ProviderId } from '../tts/providers/types.js';
 import type { TunnelController } from '../tunnel.js';
 import { env } from '../env.js';
 import { openPanel, panelStatus } from '../panel.js';
+import { parseSecretKey, secrets } from '../secrets.js';
 
 const asError = (res: Response, status: number, message: string): Response =>
   res.status(status).json({ error: message });
@@ -457,6 +458,50 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
   router.get('/youtube/usage', (_req, res) => {
     res.json(hub.youtube.getUsage());
   });
+
+  /* ---------------------------------------------------------------- *
+   * Credentials
+   *
+   * Status is readable; values are not, and there is no route that returns
+   * one. The dashboard can say "configured, 30 characters, from .env" and
+   * nothing more — so nothing that can reach the API can read a secret back
+   * out of it.
+   * ---------------------------------------------------------------- */
+
+  router.get('/credentials', (_req, res) => {
+    res.json({ credentials: secrets.status() });
+  });
+
+  router.post(
+    '/credentials',
+    wrap((req, res) => {
+      const body = (req.body ?? {}) as { key?: unknown; value?: unknown };
+      const key = parseSecretKey(body.key);
+      if (!key) {
+        asError(res, 400, 'unknown credential');
+        return;
+      }
+      if (typeof body.value !== 'string') {
+        asError(res, 400, 'value must be a string');
+        return;
+      }
+      secrets.set(key, body.value);
+      res.json({ credentials: secrets.status() });
+    }),
+  );
+
+  router.delete(
+    '/credentials/:key',
+    wrap((req, res) => {
+      const key = parseSecretKey(req.params.key);
+      if (!key) {
+        asError(res, 400, 'unknown credential');
+        return;
+      }
+      secrets.clear(key);
+      res.json({ credentials: secrets.status() });
+    }),
+  );
 
   router.get('/connections', (_req, res) => {
     res.json({

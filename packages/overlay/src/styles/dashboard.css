@@ -2899,3 +2899,104 @@ body.panel-root::after {
   font-size: 10px;
   color: var(--accent-2);
 }
+
+/* --------------------------------------------------------------- *
+ * Credentials
+ * --------------------------------------------------------------- */
+
+.cred-intro { max-width: 72ch; margin: 0; }
+.cred-intro code { font-size: 12px; }
+
+.cred-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.cred-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+
+/* Required vs optional is the first thing to read: four of the five groups
+   here are things you can skip entirely, and someone who does not know that
+   will assume the setup is five times longer than it is. */
+.cred-tag-required { background: var(--accent-2); color: #fff; }
+.cred-tag-recommended { background: rgba(255, 255, 255, 0.16); color: var(--text); }
+.cred-tag-optional { background: rgba(255, 255, 255, 0.07); color: var(--text-dim); }
+
+.cred-done {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+.cred-link { margin-left: auto; font-size: 12px; }
+
+.cred-caveat { max-width: 78ch; }
+
+.cred-steps {
+  margin: 12px 0 16px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-dim);
+  max-width: 78ch;
+}
+
+.cred-steps li { margin-bottom: 4px; }
+
+/* The value to paste, on its own line with a copy button — these are exact
+   strings where a single wrong character produces an OAuth error whose text
+   never mentions the redirect URL. */
+.cred-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.cred-copy code {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.cred-field {
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cred-field-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.cred-field-label { font-size: 13px; font-weight: 600; }
+
+.cred-state {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.cred-state-missing { color: var(--text-dim); opacity: 0.7; }
+.cred-state-warn { color: #fbbf24; }
+
+.cred-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cred-field-row > :first-child { flex: 1 1 auto; min-width: 0; }

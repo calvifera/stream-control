@@ -35,6 +35,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T>(path: string, body?: unknown): Promise<T> =>
   request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
 
+/**
+ * What the dashboard is allowed to know about a credential.
+ *
+ * Note what is absent: the value. There is no route that returns one, so this
+ * type has no field for it — the shape itself is the guarantee.
+ */
+export interface CredentialStatus {
+  key: string;
+  configured: boolean;
+  source: 'dashboard' | 'env' | null;
+  length: number;
+}
+
 export interface ProviderStatus {
   id: 'tiktok' | 'google' | 'browser';
   name: string;
@@ -194,6 +207,11 @@ export const api = {
     }),
   skipTts: () => post('/tts/skip'),
   clearTts: () => post('/tts/clear'),
+  credentials: () => request<{ credentials: CredentialStatus[] }>('/credentials'),
+  setCredential: (key: string, value: string) =>
+    post<{ credentials: CredentialStatus[] }>('/credentials', { key, value }),
+  clearCredential: (key: string) =>
+    request<{ credentials: CredentialStatus[] }>(`/credentials/${key}`, { method: 'DELETE' }),
   youtubeConnect: (videoId: string) => post('/youtube/connect', { videoId }),
   youtubeDisconnect: () => post('/youtube/disconnect'),
   youtubeUsage: () => request<{ polls: number; minutes: number }>('/youtube/usage'),

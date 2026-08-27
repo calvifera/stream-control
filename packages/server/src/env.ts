@@ -31,6 +31,19 @@ function num(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * Runtime configuration.
+ *
+ * The secret-bearing fields are **getters**, not values. Credentials can now
+ * be entered in the dashboard as well as in `.env`, and the store applies
+ * them onto `process.env` — so reading at access time is what lets a key
+ * typed into a form take effect immediately instead of at the next restart.
+ *
+ * The indirection through `process.env` rather than importing the store
+ * directly is deliberate: `secrets.ts` needs `DATA_DIR` from this file, and
+ * importing it back here would be a cycle that leaves `DATA_DIR` undefined
+ * exactly when the store is trying to find its own file.
+ */
 export const env = {
   port: num(process.env.PORT, 4700),
   host: process.env.HOST ?? '0.0.0.0',
@@ -38,14 +51,24 @@ export const env = {
    * Euler Stream key used to sign the webcast WebSocket URL. Optional — the
    * connector falls back to a shared, rate-limited quota without one.
    */
-  signApiKey: process.env.SIGN_API_KEY?.trim() || undefined,
+  get signApiKey(): string | undefined {
+    return process.env.SIGN_API_KEY?.trim() || undefined;
+  },
   /** `sessionid` cookie from tiktok.com, used for TTS and authenticated WS. */
-  ttSessionId: process.env.TIKTOK_SESSION_ID?.trim() || undefined,
+  get ttSessionId(): string | undefined {
+    return process.env.TIKTOK_SESSION_ID?.trim() || undefined;
+  },
   /** `tt-target-idc` cookie; only needed alongside an authenticated session. */
-  ttTargetIdc: process.env.TIKTOK_TARGET_IDC?.trim() || 'useast2a',
+  get ttTargetIdc(): string {
+    return process.env.TIKTOK_TARGET_IDC?.trim() || 'useast2a';
+  },
   /** Google Cloud API key with the Text-to-Speech API enabled. */
-  googleTtsApiKey: process.env.GOOGLE_TTS_API_KEY?.trim() || undefined,
-  ngrokAuthToken: process.env.NGROK_AUTHTOKEN?.trim() || undefined,
+  get googleTtsApiKey(): string | undefined {
+    return process.env.GOOGLE_TTS_API_KEY?.trim() || undefined;
+  },
+  get ngrokAuthToken(): string | undefined {
+    return process.env.NGROK_AUTHTOKEN?.trim() || undefined;
+  },
   /**
    * OAuth application credentials, registered once by hand.
    *
@@ -53,10 +76,18 @@ export const env = {
    * than config.json because config.json is broadcast to every connected
    * client; user tokens live in data/credentials.json because they rotate.
    */
-  twitchClientId: process.env.TWITCH_CLIENT_ID?.trim() || undefined,
-  twitchClientSecret: process.env.TWITCH_CLIENT_SECRET?.trim() || undefined,
-  googleClientId: process.env.GOOGLE_CLIENT_ID?.trim() || undefined,
-  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() || undefined,
+  get twitchClientId(): string | undefined {
+    return process.env.TWITCH_CLIENT_ID?.trim() || undefined;
+  },
+  get twitchClientSecret(): string | undefined {
+    return process.env.TWITCH_CLIENT_SECRET?.trim() || undefined;
+  },
+  get googleClientId(): string | undefined {
+    return process.env.GOOGLE_CLIENT_ID?.trim() || undefined;
+  },
+  get googleClientSecret(): string | undefined {
+    return process.env.GOOGLE_CLIENT_SECRET?.trim() || undefined;
+  },
   /**
    * Password for the dashboard and every state-changing API call. Unset means
    * no login is required — the right default for a server bound to loopback,

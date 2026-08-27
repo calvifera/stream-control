@@ -33,8 +33,16 @@ export const TWITCH_PROVIDER: OAuthProvider = {
     'moderator:manage:chat_messages',
     'moderator:read:followers',
   ],
-  clientId: env.twitchClientId,
-  clientSecret: env.twitchClientSecret,
+  // Getters, not values. These are captured once at module load, so reading
+  // them eagerly would mean a client id pasted into the dashboard did nothing
+  // until the next restart — which is exactly the friction the credentials
+  // screen exists to remove.
+  get clientId() {
+    return env.twitchClientId;
+  },
+  get clientSecret() {
+    return env.twitchClientSecret;
+  },
   identify: async (accessToken) => {
     if (!env.twitchClientId) return null;
     const response = await fetch('https://api.twitch.tv/helix/users', {
@@ -60,8 +68,12 @@ export const YOUTUBE_PROVIDER: OAuthProvider = {
   // Read-write on live chat, read-only on the channel. `youtube.force-ssl` is
   // what live chat moderation requires; there is no narrower scope for it.
   scopes: ['https://www.googleapis.com/auth/youtube.force-ssl'],
-  clientId: env.googleClientId,
-  clientSecret: env.googleClientSecret,
+  get clientId() {
+    return env.googleClientId;
+  },
+  get clientSecret() {
+    return env.googleClientSecret;
+  },
   authorizeExtras: {
     // Google only issues a refresh token when both are present, and without
     // one the sign-in silently stops working after an hour.

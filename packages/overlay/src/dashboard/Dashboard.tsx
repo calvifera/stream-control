@@ -7,6 +7,7 @@ import { useTtsPlayer } from '../lib/useTtsPlayer.js';
 import { ArchiveTab } from './ArchiveTab.js';
 import { ChatPopoutButton } from './ChatPopout.js';
 import { ChatTab } from './ChatTab.js';
+import { CredentialsTab } from './CredentialsTab.js';
 import { ConnectTab } from './ConnectTab.js';
 import { GalleryTab } from './GalleryTab.js';
 import { TtsTab } from './TtsTab.js';
@@ -16,7 +17,7 @@ import { LogTab } from './LogTab.js';
 import { StatusDot } from './controls.js';
 import '../styles/dashboard.css';
 
-const TABS = ['Setup', 'Chat', 'Sources', 'TTS', 'Filters', 'People', 'Archive', 'Log'] as const;
+const TABS = ['Setup', 'Keys', 'Chat', 'Sources', 'TTS', 'Filters', 'People', 'Archive', 'Log'] as const;
 type Tab = (typeof TABS)[number];
 
 export function Dashboard(): JSX.Element {
@@ -170,6 +171,7 @@ export function Dashboard(): JSX.Element {
 
       <main className="app-main">
         {tab === 'Setup' ? <ConnectTab config={config} patch={patch} meta={meta} /> : null}
+        {tab === 'Keys' ? <CredentialsTab origin={window.location.origin} /> : null}
         {tab === 'Chat' ? <ChatTab config={config} patch={patch} /> : null}
         {tab === 'Sources' ? <GalleryTab config={config} patch={patch} /> : null}
         {tab === 'TTS' ? <TtsTab config={config} patch={patch} meta={meta} /> : null}
