@@ -498,6 +498,15 @@ export interface TtsConfig {
   loudnessGainDb: number;
   /** Speak the queue even while no host is watching (keeps queue draining). */
   skipWhenNoListener: boolean;
+  /**
+   * Also play speech in the dashboard when a TTS browser source is running.
+   *
+   * Off by default because a clip normally goes to exactly one place: with a
+   * source open, monitoring here means you hear every line twice — once from
+   * your speakers and once back through the stream. On, it is a monitor feed
+   * for hearing what your viewers hear without alt-tabbing to the source.
+   */
+  monitorInDashboard: boolean;
   rules: TtsRule[];
 }
 

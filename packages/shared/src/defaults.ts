@@ -547,6 +547,7 @@ export function createDefaultConfig(username = ''): AppConfig {
       normalizeLoudness: true,
       loudnessGainDb: 8,
       skipWhenNoListener: false,
+      monitorInDashboard: false,
       rules: DEFAULT_TTS_RULES.map((r) => ({ ...r })),
     },
     youtube: {

@@ -409,16 +409,30 @@ export class Hub {
    * A real TTS source always wins over a fallback listener, so opening the
    * dashboard alongside a live overlay never pulls audio out of the stream and into your
    * desktop speakers.
+   *
+   * `monitorInDashboard` adds exactly one exception: the clip also goes to a
+   * single fallback listener, so you can hear what the stream is hearing. Still
+   * one dashboard rather than all of them — two dashboard tabs open would
+   * otherwise talk over each other, which is the same echo this method exists
+   * to prevent.
    */
   private dispatchPlayback(item: TtsQueueItem): void {
     if (!this.io) return;
 
     const listeners = [...this.clients.entries()].filter(([, info]) => info.listener);
-    const target =
-      listeners.find(([, info]) => !info.fallback) ?? listeners.find(([, info]) => info.fallback);
+    const source = listeners.find(([, info]) => !info.fallback);
+    const monitor = listeners.find(([, info]) => info.fallback);
+    const target = source ?? monitor;
 
     if (!target) return;
     this.io.to(target[0]).emit('tts:play', item);
+
+    // Only when a real source took the clip. With no source the monitor *is*
+    // the target above, and sending again would play the same line twice in
+    // the one tab.
+    if (!this.config.get().tts.monitorInDashboard) return;
+    if (!source || !monitor || monitor[0] === target[0]) return;
+    this.io.to(monitor[0]).emit('tts:play', item);
   }
 
   /**

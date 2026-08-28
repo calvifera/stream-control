@@ -265,6 +265,7 @@ export const ttsSchema = z.object({
   normalizeLoudness: z.boolean().default(true),
   loudnessGainDb: z.number().min(0).max(12).default(8),
   skipWhenNoListener: z.boolean(),
+  monitorInDashboard: z.boolean().default(false),
   rules: z.array(ttsRuleSchema),
 });
 

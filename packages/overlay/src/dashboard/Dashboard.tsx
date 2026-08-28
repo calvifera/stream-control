@@ -71,6 +71,7 @@ export function Dashboard(): JSX.Element {
   const queued = (tts?.queue.length ?? 0) + (tts?.speaking ? 1 : 0);
   // Audio lands here only when no real TTS source is open.
   const playingHere = (tts?.overlayListeners ?? 0) === 0;
+  const monitoring = config?.tts.monitorInDashboard ?? false;
 
   return (
     <div className="app">
@@ -95,12 +96,25 @@ export function Dashboard(): JSX.Element {
             <StatusDot status={socketConnected ? 'connected' : 'error'} />
             {socketConnected ? 'server online' : 'server offline'}
           </span>
-          <span className="header-chip" title={audioHint(tts?.overlayListeners ?? 0)}>
-            <StatusDot status={playingHere ? 'connecting' : 'connected'} />
+          {/* Clickable, because this is a mid-stream decision. Streaming
+              software is commonly set up to send a browser source into the
+              stream without monitoring it to your own speakers — so you cannot
+              hear your own TTS, and wanting to hear it in order to answer
+              someone happens while you are live, not while you are in a
+              settings tab. */}
+          <button
+            type="button"
+            className={`header-chip header-chip-toggle${monitoring && !playingHere ? ' chip-on' : ''}`}
+            title={audioHint(tts?.overlayListeners ?? 0, monitoring)}
+            onClick={() => patch({ tts: { monitorInDashboard: !monitoring } })}
+          >
+            <StatusDot status={playingHere || monitoring ? 'connecting' : 'connected'} />
             {playingHere
               ? 'audio: this tab'
-              : `audio: ${tts?.overlayListeners} browser source${tts?.overlayListeners === 1 ? '' : 's'}`}
-          </span>
+              : monitoring
+                ? `audio: ${tts?.overlayListeners} source${tts?.overlayListeners === 1 ? '' : 's'} + here`
+                : `audio: ${tts?.overlayListeners} browser source${tts?.overlayListeners === 1 ? '' : 's'}`}
+          </button>
 
           {/* Lives in the header, not the Chat tab: mounted there it was
               torn down the moment you switched tabs, which closed the
@@ -184,8 +198,11 @@ export function Dashboard(): JSX.Element {
   );
 }
 
-function audioHint(overlayListeners: number): string {
-  return overlayListeners === 0
-    ? 'No TTS browser source is open — speech plays in this tab so you can hear it, but it is not going into your stream.'
-    : 'Speech is going to your TTS browser source, so your streaming software captures it.';
+function audioHint(overlayListeners: number, monitoring: boolean): string {
+  if (overlayListeners === 0) {
+    return 'No TTS browser source is open — speech plays in this tab so you can hear it, but it is not going into your stream.';
+  }
+  return monitoring
+    ? 'Speech is going to your TTS browser source and also playing here. Click to stop monitoring.'
+    : 'Speech is going to your TTS browser source, so your streaming software captures it. Click to also hear it here.';
 }

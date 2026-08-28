@@ -52,6 +52,16 @@ async function connect(role: 'overlay' | 'dashboard', fallback: boolean): Promis
   return { socket, received, close: () => socket.disconnect() };
 }
 
+/** Flips the monitor toggle the way the dashboard does, via the config API. */
+async function setMonitoring(on: boolean): Promise<void> {
+  await fetch(`${BASE}/api/config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tts: { monitorInDashboard: on } }),
+  });
+  await wait(200);
+}
+
 async function speak(text: string): Promise<void> {
   await fetch(`${BASE}/api/tts/test`, {
     method: 'POST',
@@ -88,6 +98,40 @@ async function main(): Promise<void> {
     `fallback got ${JSON.stringify(dashboard.received.slice(dashboardBefore))}`,
   );
 
+  /*
+   * Monitoring: the one deliberate exception to "exactly one listener".
+   *
+   * Streaming software is commonly configured to send a browser source into
+   * the stream without monitoring it back to the desktop, so the host cannot
+   * hear their own TTS at all. This lets them hear it without taking it away
+   * from the stream, so both outputs must get the same clip.
+   */
+  await setMonitoring(true);
+  const overlayBefore = overlay.received.length;
+  const monitorBefore = dashboard.received.length;
+  await speak('fourth line');
+  check(
+    'monitoring on: the real source still gets the clip',
+    overlay.received.slice(overlayBefore).includes('fourth line'),
+    JSON.stringify(overlay.received.slice(overlayBefore)),
+  );
+  check(
+    'monitoring on: the dashboard gets it as well',
+    dashboard.received.slice(monitorBefore).includes('fourth line'),
+    JSON.stringify(dashboard.received.slice(monitorBefore)),
+  );
+
+  await setMonitoring(false);
+  const overlayAfter = overlay.received.length;
+  const monitorAfter = dashboard.received.length;
+  await speak('fifth line');
+  check(
+    'monitoring off again: back to the source alone',
+    overlay.received.slice(overlayAfter).includes('fifth line') &&
+      dashboard.received.length === monitorAfter,
+    `dashboard got ${JSON.stringify(dashboard.received.slice(monitorAfter))}`,
+  );
+
   // Closing the source hands control back.
   overlay.close();
   await wait(500);
@@ -97,6 +141,16 @@ async function main(): Promise<void> {
     dashboard.received.includes('third line'),
     JSON.stringify(dashboard.received),
   );
+
+  await setMonitoring(true);
+  const soloBefore = dashboard.received.length;
+  await speak('sixth line');
+  check(
+    'monitoring on with no source: the dashboard plays it once, not twice',
+    dashboard.received.slice(soloBefore).filter((t) => t === 'sixth line').length === 1,
+    JSON.stringify(dashboard.received.slice(soloBefore)),
+  );
+  await setMonitoring(false);
 
   dashboard.close();
   await wait(200);

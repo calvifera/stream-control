@@ -319,6 +319,19 @@ export function TtsTab({ config, patch, meta }: Props): JSX.Element {
           />
         </Row>
 
+        <Row>
+          <Toggle
+            label="Also play speech in this dashboard"
+            hint={
+              (ttsState?.overlayListeners ?? 0) > 0
+                ? 'A monitor feed for hearing what your viewers hear. Doubles up only if your streaming software also monitors that source to your speakers'
+                : 'No source is open, so speech already plays here. This only matters once one is running'
+            }
+            checked={tts.monitorInDashboard}
+            onChange={(monitorInDashboard) => setTts({ monitorInDashboard })}
+          />
+        </Row>
+
         <div className="status-line">
           <strong>{ttsState?.overlayListeners ?? 0}</strong>
           <span className="muted">TTS browser source(s) open</span>

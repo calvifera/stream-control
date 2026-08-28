@@ -206,6 +206,20 @@ body::after {
 
 .header-chip:hover { border-color: var(--border-bright); }
 
+/* A chip that is also a control. Buttons do not inherit the page font, so
+   without this the label renders a size and family out from its neighbours. */
+.header-chip-toggle {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.header-chip-toggle:hover {
+  border-color: var(--border-bright);
+  background: var(--bg-hover);
+}
+
 .header-chip-action {
   font: inherit;
   font-size: 12px;
