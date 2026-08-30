@@ -2480,20 +2480,32 @@ body.panel-root {
 }
 
 /*
- * Kill the dashboard's decorative layers.
+ * Kill the dashboard's decorative layers on every see-through surface.
  *
  * `body::before` is the aurora — three radial gradients anchored near the
  * corners — and `body::after` is the faint grid. Both are `position: fixed;
  * inset: 0`, so clearing the body background alone leaves them painting over
- * a window that is supposed to be see-through. They show up most obviously in
- * the panel's rounded corners, where the area outside the radius should be
+ * a surface that is supposed to be see-through. They show up most obviously
+ * in the panel's rounded corners, where the area outside the radius should be
  * nothing at all and instead has a coloured wedge in it.
+ *
+ * This is one stylesheet bundle for the whole app, so every rule written for
+ * the dashboard also reaches the overlay routes. `.overlay-body` sets
+ * `background: transparent !important`, which handles the body's own
+ * background and does nothing about these two: a browser source captured the
+ * cyan corner at 12% -10% and the magenta one at 92% 4% on top of otherwise
+ * transparent footage. A decorative layer belongs to the dashboard chrome and
+ * to nothing that a viewer ever sees.
  *
  * Removing them also stops the 26-second aurora animation compositing behind
  * a game, which is work nobody asked for while playing.
  */
 body.panel-root::before,
-body.panel-root::after {
+body.panel-root::after,
+body.overlay-body::before,
+body.overlay-body::after,
+body.chat-popout-body::before,
+body.chat-popout-body::after {
   content: none !important;
   display: none !important;
   animation: none !important;
