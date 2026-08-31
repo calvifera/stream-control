@@ -182,30 +182,31 @@ function PlatformCard({
         </span>
       </div>
 
-      {platform === 'youtube' ? null : (
-        <input
-          type="text"
-          className="platform-input"
-          placeholder={wiring.placeholder}
-          value={handle}
-          onChange={(event) => {
-            setHandleLocal(event.target.value);
-            patch(wiring.setHandle(config, event.target.value));
-          }}
-        />
-      )}
+      <input
+        type="text"
+        className="platform-input"
+        placeholder={wiring.placeholder}
+        value={handle}
+        onChange={(event) => {
+          setHandleLocal(event.target.value);
+          patch(wiring.setHandle(config, event.target.value));
+        }}
+      />
 
       <div className="chips">
-        {platform !== 'youtube' ? (
-          <button
-            type="button"
-            className="chip"
-            disabled={busy || (!handle.trim() && !live)}
-            onClick={() => act(() => (live ? wiring.disconnect() : wiring.connect(handle.trim())))}
-          >
-            {live ? 'Disconnect' : 'Connect'}
-          </button>
-        ) : null}
+        {/*
+          YouTube is the one platform with nothing to type: with no video id
+          it finds whichever broadcast on your own channel is live, so an
+          empty field is the normal case rather than an unfinished one.
+        */}
+        <button
+          type="button"
+          className="chip"
+          disabled={busy || (platform !== 'youtube' && !handle.trim() && !live)}
+          onClick={() => act(() => (live ? wiring.disconnect() : wiring.connect(handle.trim())))}
+        >
+          {live ? 'Disconnect' : 'Connect'}
+        </button>
 
         {auth && platform !== 'tiktok' ? (
           auth.level === 'user' ? (

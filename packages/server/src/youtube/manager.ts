@@ -206,13 +206,24 @@ export class YouTubeManager extends EventEmitter {
       return { liveChatId: chatId, title: item?.snippet?.title ?? this.config.videoId };
     }
 
+    /*
+     * `broadcastStatus` on its own, never alongside `mine`.
+     *
+     * liveBroadcasts.list takes exactly one filter — `id`, `mine`, or
+     * `broadcastStatus` — and rejects any combination with
+     * "Incompatible parameters specified in the request: mine,
+     * broadcastStatus". Sending both meant every connection attempt died on a
+     * 400 before it ever looked for a chat.
+     *
+     * Dropping `mine` loses nothing: `broadcastStatus` already scopes the
+     * results to the authenticated account's own broadcasts.
+     */
     const data = await this.call<{
       items?: { snippet?: { title?: string; liveChatId?: string } }[];
     }>(token, 'liveBroadcasts', {
       part: 'snippet',
       broadcastStatus: 'active',
       broadcastType: 'all',
-      mine: 'true',
     });
 
     const item = data.items?.[0];
