@@ -31,6 +31,20 @@ export interface FilterResult {
    * to get it past the filter rather than just typing it.
    */
   evasion: boolean;
+  /**
+   * Whether the original text must stay hidden from the host as well.
+   *
+   * Most filter hits are worth reading: a false positive is only findable by
+   * looking at what the message actually said, and a moderator deciding
+   * whether to pardon someone cannot do it blind. Those are flagged, not
+   * hidden.
+   *
+   * The exceptions are the two cases where showing it has no upside. A severe
+   * term is on the zero-tolerance list precisely because the host does not
+   * want to read it, and refused or mixed scripts are a payload aimed at the
+   * filter rather than a message anyone meant to send.
+   */
+  redact: boolean;
 }
 
 /**
@@ -322,7 +336,7 @@ export class FilterEngine {
   apply(text: string, speaker?: { platform: Platform; uniqueId: string }): FilterResult {
     const config = this.config;
     if (!config.enabled) {
-      return { text, filtered: false, reason: null, severity: 'none', evasion: false };
+      return { text, filtered: false, reason: null, severity: 'none', evasion: false, redact: false };
     }
 
     if (speaker && this.isUserBlocked(speaker.platform, speaker.uniqueId)) {
@@ -332,6 +346,9 @@ export class FilterEngine {
         reason: 'user is blocked',
         severity: 'none',
         evasion: false,
+        // Nothing objectionable is being hidden — the person is muted, not the
+        // words — so the host can still read what they said.
+        redact: false,
       };
     }
 
@@ -390,6 +407,7 @@ export class FilterEngine {
         reason: `mixed-script word: ${mixedScriptWords.join(', ')}`,
         severity: 'normal',
         evasion: true,
+        redact: true,
       };
     }
 
@@ -410,6 +428,10 @@ export class FilterEngine {
           ? `blocked by ${match.label} (written in ${scripts})`
           : `script not allowed: ${disallowed.join(' ')} (${scripts})`,
         severity: match?.severe ? 'severe' : 'normal',
+        // Folded either way. A refused script is unreadable to the host by
+        // definition — that is why it was refused — so showing it buys
+        // nothing and costs the one thing the block was for.
+        redact: true,
         evasion: true,
       };
     }
@@ -433,6 +455,9 @@ export class FilterEngine {
           reason: `blocked by ${match.label}${how}`,
           severity: match.severe ? 'severe' : 'normal',
           evasion,
+          // Severe stays hidden; an ordinary word caught only after
+          // transliteration is exactly the kind of match worth eyeballing.
+          redact: match.severe,
         };
       }
 
@@ -454,6 +479,7 @@ export class FilterEngine {
           reason: `blocked by ${match.label}`,
           severity: 'severe',
           evasion,
+          redact: true,
         };
       }
     }
@@ -467,6 +493,7 @@ export class FilterEngine {
         reason: reasons.join('; ') || 'empty after filtering',
         severity: 'normal',
         evasion: mixedScriptWords.length > 0,
+        redact: false,
       };
     }
 
@@ -490,6 +517,7 @@ export class FilterEngine {
       reason: reasons.length ? reasons.join('; ') : null,
       severity: filtered ? 'normal' : 'none',
       evasion: mixedScriptWords.length > 0,
+      redact: false,
     };
   }
 

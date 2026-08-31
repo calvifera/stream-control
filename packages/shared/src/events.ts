@@ -123,6 +123,18 @@ export interface ChatEvent extends StreamEventBase {
   /** True when the filter chain censored or dropped this message. */
   filtered: boolean;
   filterReason: string | null;
+  /**
+   * Whether `text` must stay hidden from the host too.
+   *
+   * False for an ordinary blocklist hit: the host's own surfaces show the
+   * original, flagged, because a false positive can only be spotted by
+   * reading what was actually said. True for severe terms and refused
+   * scripts, which stay folded everywhere.
+   *
+   * Viewer-facing overlays ignore this and render `displayText` regardless —
+   * it governs what the moderator sees, never what the stream shows.
+   */
+  redacted: boolean;
   emotes: string[];
 }
 

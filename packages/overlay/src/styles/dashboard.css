@@ -2115,6 +2115,36 @@ select.input option { background: var(--bg-raised); color: var(--text); }
   overflow-wrap: anywhere;
 }
 
+/*
+ * A filter hit the host can still read.
+ *
+ * Dimmed rather than recoloured to something loud: these are mostly false
+ * positives, so they must be legible at a glance without competing with the
+ * messages that were not caught. The dot is what makes it scannable — colour
+ * alone is not a signal anyone can rely on.
+ */
+.chatrow-text-flagged {
+  color: var(--warn);
+  opacity: 0.85;
+}
+
+.chatrow-flag {
+  color: var(--warn);
+  font-size: 8px;
+  vertical-align: 0.18em;
+  margin-right: 6px;
+  /* No text selection, so copying the message does not carry the marker. */
+  user-select: none;
+}
+
+/* Folded for good: severe terms and refused scripts. Muted, because there is
+   nothing here to read and it should not draw the eye. */
+.chatrow-text-redacted {
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 12.5px;
+}
+
 .chatrow-actions {
   position: absolute;
   top: 5px;

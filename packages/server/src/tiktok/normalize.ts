@@ -121,6 +121,7 @@ export function normalizeChat(msg: WebcastChatMessage, host: string): ChatEvent 
     displayText: msg.content ?? '',
     filtered: false,
     filterReason: null,
+    redacted: false,
     emotes: (msg.emotes ?? [])
       .map((e) => imageUrl(e.emote?.image))
       .filter((url): url is string => Boolean(url)),

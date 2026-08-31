@@ -151,6 +151,7 @@ export function normalizeTwitchChat(message: IrcMessage, broadcaster: string): C
     displayText: message.text,
     filtered: false,
     filterReason: null,
+    redacted: false,
     emotes: Object.keys(parseEmotes(message.tags['emotes'])),
   };
 }

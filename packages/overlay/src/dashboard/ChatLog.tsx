@@ -487,7 +487,7 @@ function ChatRow({
           {user?.isSubscriber ? <span className="chatrow-badge" title="Subscriber">★</span> : null}
         </div>
 
-        <div className="chatrow-text">{describe(event)}</div>
+        <MessageText event={event} />
 
         {user ? <RowActions user={user} /> : null}
       </div>
@@ -610,6 +610,46 @@ function RowActions({ user }: { user: StreamUser }): JSX.Element {
       >
         {trusted ? 'Trusted' : 'Trust'}
       </button>
+    </div>
+  );
+}
+
+/**
+ * A message, with the filter's verdict shown rather than applied.
+ *
+ * The panel is the host's own surface, and hiding an ordinary filter hit from
+ * the host was the wrong trade: a false positive is only findable by reading
+ * what the message actually said, and deciding whether to pardon a trusted
+ * regular cannot be done against `[removed by filter]`. So an ordinary hit
+ * now shows the original, marked with a dot and dimmed, with the filter's
+ * reason on hover.
+ *
+ * Redacted hits — severe terms and refused scripts — stay folded to `[rbf]`.
+ * Those are the cases where the host gains nothing by reading it, which is
+ * the whole reason they are on the zero-tolerance list.
+ *
+ * This changes only what the host sees. Overlays render `displayText` and are
+ * untouched, so nothing here reaches the stream.
+ */
+function MessageText({ event }: { event: StreamEvent }): JSX.Element {
+  if (event.type !== 'chat' || !event.filtered) {
+    return <div className="chatrow-text">{describe(event)}</div>;
+  }
+
+  if (event.redacted) {
+    return (
+      <div className="chatrow-text chatrow-text-redacted" title={event.filterReason ?? 'filtered'}>
+        [rbf]
+      </div>
+    );
+  }
+
+  return (
+    <div className="chatrow-text chatrow-text-flagged" title={event.filterReason ?? 'filtered'}>
+      <span className="chatrow-flag" aria-label="caught by the filter">
+        ●
+      </span>
+      {event.text}
     </div>
   );
 }
