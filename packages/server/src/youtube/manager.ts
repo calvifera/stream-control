@@ -285,12 +285,22 @@ export class YouTubeManager extends EventEmitter {
       };
       if (this.pageToken) params.pageToken = this.pageToken;
 
+      /*
+       * `liveChat/messages`, not `liveChatMessages`.
+       *
+       * The resource is named `liveChatMessages` everywhere in the docs, but
+       * its HTTP path is not: it is `/youtube/v3/liveChat/messages`, the same
+       * way bans and moderators live under `/liveChat/`. Getting it wrong
+       * returns a bare 404 with an empty body rather than the API's usual
+       * JSON error, which reads like the endpoint is gone rather than like a
+       * typo in the path.
+       */
       const data = await this.call<{
         items?: YouTubeChatMessage[];
         nextPageToken?: string;
         pollingIntervalMillis?: number;
         offlineAt?: string;
-      }>(token, 'liveChatMessages', params);
+      }>(token, 'liveChat/messages', params);
 
       this.pageToken = data.nextPageToken ?? this.pageToken;
 
