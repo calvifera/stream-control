@@ -5,6 +5,7 @@ export * from './highlights.js';
 export * from './auth.js';
 export * from './brand/marks.js';
 export * from './events.js';
+export * from './chatDisplay.js';
 export * from './testing.js';
 export * from './archive.js';
 export * from './config.js';

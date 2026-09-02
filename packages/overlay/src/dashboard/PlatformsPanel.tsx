@@ -234,12 +234,73 @@ function PlatformCard({
       </div>
 
       {error ? <p className="muted platform-note platform-error">{error}</p> : null}
+      {platform === 'youtube' && live ? <QuotaMeter /> : null}
       {auth ? <CapabilityList platform={platform} capabilities={auth.capabilities} /> : null}
       {auth?.nextStep ? <p className="muted platform-note">{auth.nextStep}</p> : null}
       {!auth?.nextStep && wiring.note ? (
         <p className="muted platform-note">{wiring.note}</p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * What this connection has spent, while it is spending it.
+ *
+ * YouTube chat is the only connector with a budget: it is polled, every poll
+ * costs quota, and a project's default allowance is 10,000 units a day shared
+ * with everything else the app asks Google for. Run out and chat stops, with
+ * nothing on screen having suggested it was coming.
+ *
+ * The call count is measured. The unit cost is not — Google does not publish
+ * what the live-chat endpoints charge, and the widely repeated figure of 5 is
+ * a community estimate. So the estimate is labelled as one, and the measured
+ * number is the one shown first. A wrong estimate that looks like a fact is
+ * worse than no estimate.
+ */
+function QuotaMeter(): JSX.Element | null {
+  const [usage, setUsage] = useState<{ polls: number; minutes: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = (): void => {
+      void api
+        .youtubeUsage()
+        .then((next) => {
+          if (!cancelled) setUsage(next);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    // Half a minute: this moves slowly, and polling a quota meter quickly
+    // would be its own small joke.
+    const timer = window.setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  if (!usage || usage.polls === 0) return null;
+
+  const DAILY = 10_000;
+  const PER_CALL = 5;
+  const units = usage.polls * PER_CALL;
+  const share = units / DAILY;
+  // Per-hour from what has actually happened, not from the configured
+  // interval: the API sets the real pace and it changes with chat volume.
+  const perHour = usage.minutes > 0.5 ? Math.round((usage.polls / usage.minutes) * 60) : null;
+  const level = share >= 0.9 ? 'error' : share >= 0.6 ? 'warn' : 'ok';
+
+  return (
+    <p className={`platform-note quota-meter quota-${level}`}>
+      <strong>{usage.polls.toLocaleString()}</strong> API calls in{' '}
+      {Math.round(usage.minutes)}m{perHour ? ` (~${perHour.toLocaleString()}/hr)` : ''} —{' '}
+      <span title="Google does not publish the per-call cost of the live-chat endpoints; 5 units is the community estimate, so treat this as a rough guide.">
+        an estimated {Math.round(share * 100)}% of a default daily quota
+      </span>
+      {share >= 0.6 ? '. Raise the poll interval to stretch it further.' : '.'}
+    </p>
   );
 }
 

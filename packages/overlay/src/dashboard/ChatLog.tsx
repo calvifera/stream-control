@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  messageDisplay,
   listKey,
   PLATFORM_INFO,
   PLATFORMS,
@@ -641,7 +642,7 @@ function RowActions({ user }: { user: StreamUser }): JSX.Element {
 function MessageText({ event }: { event: StreamEvent }): JSX.Element {
   const { config } = useLive();
 
-  if (event.type !== 'chat' || !event.filtered) {
+  if (event.type !== 'chat') {
     return <div className="chatrow-text">{describe(event)}</div>;
   }
 
@@ -650,35 +651,34 @@ function MessageText({ event }: { event: StreamEvent }): JSX.Element {
       (entry) => listKey(entry) === viewerKey(event.user.platform, event.user.uniqueId),
     ) ?? false;
 
-  // A refused script is folded for everyone, trusted included: there is no
-  // readable message underneath to vouch for.
-  if (event.redacted) {
+  // The tier decision lives in shared/chatDisplay so it can be tested without
+  // a browser; this function only paints what it is told.
+  const display = messageDisplay(event, { trusted });
+  if (display.tier === 'plain') {
+    return <div className="chatrow-text">{describe(event)}</div>;
+  }
+
+  const reason = event.filterReason ?? 'filtered';
+
+  if (display.tier === 'folded') {
     return (
-      <div className="chatrow-text chatrow-text-redacted" title={event.filterReason ?? 'filtered'}>
+      <div className="chatrow-text chatrow-text-redacted" title={reason}>
         [removed by filter]
       </div>
     );
   }
 
-  const severe = event.filterSeverity === 'severe' && !trusted;
-  // Null display text means the filter took the whole message, so TTS never
-  // saw it. A censored message was still spoken, just with the word masked.
-  const spoken = event.displayText !== null;
-
+  const severe = display.tier === 'red';
   return (
     <div
       className={`chatrow-text ${severe ? 'chatrow-text-severe' : 'chatrow-text-flagged'}`}
-      title={
-        trusted
-          ? `${event.filterReason ?? 'filtered'} — trusted, so shown as an ordinary flag`
-          : (event.filterReason ?? 'filtered')
-      }
+      title={trusted ? `${reason} — trusted, so shown as an ordinary flag` : reason}
     >
       <span className="chatrow-flag" aria-label={severe ? 'severe filter hit' : 'caught by the filter'}>
         ●
       </span>
-      {event.text}
-      {severe && !spoken ? <span className="chatrow-notread">not read</span> : null}
+      {display.text}
+      {display.notRead ? <span className="chatrow-notread">not read</span> : null}
     </div>
   );
 }

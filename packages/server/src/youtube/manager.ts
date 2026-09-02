@@ -27,6 +27,16 @@ const MIN_POLL_MS = 1000;
 /** Ceiling, so a quiet chat still notices the stream ending reasonably soon. */
 const MAX_POLL_MS = 30_000;
 
+/**
+ * Quota exhaustion, which is the one failure that reconnecting cannot fix.
+ *
+ * Everything else the API returns is worth another attempt — a 500, a dropped
+ * connection, a token that just refreshed. This one is a budget that does not
+ * refill until midnight Pacific, so each retry spends another call to be told
+ * the same thing, digging the hole it is trying to climb out of.
+ */
+class QuotaExhaustedError extends Error {}
+
 const systemEvent = (level: SystemEvent['level'], text: string): SystemEvent => ({
   id: randomUUID(),
   ts: Date.now(),
@@ -182,7 +192,7 @@ export class YouTubeManager extends EventEmitter {
 
       this.schedule(0);
     } catch (error) {
-      this.fail(describeError(error));
+      this.failFrom(error);
     }
   }
 
@@ -248,7 +258,11 @@ export class YouTubeManager extends EventEmitter {
       // Quota exhaustion is worth naming: it is the one failure that will not
       // resolve by retrying, and it looks like a generic 403 otherwise.
       if (response.status === 403 && body.includes('quotaExceeded')) {
-        throw new Error('YouTube API quota exhausted for today — chat will resume tomorrow.');
+        throw new QuotaExhaustedError(
+          `YouTube API quota is spent for today (${this.pollCount} calls this connection). ` +
+            'It resets at midnight Pacific — reconnect after that. Raising the poll interval ' +
+            'on the Setup tab makes it last longer.',
+        );
       }
       if (response.status === 401) {
         throw new Error('YouTube rejected the token. Sign in again on the Setup tab.');
@@ -324,18 +338,30 @@ export class YouTubeManager extends EventEmitter {
       const floor = Math.max(MIN_POLL_MS, this.config.pollIntervalMs);
       this.schedule(Math.min(MAX_POLL_MS, Math.max(floor, suggested)));
     } catch (error) {
-      this.fail(describeError(error));
+      this.failFrom(error);
     } finally {
       this.polling = false;
     }
   }
 
-  private fail(reason: string): void {
+  /**
+   * @param retry Whether another attempt could plausibly succeed. False stops
+   * the reconnect loop dead, which matters for quota: retrying every couple of
+   * minutes until the daily reset spends hundreds of calls to be refused
+   * hundreds of times, and leaves less budget for tomorrow than doing nothing.
+   */
+  private fail(reason: string, retry = true): void {
     log.warn(`YouTube: ${reason}`);
     this.patch({ status: 'error', lastError: reason, connectedAt: null });
     this.push(systemEvent('error', `YouTube: ${reason}`));
     this.stopPolling();
-    this.scheduleReconnect();
+    if (retry) this.scheduleReconnect();
+    else this.clearReconnect();
+  }
+
+  /** Failure handling for a caught error, honouring what it says about retrying. */
+  private failFrom(error: unknown): void {
+    this.fail(describeError(error), !(error instanceof QuotaExhaustedError));
   }
 
   private scheduleReconnect(): void {

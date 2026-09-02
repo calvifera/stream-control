@@ -226,5 +226,65 @@ console.log('\nplain messages');
   check('displayMessage is the fallback', fallback?.type === 'chat' && fallback.text, 'from display');
 }
 
+/* ------------------------------------------------------------------ *
+ * Quota exhaustion
+ *
+ * The one API failure that retrying cannot fix. Everything else — a 500, a
+ * dropped socket, a token mid-refresh — deserves another attempt. This one is
+ * a budget that does not refill until midnight Pacific, so a reconnect loop
+ * spends a call every couple of minutes to be refused again, and leaves less
+ * headroom for the next day than doing nothing at all.
+ * ------------------------------------------------------------------ */
+
+{
+  const { YouTubeManager } = await import('../youtube/manager.js');
+  const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 80));
+
+  const run = async (reply: () => Response) => {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async () => reply()) as typeof fetch;
+
+    const manager = new YouTubeManager(
+      {
+        enabled: true,
+        videoId: '',
+        autoReconnect: true,
+        reconnectDelaySeconds: 15,
+        connectOnStartup: false,
+        pollIntervalMs: 3000,
+      },
+      { userToken: async () => 'token' } as never,
+    );
+
+    const states: string[] = [];
+    manager.on('state', (st: { status: string }) => states.push(st.status));
+    manager.connect();
+    await settle();
+
+    const pending = Boolean((manager as unknown as { reconnectTimer: unknown }).reconnectTimer);
+    manager.disconnect();
+    globalThis.fetch = real;
+    return { states, pending };
+  };
+
+  console.log('');
+  console.log('quota exhaustion');
+  const quota = await run(
+    () =>
+      new Response(JSON.stringify({ error: { errors: [{ reason: 'quotaExceeded' }] } }), {
+        status: 403,
+      }),
+  );
+  check('does not schedule a reconnect', quota.pending, false);
+  check('never enters the reconnecting state', quota.states.includes('reconnecting'), false);
+
+  console.log('');
+  console.log('an ordinary failure, for contrast');
+  // Without this, the checks above would still pass if retries were simply
+  // broken — a different bug wearing the same result.
+  const transient = await run(() => new Response('upstream blew up', { status: 500 }));
+  check('still schedules a reconnect', transient.pending, true);
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed === 0 ? 0 : 1);
