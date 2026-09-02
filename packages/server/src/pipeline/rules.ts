@@ -13,6 +13,7 @@ import {
 import type { SessionState } from '../state/session.js';
 import { checkGate } from './gates.js';
 import { createLogger } from '../logger.js';
+import { stripEmoteCodes } from '../text/shortcodes.js';
 
 const log = createLogger('rules');
 
@@ -77,10 +78,19 @@ function compileRegex(source: string): RegExp | null {
   }
 }
 
-/** Returns the text a text-shaped event contributes, or null if it has none. */
+/**
+ * Returns the text a text-shaped event contributes, or null if it has none.
+ *
+ * Emote codes come out here rather than in the filter, because this is the
+ * speech path and nowhere else: the panel and the overlay go on showing
+ * `[sagethink]`, which at least reads as an emote, while TTS stops saying the
+ * word "sagethink" out loud.
+ */
 function textOf(event: StreamEvent): string | null {
-  if (event.type === 'chat') return event.displayText;
-  if (event.type === 'question') return event.text;
+  if (event.type === 'chat') {
+    return event.displayText === null ? null : stripEmoteCodes(event.displayText);
+  }
+  if (event.type === 'question') return stripEmoteCodes(event.text);
   return null;
 }
 
@@ -204,6 +214,13 @@ export class RuleEngine {
         messageText = textOf(event);
         if (messageText === null) {
           reject('message was removed by the text filter');
+          continue;
+        }
+        // Emote-only messages are a real thing to send; they just have nothing
+        // to say out loud. Rejecting by name so the dashboard shows why it was
+        // skipped rather than leaving it looking like a rule that misfired.
+        if (messageText.trim() === '') {
+          reject('nothing to speak once emote codes were removed');
           continue;
         }
 

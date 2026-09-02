@@ -3,6 +3,7 @@ import { normalizeHandle, parseViewerKey, viewerKey } from '@streaming/shared';
 import { createLogger } from '../logger.js';
 import {
   canonicalize,
+  capCombiningMarks,
   detectScripts,
   findMixedScriptWords,
   lettersOutsideScripts,
@@ -361,9 +362,24 @@ export class FilterEngine {
      * the raw text let an expansion bomb through untouched.
      */
     let working = canonicalize(text);
+
+    /*
+     * Trim stacked combining marks before anything measures the text.
+     *
+     * Canonicalization does not touch these — the marks Zalgo is built from
+     * have no precomposed form, so NFKC leaves every one of them in place.
+     * They survived to the overlay and to the TTS queue, where enough of them
+     * overflow a chat row into the lines above it. Capping here rather than at
+     * render time means the length limit below sees the real length, and every
+     * surface gets the same trimmed text.
+     */
+    const capped = capCombiningMarks(working);
+    const trimmedMarks = capped !== working;
+    working = capped;
+
     let filtered = working !== text;
     const reasons: string[] = [];
-    if (filtered) reasons.push('normalized');
+    if (filtered) reasons.push(trimmedMarks ? 'trimmed stacked marks' : 'normalized');
 
     /*
      * A generous safety bound, not the user-facing cap.

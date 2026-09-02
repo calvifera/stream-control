@@ -8,7 +8,14 @@
 import assert from 'node:assert/strict';
 import { DEFAULT_FILTERS, type Platform } from '@streaming/shared';
 import { FilterEngine } from '../pipeline/filters.js';
-import { detectScripts, findMixedScriptWords, foldHomoglyphs, transliterate } from '../text/unicode.js';
+import {
+  capCombiningMarks,
+  detectScripts,
+  findMixedScriptWords,
+  foldHomoglyphs,
+  transliterate,
+} from '../text/unicode.js';
+import { stripEmoteCodes } from '../text/shortcodes.js';
 
 let passed = 0;
 function check(label: string, fn: () => void): void {
@@ -282,5 +289,114 @@ check('disabling the filter engine disables blocking too', () => {
   });
   assert.equal(off.isUserBlocked('tiktok', 'spambot123'), false);
 });
+/* ------------------------------------------------------------------ *
+ * Stacked combining marks
+ *
+ * Zalgo survives every normalization step, because the marks it is built from
+ * have no precomposed form for NFKC to fold away. Unbounded, it reaches the
+ * overlay and overflows a chat row into the lines above it.
+ *
+ * The cap has to be a cap and not a purge: stripping marks outright would
+ * flatten every accented, Vietnamese, Hebrew, Arabic, Thai and Devanagari
+ * message into mojibake to stop a nuisance. Both halves are checked, because
+ * either one alone is easy to get right while breaking the other.
+ * ------------------------------------------------------------------ */
+
+const MARKS = [
+  '̀', '́', '̂', '̃', '̄', '̆', '̇', '̈',
+  '̉', '̊', '̖', '̗', '̘', '̙', '̜', '̝',
+];
+const zalgo = (text: string, per: number): string =>
+  [...text]
+    .map((c) => c + Array.from({ length: per }, (_, i) => MARKS[i % MARKS.length]).join(''))
+    .join('');
+
+const deepestStack = (text: string): number => {
+  let worst = 0;
+  let run = 0;
+  for (const char of text) {
+    if (/\p{M}/u.test(char)) {
+      run += 1;
+      if (run > worst) worst = run;
+    } else {
+      run = 0;
+    }
+  }
+  return worst;
+};
+
+check('fifty marks per character are trimmed to four', () => {
+  const out = capCombiningMarks(zalgo('hello chat', 50));
+  assert.equal(deepestStack(out), 4);
+});
+
+check('the trim is bounded however much arrives', () => {
+  // The property that matters: output size stops growing with input size.
+  const a = capCombiningMarks(zalgo('hello chat', 20)).length;
+  const b = capCombiningMarks(zalgo('hello chat', 200)).length;
+  assert.equal(a, b);
+});
+
+check('a message under the cap is returned unchanged', () => {
+  const light = zalgo('hi', 3);
+  assert.equal(capCombiningMarks(light), light);
+});
+
+check('base characters are kept, only the excess marks go', () => {
+  const out = capCombiningMarks(zalgo('hello chat', 30));
+  assert.equal([...out].filter((c) => !/\p{M}/u.test(c)).join(''), 'hello chat');
+});
+
+for (const [label, text] of [
+  ['Latin accents', 'café naïve'],
+  ['Vietnamese', 'Tiếng Việt xin chào'],
+  ['Hebrew with niqqud', 'שָׁלוֹם עֲלֵיכֶם'],
+  ['Arabic with harakat', 'بِسْمِ اللَّهِ'],
+  ['Devanagari', 'नमस्ते दुनिया'],
+  ['Thai', 'สวัสดีครับ'],
+  ['decomposed e-acute', 'é'],
+] as const) {
+  check(`${label} passes through untouched`, () => {
+    assert.equal(capCombiningMarks(text), text);
+  });
+}
+
+check('the filter reports trimming as its own reason', () => {
+  const engine = new FilterEngine({ ...DEFAULT_FILTERS, enabled: true });
+  const result = engine.apply(zalgo('hello chat', 30));
+  assert.ok(result.reason?.includes('trimmed stacked marks'), result.reason ?? 'no reason');
+  assert.equal(deepestStack(result.text ?? ''), 4);
+});
+
+/* ------------------------------------------------------------------ *
+ * Emote shortcodes
+ *
+ * Removed on the speech path only: the panel keeps showing `[sagethink]`,
+ * which at least reads as an emote, while TTS stops pronouncing the word.
+ * ------------------------------------------------------------------ */
+
+check('a shortcode is removed from speech', () => {
+  assert.equal(stripEmoteCodes('[sagethink] hey chat'), 'hey chat');
+});
+
+check('several are removed and the spacing closes up', () => {
+  assert.equal(stripEmoteCodes('[smile] hi [thinking] there'), 'hi there');
+});
+
+check('an emote-only message leaves nothing to say', () => {
+  assert.equal(stripEmoteCodes('[sagethink][sagethink]'), '');
+});
+
+check('ordinary bracketed writing is left alone', () => {
+  // The line the pattern has to hold: lowercase single tokens only, so
+  // footnotes and stage directions with spaces survive.
+  assert.equal(stripEmoteCodes('see [1] and [see below]'), 'see [1] and [see below]');
+  assert.equal(stripEmoteCodes('option [A] please'), 'option [A] please');
+});
+
+check('text with no brackets is returned as-is', () => {
+  assert.equal(stripEmoteCodes('no codes here'), 'no codes here');
+});
+
 
 console.log(`\n${passed} checks passed`);

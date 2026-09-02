@@ -511,3 +511,44 @@ export function decodeTagChars(text: string): string {
   }
   return out;
 }
+
+/**
+ * How many combining marks one base character may keep.
+ *
+ * Four, which is above anything real text needs and far below what Zalgo
+ * uses. Hebrew with niqqud and cantillation, Thai with a vowel plus a tone
+ * mark, and Devanagari with matra plus nukta all stack two or three; decorated
+ * junk stacks ten to fifty. Stripping marks outright was the tempting fix and
+ * the wrong one — it would flatten `café`, every Vietnamese message and every
+ * Arabic, Hebrew, Thai and Devanagari one into mojibake to stop a nuisance.
+ */
+const MAX_COMBINING_MARKS = 4;
+
+/**
+ * Trims stacked combining marks, leaving legitimate diacritics alone.
+ *
+ * Needed because canonicalization does not touch these: NFKC composes what has
+ * a precomposed form, and the marks Zalgo is built from — U+0324 and its
+ * neighbours on Latin letters — have none, so they survive every normalization
+ * step and land in the overlay and in the TTS queue. Enough of them overflow a
+ * chat row into the lines above it.
+ */
+export function capCombiningMarks(text: string, max: number = MAX_COMBINING_MARKS): string {
+  let out = '';
+  let run = 0;
+
+  for (const char of text) {
+    if (/\p{M}/u.test(char)) {
+      // Past the allowance the rest of the stack is dropped, not the whole
+      // cluster: the base character and its first few marks still read.
+      if (run >= max) continue;
+      run += 1;
+      out += char;
+      continue;
+    }
+    run = 0;
+    out += char;
+  }
+
+  return out;
+}
