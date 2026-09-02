@@ -41,6 +41,8 @@ export interface RoleInfo {
   phrase: string;
   /** What each platform calls it, when it differs enough to confuse. */
   aliases: Partial<Record<Platform, string>>;
+  /** Overrides `phrase` in the "does not report ___" warning, per platform. */
+  missingPhrase?: Partial<Record<Platform, string>>;
 }
 
 export const ROLE_INFO: Record<RoleSignal, RoleInfo> = {
@@ -48,6 +50,10 @@ export const ROLE_INFO: Record<RoleSignal, RoleInfo> = {
     label: 'Follower',
     phrase: 'who follows you',
     aliases: { youtube: 'Subscriber (free)' },
+    // On YouTube the equivalent relationship exists and is even called
+    // subscribing — it just never reaches the chat API, which is a different
+    // thing from not existing and worth saying out loud.
+    missingPhrase: { youtube: 'who subscribes to you (free subs are not in the chat API)' },
   },
   friend: { label: 'Mutual', phrase: 'mutual follows', aliases: {} },
   subscriber: {
@@ -57,7 +63,7 @@ export const ROLE_INFO: Record<RoleSignal, RoleInfo> = {
     // one word for both is how a gate ends up meaning the opposite of what
     // someone intended.
     phrase: 'paid subscriptions',
-    aliases: { youtube: 'Member (paid)', tiktok: 'Subscriber' },
+    aliases: { youtube: 'Member (paid)', twitch: 'Subscriber (paid)', tiktok: 'Subscriber' },
   },
   moderator: { label: 'Moderator', phrase: 'who moderates your chat', aliases: {} },
   host: {
@@ -160,7 +166,57 @@ export function gateWarning(
       : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
   const verb = names.length === 1 ? 'does not report' : 'do not report';
 
-  return `${list} ${verb} ${ROLE_INFO[signal].phrase}, so on ${
+  // A single missing platform can describe itself in its own terms; with
+  // several, the shared phrase is the only one that fits them all.
+  const phrase =
+    (missing.length === 1 && missing[0] && ROLE_INFO[signal].missingPhrase?.[missing[0]]) ||
+    ROLE_INFO[signal].phrase;
+
+  return `${list} ${verb} ${phrase}, so on ${
     names.length === 1 ? 'it' : 'those'
   } only you and your moderators get through.`;
+}
+
+/**
+ * What a gate actually means on each platform it is pointed at.
+ *
+ * `gateWarning` only speaks up when a platform *cannot* answer. The subtler
+ * failure is when they all can and mean different things by it: every
+ * platform reports a "subscriber", but on Twitch that is a paid subscription,
+ * on YouTube it is a paid membership, and a YouTube viewer who hit subscribe
+ * for free — the thing almost everyone means by the word — is none of those,
+ * they are a follower. A gate written on the assumption that one word means
+ * one thing quietly selects a different audience per platform.
+ *
+ * Returns null when the platforms in scope agree, so the hint only appears
+ * where there is a real difference to explain.
+ */
+export function gateMeaning(
+  signal: RoleSignal,
+  platforms: readonly Platform[],
+): string | null {
+  const scope = platforms.length > 0 ? platforms : PLATFORMS;
+  const able = PLATFORMS.filter(
+    (platform) => scope.includes(platform) && PLATFORM_ROLES[platform][signal],
+  );
+  if (able.length < 2) return null;
+
+  const info = ROLE_INFO[signal];
+  const named = able.map((platform) => ({
+    platform,
+    name: info.aliases[platform] ?? info.label,
+  }));
+  // Nothing to explain when every platform in scope uses the same word.
+  if (new Set(named.map((n) => n.name)).size < 2) return null;
+
+  const parts = named.map((n) => `${n.name} on ${PLATFORM_INFO[n.platform].label}`);
+  const list = `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+
+  // The one that actually bites: a free YouTube subscriber is not caught here.
+  const footnote =
+    signal === 'subscriber' && able.includes('youtube')
+      ? " YouTube's free subscribers are not this — they are the Followers gate."
+      : '';
+
+  return `Means ${list}.${footnote}`;
 }

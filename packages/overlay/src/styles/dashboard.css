@@ -2137,8 +2137,45 @@ select.input option { background: var(--bg-raised); color: var(--text); }
   user-select: none;
 }
 
-/* Folded for good: severe terms and refused scripts. Muted, because there is
-   nothing here to read and it should not draw the eye. */
+/*
+ * A severe hit. Red, and still readable.
+ *
+ * Louder than the amber flag because the decision behind it is different: an
+ * amber row is usually the wordlist being wrong, a red one is usually a real
+ * person to act on. The tint sits behind the text rather than replacing its
+ * colour, so the message stays as legible as any other row.
+ */
+.chatrow-text-severe {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.1);
+  border-radius: 6px;
+  padding: 2px 7px;
+  margin: -2px -3px;
+}
+
+.chatrow-text-severe .chatrow-flag {
+  color: var(--error);
+}
+
+/* The fact worth knowing: not that it was caught, but that TTS never said it. */
+.chatrow-notread {
+  margin-left: 7px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.18);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* The one folded case: a refused script. Muted, because there is nothing here
+   to read and it should not draw the eye. */
 .chatrow-text-redacted {
   color: var(--text-dim);
   font-style: italic;

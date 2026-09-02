@@ -454,6 +454,7 @@ export class Hub {
       event.filtered = result.filtered;
       event.filterReason = result.reason;
       event.redacted = result.redact;
+      event.filterSeverity = result.severity;
       filtered = result.filtered;
       filterReason = result.reason;
       this.considerPenalty(event, result.severity, result.evasion, result.reason ?? 'severe term');

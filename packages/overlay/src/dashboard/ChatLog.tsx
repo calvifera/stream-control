@@ -617,39 +617,68 @@ function RowActions({ user }: { user: StreamUser }): JSX.Element {
 /**
  * A message, with the filter's verdict shown rather than applied.
  *
- * The panel is the host's own surface, and hiding an ordinary filter hit from
- * the host was the wrong trade: a false positive is only findable by reading
- * what the message actually said, and deciding whether to pardon a trusted
- * regular cannot be done against `[removed by filter]`. So an ordinary hit
- * now shows the original, marked with a dot and dimmed, with the filter's
- * reason on hover.
+ * The panel is the host's own surface, so the default is to show what was
+ * said and mark how the filter judged it. Replacing a message with a
+ * placeholder hid the one thing needed to tell a false positive from a real
+ * hit, or to decide whether a regular deserves a ban.
  *
- * Redacted hits — severe terms and refused scripts — stay folded to `[rbf]`.
- * Those are the cases where the host gains nothing by reading it, which is
- * the whole reason they are on the zero-tolerance list.
+ * Four outcomes:
  *
- * This changes only what the host sees. Overlays render `displayText` and are
- * untouched, so nothing here reaches the stream.
+ *   trusted speaker  amber, whatever they said. Someone on the trusted list
+ *                    has already been vouched for, so a hit on them is far
+ *                    likelier to be the wordlist being wrong than the person.
+ *   ordinary hit     amber, original shown.
+ *   severe hit       red, original shown, marked "not read" when TTS was
+ *                    denied it — which is the fact the host actually needs:
+ *                    not whether it was caught, but whether it went out loud.
+ *   refused script   folded to [removed by filter]. The only case with
+ *                    nothing to read: unreadable to the host is what made it
+ *                    refused in the first place.
+ *
+ * Host surfaces only. Overlays render `displayText`, so none of this reaches
+ * the stream.
  */
 function MessageText({ event }: { event: StreamEvent }): JSX.Element {
+  const { config } = useLive();
+
   if (event.type !== 'chat' || !event.filtered) {
     return <div className="chatrow-text">{describe(event)}</div>;
   }
 
+  const trusted =
+    config?.users.trusted.some(
+      (entry) => listKey(entry) === viewerKey(event.user.platform, event.user.uniqueId),
+    ) ?? false;
+
+  // A refused script is folded for everyone, trusted included: there is no
+  // readable message underneath to vouch for.
   if (event.redacted) {
     return (
       <div className="chatrow-text chatrow-text-redacted" title={event.filterReason ?? 'filtered'}>
-        [rbf]
+        [removed by filter]
       </div>
     );
   }
 
+  const severe = event.filterSeverity === 'severe' && !trusted;
+  // Null display text means the filter took the whole message, so TTS never
+  // saw it. A censored message was still spoken, just with the word masked.
+  const spoken = event.displayText !== null;
+
   return (
-    <div className="chatrow-text chatrow-text-flagged" title={event.filterReason ?? 'filtered'}>
-      <span className="chatrow-flag" aria-label="caught by the filter">
+    <div
+      className={`chatrow-text ${severe ? 'chatrow-text-severe' : 'chatrow-text-flagged'}`}
+      title={
+        trusted
+          ? `${event.filterReason ?? 'filtered'} — trusted, so shown as an ordinary flag`
+          : (event.filterReason ?? 'filtered')
+      }
+    >
+      <span className="chatrow-flag" aria-label={severe ? 'severe filter hit' : 'caught by the filter'}>
         ●
       </span>
       {event.text}
+      {severe && !spoken ? <span className="chatrow-notread">not read</span> : null}
     </div>
   );
 }

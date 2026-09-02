@@ -126,15 +126,22 @@ export interface ChatEvent extends StreamEventBase {
   /**
    * Whether `text` must stay hidden from the host too.
    *
-   * False for an ordinary blocklist hit: the host's own surfaces show the
-   * original, flagged, because a false positive can only be spotted by
-   * reading what was actually said. True for severe terms and refused
-   * scripts, which stay folded everywhere.
+   * Only a refused or mixed script, which is unreadable to the host anyway.
+   * Everything else the filter catches is shown and marked, because a false
+   * positive can only be spotted by reading what was actually said.
    *
    * Viewer-facing overlays ignore this and render `displayText` regardless —
    * it governs what the moderator sees, never what the stream shows.
    */
   redacted: boolean;
+  /**
+   * How bad the filter judged it: `normal` is an ordinary blocklist hit,
+   * `severe` is the zero-tolerance list that auto-penalties are built on.
+   *
+   * Carried on the event so the host's surfaces can tell the two apart
+   * without re-deriving it from `filterReason` text.
+   */
+  filterSeverity: 'none' | 'normal' | 'severe';
   emotes: string[];
 }
 

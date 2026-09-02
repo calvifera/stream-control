@@ -34,15 +34,14 @@ export interface FilterResult {
   /**
    * Whether the original text must stay hidden from the host as well.
    *
-   * Most filter hits are worth reading: a false positive is only findable by
-   * looking at what the message actually said, and a moderator deciding
-   * whether to pardon someone cannot do it blind. Those are flagged, not
-   * hidden.
+   * Almost nothing qualifies. A filter hit is worth reading: a false positive
+   * is only findable by looking at what the message actually said, and a
+   * severe hit is exactly the one a host wants to see before handing out a
+   * ban. Those are marked, not hidden.
    *
-   * The exceptions are the two cases where showing it has no upside. A severe
-   * term is on the zero-tolerance list precisely because the host does not
-   * want to read it, and refused or mixed scripts are a payload aimed at the
-   * filter rather than a message anyone meant to send.
+   * The single exception is a refused or mixed script, which is unreadable to
+   * the host by definition — that is what made it refused — so there is
+   * nothing on the other side of unfolding it.
    */
   redact: boolean;
 }
@@ -455,9 +454,7 @@ export class FilterEngine {
           reason: `blocked by ${match.label}${how}`,
           severity: match.severe ? 'severe' : 'normal',
           evasion,
-          // Severe stays hidden; an ordinary word caught only after
-          // transliteration is exactly the kind of match worth eyeballing.
-          redact: match.severe,
+          redact: false,
         };
       }
 
@@ -479,7 +476,9 @@ export class FilterEngine {
           reason: `blocked by ${match.label}`,
           severity: 'severe',
           evasion,
-          redact: true,
+          // Shown, in red. The host decides what to do about it, and that
+          // decision is worse blind than informed.
+          redact: false,
         };
       }
     }

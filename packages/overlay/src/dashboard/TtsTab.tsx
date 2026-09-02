@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   DEFAULT_TTS_RULE,
+  gateMeaning,
   gateWarning,
   PLATFORM_INFO,
   platformsMissing,
@@ -534,7 +535,7 @@ function RuleEditor({
       <Row>
         <Toggle
           label="Followers only"
-          hint={gateWarning('follower', rule.platforms) ?? undefined}
+          hint={gateWarning('follower', rule.platforms) ?? gateMeaning('follower', rule.platforms) ?? undefined}
           checked={rule.gate.followersOnly}
           onChange={(followersOnly) => onChange({ gate: { ...rule.gate, followersOnly } })}
         />
@@ -546,7 +547,7 @@ function RuleEditor({
         />
         <Toggle
           label="Subscribers only"
-          hint={gateWarning('subscriber', rule.platforms) ?? undefined}
+          hint={gateWarning('subscriber', rule.platforms) ?? gateMeaning('subscriber', rule.platforms) ?? undefined}
           checked={rule.gate.subscribersOnly}
           onChange={(subscribersOnly) => onChange({ gate: { ...rule.gate, subscribersOnly } })}
         />
@@ -557,6 +558,7 @@ function RuleEditor({
         />
         <Toggle
           label="Must have gifted this session"
+          hint={gateWarning('gifter', rule.platforms) ?? gateMeaning('gifter', rule.platforms) ?? undefined}
           checked={rule.gate.giftersOnly}
           onChange={(giftersOnly) => onChange({ gate: { ...rule.gate, giftersOnly } })}
         />

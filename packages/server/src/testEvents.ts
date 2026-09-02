@@ -113,6 +113,7 @@ export function createTestEvent(spec: TestEventSpec): StreamEvent {
         filtered: false,
         filterReason: null,
         redacted: false,
+    filterSeverity: 'none',
         emotes: [],
       };
     }

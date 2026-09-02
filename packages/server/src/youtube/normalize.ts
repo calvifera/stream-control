@@ -175,6 +175,7 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         filtered: false,
         filterReason: null,
         redacted: false,
+    filterSeverity: 'none',
         emotes: [],
       } satisfies ChatEvent;
     }
