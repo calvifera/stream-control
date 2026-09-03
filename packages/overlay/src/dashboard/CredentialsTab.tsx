@@ -90,7 +90,8 @@ const GROUPS: Group[] = [
   {
     id: 'google',
     title: 'YouTube',
-    unlocks: 'Reading YouTube live chat. There is no anonymous access — this one is all or nothing.',
+    unlocks:
+      'Moderating YouTube chat from here, and the official Data API as a fallback source. Reading chat needs none of it.',
     required: 'required',
     caveat:
       'Leave the consent screen in "Testing" and Google revokes your sign-in every 7 days. Publish it to "In Production" — step 6 — and it lasts indefinitely. Nobody else needs to use your app for this; you are publishing it to yourself.',

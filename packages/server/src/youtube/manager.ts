@@ -172,7 +172,8 @@ export class YouTubeManager extends EventEmitter {
       // and a reconnect loop here would just burn until someone signs in.
       this.patch({
         status: 'error',
-        lastError: 'Sign in to YouTube on the Setup tab first — live chat has no anonymous access.',
+        lastError:
+          'The Data API source needs a Google sign-in. Switch the source to "No sign-in needed" on the Setup tab, or sign in.',
         connectedAt: null,
       });
       this.push(systemEvent('error', 'YouTube: not signed in'));

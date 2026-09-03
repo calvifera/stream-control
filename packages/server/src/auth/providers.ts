@@ -131,11 +131,28 @@ export function capabilitiesFor(
       };
 
     case 'youtube':
-      // Nothing works without sign-in: the Live API requires the request to be
-      // authorized by the account that owns the broadcast.
-      return level === 'user'
-        ? { ...MAX_CAPABILITIES.youtube }
-        : { ...NO_CAPABILITIES };
+      /*
+       * Reading needs nothing, the way it does on TikTok and Twitch.
+       *
+       * That used to be false — the Data API was the only route in and it
+       * demands an authorized request. The watch-page source changed it, and
+       * this table is what the Setup screen greys out, so leaving it saying
+       * otherwise would have the card promise "no account needed" directly
+       * above a greyed-out "Read chat".
+       *
+       * Everything past reading still needs the account: names and pictures
+       * come with the messages either way, but banning somebody is an action
+       * taken as you.
+       */
+      return {
+        readChat: true,
+        avatars: true,
+        viewerCount: true,
+        // Free subscribers never appear in chat on either route.
+        followEvents: false,
+        sendMessage: level === 'user',
+        moderate: level === 'user',
+      };
 
     default:
       return { ...NO_CAPABILITIES };
@@ -149,12 +166,15 @@ function nextStepFor(platform: Platform, level: AuthLevel, appConfigured: boolea
   if (!appConfigured) {
     return platform === 'twitch'
       ? 'Register an app at dev.twitch.tv/console/apps, then put TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in .env — that alone unlocks avatars.'
-      : 'Create OAuth credentials in Google Cloud Console (YouTube Data API v3), then put GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.';
+      : 'Optional. Chat reads without any of this — credentials from Google Cloud Console (YouTube Data API v3) in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET add moderation, and the official API as a fallback source.';
   }
   if (level !== 'user') {
     return platform === 'twitch'
       ? 'Sign in to enable sending messages and moderating from here.'
-      : 'Sign in with Google — YouTube live chat cannot be read without it.';
+      // No longer a prerequisite for reading: the watch-page source needs
+      // nothing. Saying otherwise sent people to the Cloud Console for an
+      // hour to reach a screen they could already have used.
+      : 'Optional. Sign in to moderate from here, and to save typing your channel handle.';
   }
   return null;
 }

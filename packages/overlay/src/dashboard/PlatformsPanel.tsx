@@ -64,14 +64,33 @@ const WIRING: Record<Platform, PlatformWiring> = {
     // dashboard and restarting the server, this section does not exist yet.
     // Reading straight through it would throw and take the whole tab down,
     // which is a far worse failure than an empty field.
-    handle: (config) => config.youtube?.videoId ?? '',
-    setHandle: (config, videoId) => ({ youtube: { ...(config.youtube ?? {}), videoId } }),
+    handle: (config) => config.youtube?.videoId || config.youtube?.handle || '',
+    /*
+     * One field for two different things, routed by shape.
+     *
+     * A channel and a video are separate settings underneath, but nobody
+     * arrives holding "a channel id" — they arrive holding something they
+     * copied, and it is a @handle, a channel URL or a link to the stream.
+     * Asking which kind it is would be asking the reader to know something
+     * the string already says. Setting one clears the other, because holding
+     * both would leave which one wins to guesswork.
+     */
+    setHandle: (config, value) => {
+      const trimmed = value.trim();
+      const looksLikeVideo =
+        /(?:v=|youtu\.be\/|\/live\/)[\w-]{11}/.test(trimmed) || /^[\w-]{11}$/.test(trimmed);
+      return {
+        youtube: {
+          ...(config.youtube ?? {}),
+          videoId: looksLikeVideo ? trimmed : '',
+          handle: looksLikeVideo ? '' : trimmed,
+        },
+      };
+    },
     connect: (handle) => api.youtubeConnect(handle),
     disconnect: () => api.youtubeDisconnect(),
-    // Blank is the normal case: with no id it finds whichever broadcast on
-    // your own channel is live.
-    placeholder: 'blank = your live broadcast',
-    note: 'Needs Google sign-in — live chat has no anonymous access. Chat is polled, so it spends daily API quota while connected.',
+    placeholder: '@handle, channel link, or a video link',
+    note: '',
   },
 };
 
@@ -233,13 +252,88 @@ function PlatformCard({
         ) : null}
       </div>
 
+      {platform === 'youtube' ? <YouTubeSource config={config} patch={patch} auth={auth} /> : null}
       {error ? <p className="muted platform-note platform-error">{error}</p> : null}
-      {platform === 'youtube' && live ? <QuotaMeter /> : null}
+      {platform === 'youtube' && live && config.youtube?.source === 'api' ? <QuotaMeter /> : null}
       {auth ? <CapabilityList platform={platform} capabilities={auth.capabilities} /> : null}
       {auth?.nextStep ? <p className="muted platform-note">{auth.nextStep}</p> : null}
       {!auth?.nextStep && wiring.note ? (
         <p className="muted platform-note">{wiring.note}</p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Which way YouTube chat is read.
+ *
+ * Worth a control rather than a setting buried in a file, because the two
+ * routes ask completely different things of whoever is setting this up. One
+ * needs nothing. The other needs a Google Cloud project, an OAuth consent
+ * screen and a signed-in account, and then rations how long it will work.
+ *
+ * The wording avoids "official" and "unofficial" as the headline. What
+ * matters at the moment of choosing is what each costs you and how it fails —
+ * quota versus the risk of an undocumented endpoint moving — and the second
+ * of those is stated plainly rather than buried.
+ */
+function YouTubeSource({
+  config,
+  patch,
+  auth,
+}: {
+  config: AppConfig;
+  patch: (partial: Record<string, unknown>) => void;
+  auth: PlatformAuthState | null;
+}): JSX.Element {
+  const source = config.youtube?.source ?? 'innertube';
+  const signedIn = auth?.level === 'user';
+  const target = config.youtube?.videoId || config.youtube?.handle || '';
+
+  const set = (next: 'innertube' | 'api'): void =>
+    patch({ youtube: { ...(config.youtube ?? {}), source: next } });
+
+  return (
+    <div className="yt-source">
+      <div className="chips">
+        <button
+          type="button"
+          className={source === 'innertube' ? 'chip chip-on' : 'chip'}
+          onClick={() => set('innertube')}
+          title="Reads the page a viewer reads. No account, no quota, any public stream."
+        >
+          No sign-in needed
+        </button>
+        <button
+          type="button"
+          className={source === 'api' ? 'chip chip-on' : 'chip'}
+          onClick={() => set('api')}
+          title="Google's official Data API. Needs an OAuth app and a signed-in account, and spends a daily quota."
+        >
+          Google Data API
+        </button>
+      </div>
+
+      <p className="muted platform-note">
+        {source === 'innertube' ? (
+          <>
+            Reads chat the way the watch page does — no account, no quota, and it works on any
+            public stream.{' '}
+            {target
+              ? null
+              : signedIn
+                ? 'Using the channel from your signed-in account.'
+                : 'Put your @handle above so it knows whose stream to find.'}{' '}
+            Not a documented API, so it can change without warning; switch to the Data API if it
+            ever stops.
+          </>
+        ) : (
+          <>
+            Google&apos;s supported API. Needs the sign-in below and spends a daily quota — around
+            1,200 calls an hour, against a default allowance of 10,000 units.
+          </>
+        )}
+      </p>
     </div>
   );
 }

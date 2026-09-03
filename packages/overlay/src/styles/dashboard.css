@@ -2137,6 +2137,26 @@ select.input option { background: var(--bg-raised); color: var(--text); }
   user-select: none;
 }
 
+/* The source choice sits above the platform's own note, indented under the
+   controls it explains rather than floating loose in the card. */
+.yt-source {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.yt-source .chips {
+  gap: 6px;
+}
+
+.yt-source .platform-note {
+  margin: 0;
+  line-height: 1.55;
+}
+
 /* A budget readout, coloured by how much of it is gone. Neutral until it
    matters — a meter that is always orange stops meaning anything. */
 .quota-meter {
