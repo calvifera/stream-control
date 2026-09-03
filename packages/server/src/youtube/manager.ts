@@ -87,6 +87,17 @@ export class YouTubeManager extends EventEmitter {
   private pageToken: string | null = null;
   /** Guards against two polls overlapping if one runs long. */
   private polling = false;
+  /**
+   * True until the first poll has established a cursor.
+   *
+   * Asked for a chat with no `pageToken`, the API answers with the backlog —
+   * what has already been said, not what is new. TikTok and Twitch both hand
+   * over a live stream of messages and nothing else, so without this, joining
+   * a YouTube chat an hour in replayed that hour: every message queued for
+   * speech, rendered in overlays, written to the archive, and weighed for
+   * penalties, all at once and all long after the fact.
+   */
+  private priming = true;
   /** Calls made this connection, so quota burn can be seen rather than assumed. */
   private pollCount = 0;
   private startedAt = 0;
@@ -172,6 +183,7 @@ export class YouTubeManager extends EventEmitter {
 
       this.liveChatId = found.liveChatId;
       this.pageToken = null;
+      this.priming = true;
       this.pollCount = 0;
       this.startedAt = Date.now();
       this.patch({
@@ -316,11 +328,26 @@ export class YouTubeManager extends EventEmitter {
         offlineAt?: string;
       }>(token, 'liveChat/messages', params);
 
+      /*
+       * A missing token means keep the one we have, never start over.
+       * Clearing it would send the next poll back to the top of the chat and
+       * redeliver everything already handled.
+       */
       this.pageToken = data.nextPageToken ?? this.pageToken;
 
-      for (const item of data.items ?? []) {
-        const event = youtubeEventFrom(item);
-        if (event) this.push(event);
+      const items = data.items ?? [];
+      if (this.priming) {
+        // The first answer is history. Take the cursor from it and let the
+        // messages go: they were said before anyone here was listening.
+        this.priming = false;
+        if (items.length > 0) {
+          log.info(`Skipped ${items.length} message(s) already in the chat backlog`);
+        }
+      } else {
+        for (const item of items) {
+          const event = youtubeEventFrom(item);
+          if (event) this.push(event);
+        }
       }
 
       if (data.offlineAt) {

@@ -286,5 +286,80 @@ console.log('\nplain messages');
   check('still schedules a reconnect', transient.pending, true);
 }
 
+/* ------------------------------------------------------------------ *
+ * The backlog on connect
+ *
+ * Asked for a chat with no pageToken, the API answers with what has already
+ * been said. TikTok and Twitch deliver live messages and nothing else, so
+ * that difference is invisible until you join a busy chat an hour in and the
+ * whole hour arrives at once — spoken aloud, drawn in overlays, archived, and
+ * weighed for penalties, all long after the fact.
+ * ------------------------------------------------------------------ */
+
+{
+  const { YouTubeManager } = await import('../youtube/manager.js');
+  const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 80));
+
+  const message = (id: string, text: string) => ({
+    id,
+    snippet: { type: 'textMessageEvent', displayMessage: text, publishedAt: new Date().toISOString() },
+    authorDetails: { channelId: 'UC' + id, displayName: 'Someone' },
+  });
+
+  let page = 0;
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: URL | string) => {
+    const url = String(input);
+    if (url.includes('liveBroadcasts')) {
+      return new Response(
+        JSON.stringify({ items: [{ id: 'vid', snippet: { title: 'Stream', liveChatId: 'chat1' } }] }),
+        { status: 200 },
+      );
+    }
+    page += 1;
+    // First answer: history. Second: one genuinely new message.
+    const items =
+      page === 1
+        ? [message('old1', 'said before you joined'), message('old2', 'also before')]
+        : [message('new1', 'said while listening')];
+    return new Response(
+      JSON.stringify({ items, nextPageToken: `t${page}`, pollingIntervalMillis: 20 }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+
+  const manager = new YouTubeManager(
+    {
+      enabled: true,
+      videoId: '',
+      autoReconnect: false,
+      reconnectDelaySeconds: 15,
+      connectOnStartup: false,
+      pollIntervalMs: 1,
+    },
+    { userToken: async () => 'token' } as never,
+  );
+
+  const spoken: string[] = [];
+  manager.on('event', (e: { type: string; text?: string }) => {
+    if (e.type === 'chat' && e.text) spoken.push(e.text);
+  });
+
+  manager.connect();
+  await settle();
+  // Drive the second poll rather than waiting out the interval floor: the
+  // question is what priming does to the messages, not how long until it does.
+  await (manager as unknown as { poll: () => Promise<void> }).poll();
+  manager.disconnect();
+  globalThis.fetch = real;
+
+  console.log('');
+  console.log('joining a chat that already has messages in it');
+  check('the backlog is not replayed', spoken.includes('said before you joined'), false);
+  check('nor the rest of it', spoken.includes('also before'), false);
+  // The other half: priming must not swallow the live stream that follows.
+  check('messages after the cursor still arrive', spoken.includes('said while listening'), true);
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed === 0 ? 0 : 1);
