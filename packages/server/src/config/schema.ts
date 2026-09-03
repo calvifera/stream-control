@@ -220,6 +220,21 @@ export const twitchSchema = z
 export const youtubeSchema = z
   .object({
     enabled: z.boolean().default(false),
+    // Defaults to the watch-page route: it needs no setup at all, where the
+    // API route needs a Cloud project before it returns a single message.
+    source: z.enum(['innertube', 'api']).default('innertube'),
+    handle: z
+      .string()
+      .default('')
+      // A handle, a channel URL or a bare name all end up as `@name`, because
+      // all three are things people paste.
+      .transform((value) => {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+        const fromUrl = /youtube\.com\/(@[\w.-]+)/.exec(trimmed)?.[1];
+        const bare = fromUrl ?? trimmed;
+        return bare.startsWith('@') ? bare : `@${bare}`;
+      }),
     videoId: z
       .string()
       .default('')

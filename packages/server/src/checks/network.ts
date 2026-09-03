@@ -49,7 +49,8 @@ const ALLOWED: Record<string, string> = {
   // Google / YouTube
   'accounts.google.com': 'OAuth: the sign-in page itself',
   'oauth2.googleapis.com': 'OAuth: token exchange and refresh',
-  'www.googleapis.com': 'YouTube live chat',
+  'www.googleapis.com': 'YouTube live chat (Data API, when that source is chosen)',
+  'www.youtube.com': 'YouTube live chat read the way the watch page reads it',
   'texttospeech.googleapis.com': 'Google Cloud text-to-speech',
   'www.google.com': 'The legacy translate-style speech endpoint',
 

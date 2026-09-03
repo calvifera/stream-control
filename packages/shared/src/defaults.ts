@@ -552,6 +552,8 @@ export function createDefaultConfig(username = ''): AppConfig {
     },
     youtube: {
       enabled: false,
+      source: 'innertube',
+      handle: '',
       videoId: '',
       autoReconnect: true,
       reconnectDelaySeconds: 15,

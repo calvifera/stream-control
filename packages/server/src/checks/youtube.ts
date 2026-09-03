@@ -247,6 +247,8 @@ console.log('\nplain messages');
     const manager = new YouTubeManager(
       {
         enabled: true,
+        source: 'api' as const,
+        handle: '',
         videoId: '',
         autoReconnect: true,
         reconnectDelaySeconds: 15,
@@ -331,6 +333,8 @@ console.log('\nplain messages');
   const manager = new YouTubeManager(
     {
       enabled: true,
+      source: 'api' as const,
+      handle: '',
       videoId: '',
       autoReconnect: false,
       reconnectDelaySeconds: 15,

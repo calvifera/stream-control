@@ -9,6 +9,8 @@ import type {
 import { createLogger, describeError } from '../logger.js';
 import type { AuthManager } from '../auth/manager.js';
 import { youtubeEventFrom, type YouTubeChatMessage } from './normalize.js';
+import { findLiveChat, pollChat, type ChatSession } from './innertube.js';
+import { innertubeEventFrom } from './innertubeNormalize.js';
 
 const log = createLogger('youtube');
 
@@ -98,6 +100,8 @@ export class YouTubeManager extends EventEmitter {
    * penalties, all at once and all long after the fact.
    */
   private priming = true;
+  /** Set while reading from the watch page instead of the Data API. */
+  private session: ChatSession | null = null;
   /** Calls made this connection, so quota burn can be seen rather than assumed. */
   private pollCount = 0;
   private startedAt = 0;
@@ -157,6 +161,11 @@ export class YouTubeManager extends EventEmitter {
   }
 
   private async begin(): Promise<void> {
+    if (this.config.source === 'innertube') {
+      await this.beginInnertube();
+      return;
+    }
+
     const token = await this.auth.userToken('youtube');
     if (!token) {
       // Terminal rather than retried: no amount of waiting produces a token,
@@ -201,6 +210,56 @@ export class YouTubeManager extends EventEmitter {
       this.emit('sessionStart');
       this.push(systemEvent('info', `Connected to YouTube live chat — ${found.title}`));
       log.info(`Connected to YouTube live chat (${found.liveChatId})`);
+
+      this.schedule(0);
+    } catch (error) {
+      this.failFrom(error);
+    }
+  }
+
+  /**
+   * Connects without credentials, the way the watch page does.
+   *
+   * No token is fetched and none is needed. Signing in still helps in one
+   * small way — the channel id from the account saves having to type a handle
+   * — but its absence is not an error here, which is the entire point of this
+   * route.
+   */
+  private async beginInnertube(): Promise<void> {
+    try {
+      const found = await findLiveChat({
+        videoId: this.config.videoId,
+        handle: this.config.handle,
+        channelId: this.auth.store.get('youtube')?.accountId ?? undefined,
+      });
+
+      if (!found) {
+        this.fail(
+          this.config.videoId
+            ? `No live chat on video ${this.config.videoId} — is it live, and is chat enabled?`
+            : 'That channel is not live, or its chat is disabled.',
+        );
+        return;
+      }
+
+      this.session = found;
+      this.priming = true;
+      this.pollCount = 0;
+      this.startedAt = Date.now();
+      this.liveChatId = found.videoId;
+      this.patch({
+        status: 'connected',
+        username: found.videoId,
+        roomId: found.videoId,
+        hostNickname: found.title,
+        connectedAt: Date.now(),
+        liveSince: Date.now(),
+        reconnectAttempts: 0,
+        lastError: null,
+      });
+      this.emit('sessionStart');
+      this.push(systemEvent('info', `Connected to YouTube live chat — ${found.title}`));
+      log.info(`Reading YouTube chat from the watch page (${found.videoId})`);
 
       this.schedule(0);
     } catch (error) {
@@ -297,6 +356,15 @@ export class YouTubeManager extends EventEmitter {
     if (this.polling || !this.liveChatId || this.manuallyDisconnected) return;
     this.polling = true;
 
+    if (this.session) {
+      try {
+        await this.pollInnertube();
+      } finally {
+        this.polling = false;
+      }
+      return;
+    }
+
     try {
       const token = await this.auth.userToken('youtube');
       if (!token) {
@@ -372,6 +440,53 @@ export class YouTubeManager extends EventEmitter {
   }
 
   /**
+   * One batch from the watch page.
+   *
+   * The server states how long to wait before asking again, and that is
+   * honoured rather than overridden: it is the same self-throttling contract
+   * the Data API offers, and ignoring it is what turns a reader into
+   * something that looks like hammering.
+   */
+  private async pollInnertube(): Promise<void> {
+    const session = this.session;
+    if (!session) return;
+
+    try {
+      this.pollCount += 1;
+      const batch = await pollChat(session);
+
+      if (this.priming) {
+        // Same as the Data API path: the opening answer is history, not news.
+        this.priming = false;
+        if (batch.items.length > 0) {
+          log.info(`Skipped ${batch.items.length} message(s) already in the chat backlog`);
+        }
+      } else {
+        for (const action of batch.items) {
+          const event = innertubeEventFrom(action);
+          if (event) this.push(event);
+        }
+      }
+
+      if (!batch.continuation) {
+        this.push(systemEvent('info', 'YouTube: the stream has gone offline'));
+        log.info('YouTube chat ended');
+        this.stopPolling();
+        this.patch({ status: 'idle', connectedAt: null });
+        return;
+      }
+
+      this.session = { ...session, continuation: batch.continuation };
+      // The page's own pacing, already clamped by the reader. The config's
+      // poll interval is a quota lever and this route has no quota, so it
+      // has nothing to say here.
+      this.schedule(batch.waitMs);
+    } catch (error) {
+      this.failFrom(error);
+    }
+  }
+
+  /**
    * @param retry Whether another attempt could plausibly succeed. False stops
    * the reconnect loop dead, which matters for quota: retrying every couple of
    * minutes until the daily reset spends hundreds of calls to be refused
@@ -422,6 +537,9 @@ export class YouTubeManager extends EventEmitter {
     this.clearTimer();
     this.liveChatId = null;
     this.pageToken = null;
+    // Dropped rather than kept: a continuation is only valid for the page it
+    // came from, so reconnecting has to start by fetching the page again.
+    this.session = null;
   }
 
   disconnect(): void {

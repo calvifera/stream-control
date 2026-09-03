@@ -81,8 +81,30 @@ export interface TwitchModerationConfig {
  * means every connected minute spends from a daily API quota. `pollIntervalMs`
  * is the floor on how fast that happens.
  */
+/**
+ * Where YouTube chat is read from.
+ *
+ * `innertube` is the route the watch page itself uses: no Google Cloud
+ * project, no sign-in, no quota, and it works on any public stream. It is
+ * also undocumented, so it can change without notice.
+ *
+ * `api` is the official Data API. It needs an OAuth app and a signed-in
+ * account, and it spends a daily quota that a long stream can exhaust — but
+ * Google supports it, so it is the one to fall back to if the other breaks.
+ */
+export type YouTubeChatSource = 'innertube' | 'api';
+
 export interface YouTubeConnectionConfig {
   enabled: boolean;
+  source: YouTubeChatSource;
+  /**
+   * `@handle` of the channel to read, for the innertube source.
+   *
+   * Only needed when you are not signed in: with a Google account attached,
+   * the channel id from that account is used instead and nothing has to be
+   * typed. Ignored entirely when a video id is set.
+   */
+  handle: string;
   /**
    * A specific video to read, or blank to use whichever broadcast on your own
    * channel is currently live.
