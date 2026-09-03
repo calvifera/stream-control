@@ -94,9 +94,39 @@ export interface TwitchModerationConfig {
  */
 export type YouTubeChatSource = 'innertube' | 'api';
 
+/**
+ * Penalty-box enforcement on YouTube.
+ *
+ * Same shape and the same caution as Twitch's, for the same reasons: these
+ * are outward-facing actions on real people, watched by an audience. What
+ * differs is the reach — YouTube bans by channel id, which is what a viewer
+ * is already keyed on here, so no lookup stands between a mistaken penalty
+ * and a real person.
+ */
+export interface YouTubeModerationConfig {
+  enabled: boolean;
+  /**
+   * How long a penalised viewer is banned for, in seconds.
+   *
+   * **0 means a permanent ban**, which is why this defaults to 300 — the
+   * length YouTube's own timeout button uses.
+   */
+  timeoutSeconds: number;
+  /**
+   * Let *automatic* penalties act on YouTube too.
+   *
+   * Off even when `enabled` is on. Automatic strikes come from evasion
+   * heuristics and phonetic near misses, which have false positives by
+   * design; one that mutes TTS is private and recoverable, and one that bans
+   * a real viewer is neither.
+   */
+  includeAutomatic: boolean;
+}
+
 export interface YouTubeConnectionConfig {
   enabled: boolean;
   source: YouTubeChatSource;
+  moderation: YouTubeModerationConfig;
   /**
    * `@handle` of the channel to read, for the innertube source.
    *

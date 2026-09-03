@@ -310,6 +310,7 @@ export function PeopleTab({ config, patch }: Props): JSX.Element {
       </Panel>
 
       <TwitchModerationPanel config={config} patch={patch} />
+      <YouTubeModerationPanel config={config} patch={patch} />
 
       <Panel
         title="Severe terms"
@@ -624,6 +625,88 @@ function VoiceProfileEditor({
         <TextInput value={profile.note} onChange={(note) => onChange({ note })} />
       </Field>
     </div>
+  );
+}
+
+/**
+ * Whether the penalty box reaches YouTube itself.
+ *
+ * Its own panel for the same reason Twitch has one: this is a setting whose
+ * effects are visible to an audience and land on somebody else's account.
+ *
+ * One difference is worth stating on the screen rather than only in the code.
+ * YouTube bans by channel id, and a channel id is exactly what a viewer is
+ * keyed on here — so unlike Twitch there is no name lookup in between that
+ * could fail harmlessly on a bad handle. Whoever is in the penalty box is who
+ * gets banned.
+ */
+function YouTubeModerationPanel({
+  config,
+  patch,
+}: {
+  config: AppConfig;
+  patch: (partial: Record<string, unknown>) => void;
+}): JSX.Element {
+  const youtube = config.youtube;
+  const mod = youtube.moderation;
+  const set = (over: Partial<typeof mod>): void =>
+    patch({ youtube: { ...youtube, moderation: { ...mod, ...over } } });
+
+  const permanent = mod.timeoutSeconds === 0;
+
+  return (
+    <Panel
+      title="YouTube enforcement"
+      description="Off by default, the penalty box only mutes speech — someone you have penalised carries on posting to everyone watching. Turn this on and a penalty also bans them from the live chat."
+    >
+      <Row>
+        <Toggle
+          label="Penalties reach YouTube"
+          checked={mod.enabled}
+          onChange={(enabled) => set({ enabled })}
+        />
+        <Field
+          label="Ban length (seconds)"
+          hint={
+            permanent
+              ? 'Zero is a PERMANENT BAN, not a zero-second timeout'
+              : `${Math.round(mod.timeoutSeconds / 60)} minute(s) — 300 is what YouTube's own timeout button uses`
+          }
+        >
+          <NumberInput
+            value={mod.timeoutSeconds}
+            onChange={(timeoutSeconds) => set({ timeoutSeconds })}
+            min={0}
+            max={86400}
+          />
+        </Field>
+      </Row>
+
+      {permanent && mod.enabled ? (
+        <div className="banner banner-warn">
+          A ban length of zero bans permanently. Every penalty — including one added by a
+          misclick — will remove that viewer from your chat until you undo it in YouTube Studio.
+        </div>
+      ) : null}
+
+      <Row>
+        <Toggle
+          label="Automatic penalties too"
+          hint="Off by default even when the above is on. Strikes fire on evasion heuristics and phonetic near misses, which have false positives — a wrong call that mutes speech is private, and one that bans a real viewer is not."
+          checked={mod.includeAutomatic}
+          onChange={(includeAutomatic) => set({ includeAutomatic })}
+        />
+      </Row>
+
+      {mod.enabled ? (
+        <p className="muted">
+          Banning is done as you, so this needs the Google sign-in even when chat is being read
+          without one. Releasing someone from the penalty box lifts the ban — but only one placed
+          since the server last started, because YouTube gives no way to look a ban up afterwards.
+          Anything older has to be lifted in YouTube Studio.
+        </p>
+      ) : null}
+    </Panel>
   );
 }
 

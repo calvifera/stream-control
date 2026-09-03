@@ -248,6 +248,7 @@ console.log('\nplain messages');
       {
         enabled: true,
         source: 'api' as const,
+        moderation: { enabled: false, timeoutSeconds: 300, includeAutomatic: false },
         handle: '',
         videoId: '',
         autoReconnect: true,
@@ -334,6 +335,7 @@ console.log('\nplain messages');
     {
       enabled: true,
       source: 'api' as const,
+      moderation: { enabled: false, timeoutSeconds: 300, includeAutomatic: false },
       handle: '',
       videoId: '',
       autoReconnect: false,

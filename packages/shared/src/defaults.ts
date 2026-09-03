@@ -553,6 +553,7 @@ export function createDefaultConfig(username = ''): AppConfig {
     youtube: {
       enabled: false,
       source: 'innertube',
+      moderation: { enabled: false, timeoutSeconds: 300, includeAutomatic: false },
       handle: '',
       videoId: '',
       autoReconnect: true,

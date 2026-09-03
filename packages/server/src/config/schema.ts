@@ -223,6 +223,14 @@ export const youtubeSchema = z
     // Defaults to the watch-page route: it needs no setup at all, where the
     // API route needs a Cloud project before it returns a single message.
     source: z.enum(['innertube', 'api']).default('innertube'),
+    moderation: z
+      .object({
+        enabled: z.boolean().default(false),
+        // 0 is a permanent ban, so the floor is deliberate.
+        timeoutSeconds: z.number().min(0).max(86_400).default(300),
+        includeAutomatic: z.boolean().default(false),
+      })
+      .default({}),
     handle: z
       .string()
       .default('')

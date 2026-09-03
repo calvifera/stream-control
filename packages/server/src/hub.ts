@@ -1,4 +1,4 @@
-import { listKey, readViewerKey, userKey, viewerKey } from '@streaming/shared';
+import { listKey, PLATFORM_INFO, readViewerKey, userKey, viewerKey } from '@streaming/shared';
 import type { Server, Socket } from 'socket.io';
 import type {
   AppConfig,
@@ -26,6 +26,7 @@ import { TwitchManager } from './twitch/manager.js';
 import { YouTubeManager } from './youtube/manager.js';
 import { TwitchProfiles } from './twitch/helix.js';
 import { TwitchModeration } from './twitch/moderation.js';
+import { YouTubeModeration } from './youtube/moderation.js';
 import { TwitchLive } from './twitch/live.js';
 import { AuthManager } from './auth/manager.js';
 import { TtsEngine } from './tts/engine.js';
@@ -72,6 +73,7 @@ export class Hub {
   readonly auth = new AuthManager();
   readonly twitchProfiles: TwitchProfiles;
   readonly twitchModeration: TwitchModeration;
+  readonly youtubeModeration: YouTubeModeration;
   readonly twitchLive: TwitchLive;
 
   private io: TypedServer | null = null;
@@ -107,6 +109,7 @@ export class Hub {
       this.twitchLive.watch(config.twitch.channel);
     }
     this.youtube = new YouTubeManager(config.youtube, this.auth);
+    this.youtubeModeration = new YouTubeModeration(this.auth, config.youtube.moderation);
     // Fills in Twitch avatars once app credentials exist. Resolved profiles
     // are written back into the directory so the archive and overlays get
     // faces too, not just the live chat log.
@@ -148,7 +151,21 @@ export class Hub {
     this.twitch.on('state', () => this.broadcastConnections());
 
     this.youtube.on('event', (event: StreamEvent) => this.handleEvent(event));
-    this.youtube.on('state', () => this.broadcastConnections());
+    this.youtube.on('state', (state: { status: string; roomId: string | null }) => {
+      // Moderation follows the connection: a ban belongs to one broadcast, so
+      // pointing it at a stale chat would either fail or land somewhere else.
+      // The two sources report different things in `roomId` — a Data API chat
+      // id or a video id — so both are offered and the moderator picks.
+      const connected = state.status === 'connected' && state.roomId;
+      this.youtubeModeration.setChat(
+        connected
+          ? this.config.get().youtube.source === 'api'
+            ? { liveChatId: state.roomId }
+            : { videoId: state.roomId }
+          : {},
+      );
+      this.broadcastConnections();
+    });
     // Twitch joining does not reset session aggregates: TikTok may already be
     // live, and wiping its counters because a second platform connected would
     // lose the night's numbers.
@@ -190,6 +207,7 @@ export class Hub {
     this.tiktok.setConfig(next.connection);
     this.twitch.setConfig(next.twitch);
     this.twitchModeration.setConfig(next.twitch.moderation, next.twitch.channel);
+    this.youtubeModeration.setConfig(next.youtube.moderation);
     this.twitchLive.watch(next.twitch.enabled ? next.twitch.channel : '');
     this.youtube.setConfig(next.youtube);
     this.io?.emit('config', next);
@@ -214,31 +232,48 @@ export class Hub {
    */
   async enforcePenalty(key: string, reason: string, automatic: boolean): Promise<void> {
     const { platform, handle } = readViewerKey(key);
-    if (platform !== 'twitch' || !this.twitchModeration.enabled) return;
+    if (platform === 'tiktok') return;
 
-    const result = await this.twitchModeration.timeout(handle, reason, automatic);
+    const moderator =
+      platform === 'twitch'
+        ? { enabled: this.twitchModeration.enabled, act: () => this.twitchModeration.timeout(handle, reason, automatic) }
+        : { enabled: this.youtubeModeration.enabled, act: () => this.youtubeModeration.ban(handle, reason, automatic) };
+    if (!moderator.enabled) return;
+
+    const result = await moderator.act();
     // Reported as a system event rather than only logged: a moderation action
     // that quietly failed would leave you believing someone had been dealt
     // with when they are still talking.
     this.handleEvent({
       id: `mod-${Date.now()}`,
       ts: Date.now(),
-      platform: 'twitch',
+      platform,
       type: 'system',
       user: null,
       level: result.ok ? 'info' : 'warn',
       text: result.ok
-        ? `@${handle} ${result.detail} on Twitch`
-        : `Could not moderate @${handle} on Twitch — ${result.detail}`,
+        ? `@${handle} ${result.detail} on ${PLATFORM_INFO[platform].label}`
+        : `Could not moderate @${handle} on ${PLATFORM_INFO[platform].label} — ${result.detail}`,
     });
   }
 
   /** Lifts a platform penalty when someone leaves the penalty box. */
   async liftPenalty(key: string): Promise<void> {
     const { platform, handle } = readViewerKey(key);
-    if (platform !== 'twitch' || !this.twitchModeration.enabled) return;
-    const result = await this.twitchModeration.unban(handle);
-    if (!result.ok) log.warn(`Could not lift the Twitch ban on @${handle}: ${result.detail}`);
+    if (platform === 'tiktok') return;
+
+    const result =
+      platform === 'twitch'
+        ? this.twitchModeration.enabled
+          ? await this.twitchModeration.unban(handle)
+          : null
+        : this.youtubeModeration.enabled
+          ? await this.youtubeModeration.unban(handle)
+          : null;
+
+    if (result && !result.ok) {
+      log.warn(`Could not lift the ${PLATFORM_INFO[platform].label} ban on @${handle}: ${result.detail}`);
+    }
   }
 
   private considerPenalty(event: StreamEvent, severity: string, evasion: boolean, reason: string): void {

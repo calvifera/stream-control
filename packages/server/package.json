@@ -12,6 +12,7 @@
     "check:filters": "tsx src/checks/filters.ts",
     "check:display": "tsx src/checks/display.ts",
     "check:innertube": "tsx src/checks/innertube.ts",
+    "check:youtube-moderation": "tsx src/checks/youtube-moderation.ts",
     "check:phonetic": "tsx src/checks/phonetic.ts",
     "check:bypass": "tsx src/checks/bypass.ts",
     "check:wordlist": "tsx src/checks/wordlist.ts",
