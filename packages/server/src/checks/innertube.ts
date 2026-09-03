@@ -173,5 +173,55 @@ check(
 check('an action with no chat item is skipped', innertubeEventFrom({ markChatItemAsDeletedAction: {} }), null);
 check('nonsense is skipped rather than thrown at', innertubeEventFrom(null), null);
 
+/* ------------------------------------------------------------------ *
+ * Choosing what to read
+ *
+ * Every case here comes from one live failure. The Setup field learned to
+ * accept a @handle, the Connect route kept writing whatever it was given
+ * into `videoId`, and the reader went looking for a video called
+ * "@calvifera" on a stream that was up and running.
+ * ------------------------------------------------------------------ */
+
+{
+  const { findLiveChat } = await import('../youtube/innertube.js');
+
+  const urlsTried = async (target: Parameters<typeof findLiveChat>[0]) => {
+    const seen: string[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (u: URL | string) => {
+      seen.push(String(u));
+      return new Response('', { status: 404 });
+    }) as typeof fetch;
+    await findLiveChat(target).catch(() => null);
+    globalThis.fetch = real;
+    return seen;
+  };
+
+  console.log('');
+  console.log('which pages get tried');
+
+  const blank = await urlsTried({ handle: '', channelId: 'UCchannel' });
+  // '' .replace(/^@?/, '@') is '@', not '' — a blank handle became a real
+  // looking one and shadowed the channel id that would have worked.
+  check('a blank handle never becomes /@/', blank.some((u) => u.includes('/@/')), false);
+  check('and the channel id is used instead', blank[0]?.includes('/channel/UCchannel/live'), true);
+
+  const spaces = await urlsTried({ handle: '   ', channelId: 'UCchannel' });
+  check('whitespace counts as blank too', spaces.some((u) => u.includes('/@/')), false);
+
+  const both = await urlsTried({ handle: '@someone', channelId: 'UCchannel' });
+  check('a real handle is tried first', both[0]?.includes('/@someone/live'), true);
+  // A 404 on the handle used to throw, which meant the channel id behind it
+  // was never reached — the fallback existed and could not be got to.
+  check('and a 404 there falls through to the channel', both[1]?.includes('/channel/UCchannel/live'), true);
+
+  const bare = await urlsTried({ handle: 'someone', channelId: '' });
+  check('a handle without its @ still works', bare[0]?.includes('/@someone/live'), true);
+
+  const video = await urlsTried({ videoId: 'abcdefghijk', handle: '@someone' });
+  check('a video id wins outright', video[0]?.includes('watch?v=abcdefghijk'), true);
+  check('and nothing else is tried', video.length, 1);
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed === 0 ? 0 : 1);

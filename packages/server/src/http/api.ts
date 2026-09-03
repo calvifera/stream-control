@@ -440,12 +440,29 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
   router.post(
     '/youtube/connect',
     wrap((req, res) => {
-      // A video id or a full watch URL; the schema strips the URL down.
-      const videoId = String((req.body as { videoId?: string })?.videoId ?? '').trim();
+      /*
+       * A video id, a watch URL, a @handle or a channel URL — routed by shape.
+       *
+       * This used to write whatever it was given straight into `videoId`,
+       * from a caller that sends whatever is in the Setup field. Once that
+       * field started accepting handles, pressing Connect stamped the handle
+       * into `videoId` as well, and the reader dutifully went looking for a
+       * video called "@calvifera". Routing here rather than trusting the
+       * caller means the two fields cannot contradict each other no matter
+       * who calls this.
+       */
+      const target = String((req.body as { videoId?: string })?.videoId ?? '').trim();
       const current = hub.config.get().youtube;
-      hub.config.update({
-        youtube: { ...current, videoId: videoId || current.videoId, enabled: true },
-      });
+
+      const looksLikeVideo =
+        /(?:v=|youtu\.be\/|\/live\/)[\w-]{11}/.test(target) || /^[\w-]{11}$/.test(target);
+      const routed = target
+        ? looksLikeVideo
+          ? { videoId: target, handle: '' }
+          : { videoId: '', handle: target }
+        : { videoId: current.videoId, handle: current.handle };
+
+      hub.config.update({ youtube: { ...current, ...routed, enabled: true } });
       hub.youtube.connect();
       res.json(hub.youtube.getState());
     }),

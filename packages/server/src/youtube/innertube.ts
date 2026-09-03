@@ -76,12 +76,23 @@ export interface ChatTarget {
 const first = <T>(...values: (T | undefined | null)[]): T | undefined =>
   values.find((v) => v !== undefined && v !== null) as T | undefined;
 
-async function getPage(url: string): Promise<{ html: string; url: string }> {
+/**
+ * Fetches a candidate page, or null when there is nothing there.
+ *
+ * Null rather than throwing, because these are candidates: a handle that does
+ * not exist should let the next candidate be tried, not abort the search. It
+ * threw before, which meant a wrong handle hid a perfectly good channel id
+ * sitting behind it in the list.
+ */
+async function getPage(url: string): Promise<string | null> {
   const response = await fetch(url, {
     headers: { 'User-Agent': UA, 'Accept-Language': 'en-US,en' },
   });
-  if (!response.ok) throw new Error(`YouTube returned ${response.status} for ${url}`);
-  return { html: await response.text(), url: response.url };
+  if (!response.ok) {
+    log.debug(`${response.status} for ${url}`);
+    return null;
+  }
+  return response.text();
 }
 
 /**
@@ -96,8 +107,18 @@ function candidateUrls(target: ChatTarget): string[] {
   if (target.videoId) return [`${ORIGIN}/watch?v=${target.videoId}`];
 
   const urls: string[] = [];
-  const handle = target.handle?.trim().replace(/^@?/, '@');
-  if (handle) urls.push(`${ORIGIN}/${handle}/live`);
+
+  /*
+   * Emptiness has to be checked before the `@` is added, not after.
+   *
+   * `''.replace(/^@?/, '@')` is `'@'`, not `''` — the optional group matches
+   * nothing at position zero and the replacement lands anyway. A blank handle
+   * therefore became a real-looking one and sent the reader to `/@/live`,
+   * which 404s. Worse, it did so *before* the channel-id candidate, which
+   * would have worked.
+   */
+  const handle = target.handle?.trim();
+  if (handle) urls.push(`${ORIGIN}/${handle.startsWith('@') ? handle : `@${handle}`}/live`);
   if (target.channelId?.trim()) urls.push(`${ORIGIN}/channel/${target.channelId.trim()}/live`);
   return urls;
 }
@@ -115,7 +136,8 @@ export async function findLiveChat(target: ChatTarget): Promise<ChatSession | nu
   }
 
   for (const url of urls) {
-    const { html } = await getPage(url);
+    const html = await getPage(url);
+    if (!html) continue;
 
     // No chat renderer at all means this is not a live watch page — a channel
     // home page, a members-only stream, or a stream with chat disabled.
