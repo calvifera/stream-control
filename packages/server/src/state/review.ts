@@ -93,6 +93,18 @@ export class ReviewFeed {
   }
 
   /**
+   * Checks whether a message sounds like a severe term, without recording it.
+   *
+   * Skips phrases you dismissed, so a sound-alike you already judged harmless
+   * doesn't count against the viewer's trust score either.
+   */
+  sounds(text: string, severeTerms: string[]): boolean {
+    return findNearMatches(text, severeTerms).some(
+      (match) => !this.ignored.has(match.phrase) && match.phrase !== match.term.toLowerCase(),
+    );
+  }
+
+  /**
    * Checks one message. Returns the near-matches recorded, if any.
    * Purely observational — the caller does not act on the return value.
    */

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useDraft } from '../lib/useDraft.js';
 
 /* ------------------------------------------------------------------ *
  * Layout
@@ -336,6 +337,9 @@ export function Slider({
   step?: number;
   format?: (value: number) => string;
 }): JSX.Element {
+  // Saves are throttled while dragging, so the thumb follows the pointer
+  // instead of snapping back to whatever the server last echoed.
+  const [shown, setShown] = useDraft(value, onChange);
   return (
     <div className="slider">
       <input
@@ -343,10 +347,10 @@ export function Slider({
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        value={shown}
+        onChange={(event) => setShown(Number(event.target.value))}
       />
-      <span className="slider-value">{format ? format(value) : value.toFixed(2)}</span>
+      <span className="slider-value">{format ? format(shown) : shown.toFixed(2)}</span>
     </div>
   );
 }

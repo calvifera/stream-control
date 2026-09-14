@@ -14,6 +14,7 @@ import {
   type TtsRule,
 } from './config.js';
 import type { HighlightTier } from './highlights.js';
+import { DEFAULT_TRUST } from './trust.js';
 
 const style = (over: Partial<OverlayStyle> = {}): OverlayStyle => ({ ...DEFAULT_STYLE, ...over });
 
@@ -522,6 +523,7 @@ export function createDefaultConfig(username = ''): AppConfig {
       penaltyBox: [],
       voiceProfiles: [],
     },
+    trust: { ...DEFAULT_TRUST },
     tts: {
       enabled: true,
       provider: 'tiktok',

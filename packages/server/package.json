@@ -16,6 +16,7 @@
     "check:phonetic": "tsx src/checks/phonetic.ts",
     "check:bypass": "tsx src/checks/bypass.ts",
     "check:wordlist": "tsx src/checks/wordlist.ts",
+    "check:trust": "tsx src/checks/trust.ts",
     "check:auth": "tsx src/checks/auth.ts",
     "check:preview": "tsx src/checks/preview.ts",
     "check:cooldown": "tsx src/checks/cooldown.ts",

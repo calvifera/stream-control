@@ -269,3 +269,24 @@ const getState = (): LiveState => state;
 export function useLive(): LiveState {
   return useSyncExternalStore(subscribe, getState, getState);
 }
+
+/**
+ * Reads one slice of the live state, and re-renders only when that slice
+ * changes.
+ *
+ * `useLive` re-renders on every update, and the socket sends stats and
+ * leaderboard changes twice a second whether or not anything on screen uses
+ * them. The chat panel sits open for hours, so it reads what it needs through
+ * this instead.
+ *
+ * The selector must return a value already in the state, or a primitive. A
+ * selector that builds a new object or array every call never compares equal,
+ * and React re-renders in a loop.
+ */
+export function useLiveSelect<T>(select: (state: LiveState) => T): T {
+  return useSyncExternalStore(
+    subscribe,
+    () => select(state),
+    () => select(state),
+  );
+}

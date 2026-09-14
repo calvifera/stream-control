@@ -1,11 +1,14 @@
 import { useEffect, useMemo } from 'react';
 import {
   DEFAULT_CHAT_PANEL,
+  type AppConfig,
   type ChatPanelConfig,
   type ConnectionState,
   type Platform,
 } from '@streaming/shared';
-import { identify, useLive } from '../lib/store.js';
+import { api } from '../lib/api.js';
+import { identify, useLiveSelect } from '../lib/store.js';
+import { useDraft } from '../lib/useDraft.js';
 import { formatElapsed, useElapsed } from '../lib/useElapsed.js';
 import { inPanelShell, panelWindow } from '../lib/panelWindow.js';
 import { ChatLog } from './ChatLog.js';
@@ -17,7 +20,7 @@ import { KillTtsButton, PanelSettingsMenu } from './PanelControls.js';
  * Served at `/panel/chat`. Deliberately not the same thing as an overlay:
  * overlays are built to be captured by streaming software and shown to viewers, this is built
  * to sit on top of a game and be read by one person, so it keeps the
- * dashboard's controls (pin, copy a handle, mute) rather than the broadcast
+ * dashboard's controls (the profile card, mute, trust) rather than the broadcast
  * styling.
  *
  * The background is painted here rather than by the native window, because a
@@ -31,9 +34,18 @@ import { KillTtsButton, PanelSettingsMenu } from './PanelControls.js';
  * to see what is under it, move it.
  */
 export function ChatPanelPage(): JSX.Element {
-  const { config, snapshot } = useLive();
-  const panel: ChatPanelConfig = config?.chatPanel ?? DEFAULT_CHAT_PANEL;
+  // Selected piece by piece: this page stays open for hours, and `useLive`
+  // would re-render it, and the whole chat log under it, on every stats tick.
+  const panel: ChatPanelConfig = useLiveSelect((s) => s.config?.chatPanel) ?? DEFAULT_CHAT_PANEL;
+  const ttsEnabled = useLiveSelect((s) => s.config?.tts.enabled ?? null);
+  const connections = useLiveSelect((s) => s.snapshot?.connections);
   const shell = inPanelShell();
+
+  // The drag previews on the panel straight away, and saves in the background.
+  const [opacity, setOpacity] = useDraft(panel.opacity, (value) => savePanel({ opacity: value }));
+  const [fontScale, setFontScale] = useDraft(panel.fontScale, (value) =>
+    savePanel({ fontScale: value }),
+  );
 
   /*
    * Never a TTS listener.
@@ -45,7 +57,7 @@ export function ChatPanelPage(): JSX.Element {
    * silently, and only for the one person who cannot hear the difference.
    */
   useEffect(() => {
-    identify({ role: 'dashboard', listener: false });
+    identify({ role: 'dashboard', listener: false, logs: false });
   }, []);
 
   useEffect(() => {
@@ -56,10 +68,10 @@ export function ChatPanelPage(): JSX.Element {
     () => ({
       // Transparent window plus an explicitly painted background: without the
       // second half the desktop would show through the *text* too.
-      background: withAlpha(panel.background, panel.opacity),
-      fontSize: `${panel.fontScale}rem`,
+      background: withAlpha(panel.background, opacity),
+      fontSize: `${fontScale}rem`,
     }),
-    [panel.background, panel.opacity, panel.fontScale],
+    [panel.background, opacity, fontScale],
   );
 
   useEffect(() => {
@@ -79,19 +91,36 @@ export function ChatPanelPage(): JSX.Element {
         // window around.
         onMouseDown={(event) => {
           if (event.button !== 0) return;
-          if ((event.target as HTMLElement).closest('.panel-btn')) return;
+          // The settings menu hangs from this strip, so a press on one of its
+          // sliders lands here too. Starting a window drag from it took the
+          // pointer away from the slider, which then refused to move.
+          const target = event.target as HTMLElement;
+          if (target.closest('.panel-btn, .panel-settings, input, label, button')) return;
           panelWindow.drag();
         }}
       >
         <span className="chat-panel-title">Chat</span>
-        <StreamClock connections={snapshot?.connections ?? {}} />
+        <StreamClock connections={connections ?? {}} />
 
         {/* Outside the `shell` guard, unlike the window buttons: stopping
             speech and changing opacity are useful in a plain browser tab too,
             where minimise and close would be meaningless. */}
         <div className="panel-buttons panel-buttons-left">
           <KillTtsButton />
-          <PanelSettingsMenu config={config} />
+          <PanelSettingsMenu
+            opacity={opacity}
+            fontScale={fontScale}
+            alwaysOnTop={panel.alwaysOnTop}
+            ttsEnabled={ttsEnabled}
+            onOpacity={setOpacity}
+            onFontScale={setFontScale}
+            onAlwaysOnTop={(value) => savePanel({ alwaysOnTop: value })}
+            onTtsEnabled={(value) =>
+              void api
+                .patchConfig({ tts: { enabled: value } } as unknown as Partial<AppConfig>)
+                .catch(() => undefined)
+            }
+          />
         </div>
 
         {shell ? (
@@ -139,6 +168,19 @@ export function ChatPanelPage(): JSX.Element {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Saves panel settings.
+ *
+ * Sends only the changed fields. The server merges them into the stored
+ * config, so two sliders saving at once can't overwrite each other with a
+ * stale copy of the whole panel section.
+ */
+function savePanel(over: Partial<ChatPanelConfig>): void {
+  void api
+    .patchConfig({ chatPanel: over } as unknown as Partial<AppConfig>)
+    .catch(() => undefined);
 }
 
 /**

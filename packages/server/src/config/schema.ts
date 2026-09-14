@@ -4,6 +4,7 @@ import {
   FALLBACK_PROVIDER_KEY,
   CHAT_DENSITIES,
   DEFAULT_HIGHLIGHTS,
+  DEFAULT_TRUST,
   HIGHLIGHT_CONDITIONS,
   HIGHLIGHT_SCOPES,
   IMAGE_FIT,
@@ -180,6 +181,22 @@ export const usersSchema = z.object({
   severe: severeTermsSchema,
   voiceProfiles: z.array(voiceProfileSchema),
 });
+
+/**
+ * Viewer trust. Every field has a default, so a config written before trust
+ * existed loads with it switched on at the default settings.
+ */
+export const trustSchema = z
+  .object({
+    enabled: z.boolean().default(DEFAULT_TRUST.enabled),
+    strictBelow: z.number().int().min(0).max(100).default(DEFAULT_TRUST.strictBelow),
+    strikeOnRetry: z.boolean().default(DEFAULT_TRUST.strikeOnRetry),
+    retryWindowSeconds: z.number().int().min(10).max(600).default(DEFAULT_TRUST.retryWindowSeconds),
+    holdNewViewers: z.boolean().default(DEFAULT_TRUST.holdNewViewers),
+    holdMessages: z.number().int().min(0).max(50).default(DEFAULT_TRUST.holdMessages),
+    holdMinutes: z.number().int().min(0).max(120).default(DEFAULT_TRUST.holdMinutes),
+  })
+  .default({});
 
 export const connectionSchema = z.object({
   username: z.string(),
@@ -512,6 +529,7 @@ export const appConfigSchema = z.object({
   youtube: youtubeSchema,
   filters: filterSchema,
   users: usersSchema,
+  trust: trustSchema,
   tts: ttsSchema,
   tunnel: tunnelSchema,
   sources: sourcesSchema,

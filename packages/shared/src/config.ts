@@ -2,6 +2,7 @@ import type { HighlightTier } from './highlights.js';
 import type { Platform } from './platforms.js';
 import type { StreamEventType } from './events.js';
 import { DEFAULT_TTS_VOICE } from './voices.js';
+import type { TrustConfig } from './trust.js';
 
 /* ------------------------------------------------------------------ *
  * Connection
@@ -888,6 +889,8 @@ export interface AppConfig {
   youtube: YouTubeConnectionConfig;
   filters: FilterConfig;
   users: UsersConfig;
+  /** Viewer trust scoring and the strict mode it drives. */
+  trust: TrustConfig;
   tts: TtsConfig;
   tunnel: TunnelConfig;
   sources: SourcesConfig;

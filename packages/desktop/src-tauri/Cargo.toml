@@ -18,6 +18,15 @@ tauri-plugin-single-instance = "2"
 # time.
 tauri-plugin-window-state = "2"
 
+# Raises the panel's scheduling priority and opts it out of Windows power
+# throttling, so a heavy game can't starve it of processor time.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
+] }
+
 [profile.release]
 # A local tool, not something being shipped to strangers: optimise for a small
 # binary and quick startup rather than for build time.

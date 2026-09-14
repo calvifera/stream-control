@@ -14,6 +14,7 @@ import type {
   TestEventSpec,
   UsersConfig,
   UserVoiceProfile,
+  ViewerProfile,
   VoiceSettings,
 } from '@streaming/shared';
 import { subscribeAuth } from './store.js';
@@ -259,6 +260,12 @@ export const api = {
   searchUsers: (query: string, limit = 12) =>
     request<UserSearchResult[]>(`/users/search?q=${encodeURIComponent(query)}&limit=${limit}`),
   getUser: (username: string) => request<KnownUserDetail>(`/users/${encodeURIComponent(username)}`),
+  /** Everything the chat log's profile card shows, for a `platform:handle` key. */
+  viewerProfile: (key: string) =>
+    request<ViewerProfile>(`/viewers/${encodeURIComponent(key)}/profile`),
+  /** Opens the viewer's platform profile in the browser on the server's desktop. */
+  openViewerProfile: (key: string) =>
+    post<{ ok: true }>(`/viewers/${encodeURIComponent(key)}/open-profile`),
 
   /** Directory entries for handles already on a list, so lists can show names. */
   knownUsers: (usernames: string[]) =>

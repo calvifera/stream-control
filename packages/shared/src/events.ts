@@ -1,4 +1,5 @@
 import type { Platform } from './platforms.js';
+import type { ChatTrust } from './trust.js';
 
 /**
  * Normalized event model.
@@ -142,6 +143,11 @@ export interface ChatEvent extends StreamEventBase {
    * without re-deriving it from `filterReason` text.
    */
   filterSeverity: 'none' | 'normal' | 'severe';
+  /**
+   * The speaker's trust score when this message arrived, and whether it held
+   * the message back from speech. Absent on events from older servers.
+   */
+  trust?: ChatTrust;
   emotes: string[];
 }
 

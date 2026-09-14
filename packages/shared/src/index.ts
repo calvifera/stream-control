@@ -15,3 +15,4 @@ export * from './socket.js';
 export * from './template.js';
 export * from './voices.js';
 export * from './wordlist.js';
+export * from './trust.js';

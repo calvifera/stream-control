@@ -1,4 +1,4 @@
-import { emptyPlatformStats, viewerKey } from '@streaming/shared';
+import { emptyPlatformStats, normalizeHandle, viewerKey } from '@streaming/shared';
 import type {
   LeaderboardEntry,
   Platform,
@@ -216,6 +216,22 @@ export class SessionState {
 
   hasGifted(user: StreamUser): boolean {
     return (this.users.get(viewerKey(user.platform, user.userId))?.gifts ?? 0) > 0;
+  }
+
+  /**
+   * One viewer's totals this session, found by handle.
+   *
+   * Entries are keyed by platform user id, which a caller holding only a
+   * `platform:handle` key doesn't have, so this scans. It serves a click on a
+   * name, not a hot path.
+   */
+  findByHandle(platform: Platform, handle: string): LeaderboardEntry | undefined {
+    for (const entry of this.users.values()) {
+      if (entry.user.platform === platform && normalizeHandle(entry.user.uniqueId) === handle) {
+        return entry;
+      }
+    }
+    return undefined;
   }
 
   leaderboard(limit = 25): LeaderboardEntry[] {
