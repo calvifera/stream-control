@@ -10,10 +10,10 @@ const log = createLogger('panel');
  * Launching the desktop chat panel from the dashboard.
  *
  * This is the one place the server starts a program, so it is deliberately
- * narrow: there is no path parameter, no argument passing, and no shell. The
- * only thing it can ever run is the panel binary, found at a fixed set of
- * locations relative to this repo. A request cannot influence *what* runs —
- * only whether the one known executable is started.
+ * narrow: there is no path parameter and no shell. It runs the panel binary,
+ * found at a fixed set of locations relative to this repo, or the system URL
+ * handler for a platform profile link. A request can't influence which
+ * program runs.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -62,6 +62,43 @@ export function panelStatus(): PanelStatus {
     // second launch focuses the first rather than duplicating it.
     running: child !== null && child.exitCode === null,
   };
+}
+
+/**
+ * Opens a viewer's profile page in the default browser.
+ *
+ * The panel window can't open links itself, so it asks the server, which runs
+ * on the same desktop. Accepts only `https` links to the three platform
+ * sites, and the caller builds those from a stored handle rather than taking
+ * a URL from the request. No shell runs: on Windows the URL goes straight to
+ * the system's URL handler as a single argument.
+ */
+export function openExternal(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  const allowed = ['www.tiktok.com', 'www.twitch.tv', 'www.youtube.com'];
+  if (parsed.protocol !== 'https:' || !allowed.includes(parsed.hostname)) return false;
+
+  const [command, args] =
+    process.platform === 'win32'
+      ? ['rundll32', ['url.dll,FileProtocolHandler', parsed.href]]
+      : process.platform === 'darwin'
+        ? ['open', [parsed.href]]
+        : ['xdg-open', [parsed.href]];
+
+  try {
+    const started = spawn(command, args, { detached: true, stdio: 'ignore', shell: false });
+    started.on('error', (error) => log.warn(`Could not open ${parsed.href}: ${String(error)}`));
+    started.unref();
+    return true;
+  } catch (error) {
+    log.warn(`Could not open ${parsed.href}: ${String(error)}`);
+    return false;
+  }
 }
 
 export function openPanel(): { ok: true } | { ok: false; error: string } {

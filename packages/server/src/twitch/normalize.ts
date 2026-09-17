@@ -1,11 +1,22 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  ChatEvent,
-  GiftEvent,
-  ShareEvent,
-  StreamEvent,
-  StreamUser,
-  SubscribeEvent,
+import {
+  CHEER_TIER_COLORS,
+  cheerTier,
+  findCheers,
+  formatUnit,
+  globalCheermoteUrl,
+  replaceRanges,
+  stripCheers,
+  twitchEmoteUrl,
+  twitchSubTier,
+  type ChatEvent,
+  type EmoteRange,
+  type GiftEvent,
+  type MessagePart,
+  type ShareEvent,
+  type StreamEvent,
+  type StreamUser,
+  type SubscribeEvent,
 } from '@streaming/shared';
 
 /**
@@ -154,7 +165,29 @@ export function normalizeTwitchChat(message: IrcMessage, broadcaster: string): C
     redacted: false,
     filterSeverity: 'none',
     emotes: Object.keys(parseEmotes(message.tags['emotes'])),
+    parts: twitchParts(message.text, message.tags['emotes']),
   };
+}
+
+/**
+ * The message with its emotes as images.
+ *
+ * Twitch leaves emote names in the text and says in the `emotes` tag which
+ * code points each covers, so this is a straight replacement. Undefined for a
+ * message with no emotes, which is most of them.
+ */
+export function twitchParts(text: string, tag: string | undefined): MessagePart[] | undefined {
+  const ranges: EmoteRange[] = [];
+  for (const [id, spans] of Object.entries(parseEmotes(tag))) {
+    for (const span of spans) {
+      const [start, end] = span.split('-').map((n) => Number.parseInt(n, 10));
+      if (start === undefined || end === undefined || !Number.isFinite(start) || !Number.isFinite(end)) {
+        continue;
+      }
+      ranges.push({ start, end, url: twitchEmoteUrl(id), id });
+    }
+  }
+  return ranges.length > 0 ? replaceRanges(text, ranges) : undefined;
 }
 
 /**
@@ -165,27 +198,134 @@ export function normalizeTwitchChat(message: IrcMessage, broadcaster: string): C
  * gates and TTS rules work on Twitch without special-casing — `diamondCount`
  * carries the bit count, so a "minimum diamonds" threshold reads as a minimum
  * bit threshold.
+ *
+ * The picture is the global cheermote for the tier, which needs no
+ * credentials. A channel's own cheermotes need Helix, so `cheermotes.ts` swaps
+ * the picture later when app credentials exist — the prefix is recorded here
+ * so that it can.
  */
-export function normalizeTwitchBits(message: IrcMessage, broadcaster: string): GiftEvent {
+export function normalizeTwitchBits(
+  message: IrcMessage,
+  broadcaster: string,
+  knownPrefixes?: ReadonlySet<string>,
+): GiftEvent {
   const bits = toInt(message.tags['bits']);
+  const cheers = findCheers(message.text, bits, knownPrefixes);
+  // The biggest single cheer decides the look, as it does in Twitch's own chat.
+  const main = [...cheers].sort((a, b) => b.bits - a.bits)[0];
+  const tier = cheerTier(bits);
+  const text = stripCheers(message.text, cheers);
+  const still = globalCheermoteUrl(bits, { animated: false });
+
   return {
     ...base(),
     type: 'gift',
     user: twitchUser(message, broadcaster),
-    giftId: 'bits',
+    giftId: `cheer-${tier}`,
     giftName: bits === 1 ? 'Bit' : 'Bits',
-    giftImageUrl: null,
+    giftImageUrl: still,
     diamondCount: bits,
     repeatCount: 1,
     repeatEnd: true,
     streakable: false,
     totalDiamonds: bits,
+    detail: {
+      kind: 'twitch-cheer',
+      platform: 'twitch',
+      prefix: main?.prefix ?? 'cheer',
+      tier,
+      value: { amount: bits, unit: 'bits', known: true, label: formatUnit(bits, 'bits') },
+      media: { imageUrl: still, animationUrl: globalCheermoteUrl(bits) },
+      // The cheer words themselves are the payment, not the message.
+      message: text || null,
+      displayMessage: text || null,
+      colors: {
+        primary: CHEER_TIER_COLORS[tier],
+        secondary: CHEER_TIER_COLORS[tier],
+        text: '#ffffff',
+      },
+    },
   };
 }
 
+/** `msg-id` values Twitch puts on a chat line that bits turned into a Power-up. */
+const POWER_UPS: Record<string, 'gigantify' | 'message-effect'> = {
+  'gigantified-emote-message': 'gigantify',
+  'animated-message': 'message-effect',
+};
+
+/**
+ * A Power-up: bits spent to gigantify an emote or put an effect on a message.
+ *
+ * Twitch does not put the price in the tags — the streamer sets it — so the
+ * value is marked unknown rather than recorded as free. The gigantified emote
+ * is, by Twitch's convention, the last one in the message.
+ */
+export function normalizeTwitchPowerUp(message: IrcMessage, broadcaster: string): GiftEvent | null {
+  const effect = POWER_UPS[message.tags['msg-id'] ?? ''];
+  if (!effect) return null;
+
+  const bits = toInt(message.tags['bits']);
+  const lastEmote = lastEmoteId(message.tags['emotes']);
+  const emoteUrl = effect === 'gigantify' && lastEmote ? twitchEmoteUrl(lastEmote, '3.0') : null;
+
+  return {
+    ...base(),
+    type: 'gift',
+    user: twitchUser(message, broadcaster),
+    giftId: effect,
+    giftName: effect === 'gigantify' ? 'Gigantified emote' : 'Message effect',
+    giftImageUrl: emoteUrl,
+    diamondCount: bits,
+    repeatCount: 1,
+    repeatEnd: true,
+    streakable: false,
+    totalDiamonds: bits,
+    detail: {
+      kind: 'twitch-power-up',
+      platform: 'twitch',
+      effect,
+      animationId: message.tags['animation-id'] || null,
+      value: {
+        amount: bits,
+        unit: 'bits',
+        known: bits > 0,
+        label: bits > 0 ? formatUnit(bits, 'bits') : 'Power-up',
+      },
+      media: { imageUrl: emoteUrl, animationUrl: emoteUrl },
+      message: message.text || null,
+      displayMessage: message.text || null,
+      colors: null,
+    },
+  };
+}
+
+/** The emote whose last use comes latest in the message. */
+function lastEmoteId(tag: string | undefined): string | null {
+  let best: [string, number] | null = null;
+  for (const [id, spans] of Object.entries(parseEmotes(tag))) {
+    for (const span of spans) {
+      const start = Number.parseInt(span.split('-')[0] ?? '', 10);
+      if (Number.isFinite(start) && (!best || start > best[1])) best = [id, start];
+    }
+  }
+  return best?.[0] ?? null;
+}
+
+const GIFT_IDS = new Set(['subgift', 'anonsubgift', 'submysterygift', 'anonsubmysterygift']);
+const BOMB_IDS = new Set(['submysterygift', 'anonsubmysterygift']);
+
+/**
+ * Subscriptions, including gifted ones and gift bombs.
+ *
+ * A bomb of N arrives as one `submysterygift` from the buyer with the count,
+ * then N `subgift`s sharing its `msg-param-community-gift-id`. The
+ * announcement carries the count and each recipient is marked as part of it,
+ * so totals count the bomb once and alerts do not fire N+1 times.
+ */
 export function normalizeTwitchSub(message: IrcMessage, broadcaster: string): SubscribeEvent {
   const id = message.tags['msg-id'] ?? '';
-  return {
+  const event: SubscribeEvent = {
     ...base(),
     type: 'subscribe',
     user: twitchUser(message, broadcaster),
@@ -193,8 +333,20 @@ export function normalizeTwitchSub(message: IrcMessage, broadcaster: string): Su
       message.tags['msg-param-cumulative-months'] ?? message.tags['msg-param-months'],
       1,
     ),
-    isGifted: id === 'subgift' || id === 'anonsubgift',
+    isGifted: GIFT_IDS.has(id),
+    tier: twitchSubTier(message.tags['msg-param-sub-plan']),
   };
+
+  if (BOMB_IDS.has(id)) {
+    event.giftCount = Math.max(1, toInt(message.tags['msg-param-mass-gift-count'], 1));
+  } else if (GIFT_IDS.has(id)) {
+    event.recipient =
+      message.tags['msg-param-recipient-display-name'] ||
+      message.tags['msg-param-recipient-user-name'] ||
+      null;
+    if (message.tags['msg-param-community-gift-id']) event.giftBombMember = true;
+  }
+  return event;
 }
 
 /**
@@ -225,23 +377,39 @@ function parseEmotes(tag: string | undefined): Record<string, string[]> {
   return out;
 }
 
+const SUB_NOTICES = new Set([
+  'sub',
+  'resub',
+  'subgift',
+  'anonsubgift',
+  'submysterygift',
+  'anonsubmysterygift',
+  'giftpaidupgrade',
+  'anongiftpaidupgrade',
+  'primepaidupgrade',
+]);
+
 /** Routes one parsed line to the right normalizer, or null if it isn't an event. */
-export function twitchEventFrom(message: IrcMessage, broadcaster: string): StreamEvent | null {
+export function twitchEventFrom(
+  message: IrcMessage,
+  broadcaster: string,
+  knownPrefixes?: ReadonlySet<string>,
+): StreamEvent | null {
   if (message.command === 'PRIVMSG') {
-    // A cheer is a PRIVMSG that also carries bits. Emit the gift rather than
-    // the chat line so the money isn't silently swallowed; the message text
-    // still rides along on the gift's user for templates that want it.
-    return message.tags['bits']
-      ? normalizeTwitchBits(message, broadcaster)
+    // A Power-up or a cheer is a chat line that cost bits. Emit the gift, with
+    // the message riding on it, rather than the chat line: the money is not
+    // swallowed, and the line does not show twice.
+    const powerUp = normalizeTwitchPowerUp(message, broadcaster);
+    if (powerUp) return powerUp;
+    return toInt(message.tags['bits']) > 0
+      ? normalizeTwitchBits(message, broadcaster, knownPrefixes)
       : normalizeTwitchChat(message, broadcaster);
   }
 
   if (message.command === 'USERNOTICE') {
     const id = message.tags['msg-id'] ?? '';
     if (id === 'raid') return normalizeTwitchRaid(message, broadcaster);
-    if (['sub', 'resub', 'subgift', 'anonsubgift', 'giftpaidupgrade'].includes(id)) {
-      return normalizeTwitchSub(message, broadcaster);
-    }
+    if (SUB_NOTICES.has(id)) return normalizeTwitchSub(message, broadcaster);
   }
 
   return null;

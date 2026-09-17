@@ -7,6 +7,8 @@ import { ChatWidget } from './widgets/ChatWidget.js';
 import { AlertsWidget } from './widgets/AlertsWidget.js';
 import { TtsWidget } from './widgets/TtsWidget.js';
 import { SlideshowWidget } from './widgets/SlideshowWidget.js';
+import { GiftSpotlightWidget } from './gifts/GiftSpotlightWidget.js';
+import { GiftRainWidget } from './gifts/GiftRainWidget.js';
 import {
   CounterWidget,
   CustomWidget,
@@ -35,6 +37,10 @@ function Widget({ overlay }: { overlay: OverlaySource }): JSX.Element {
       return <CounterWidget settings={settings.counter} />;
     case 'slideshow':
       return <SlideshowWidget settings={settings.slideshow} />;
+    case 'giftSpotlight':
+      return <GiftSpotlightWidget settings={settings.giftSpotlight} />;
+    case 'giftRain':
+      return <GiftRainWidget settings={settings.giftRain} />;
     case 'custom':
       return <CustomWidget settings={settings.custom} />;
   }

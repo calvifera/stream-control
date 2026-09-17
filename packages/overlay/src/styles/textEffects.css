@@ -1,0 +1,138 @@
+/*
+ * Per-letter text effects. See lib/AnimatedText.tsx.
+ *
+ * Each letter is two spans: .tx-l moves, .tx-c changes colour. Keeping them
+ * apart means motion and colour combine freely without a rule for every
+ * pairing, and each can be switched off on its own.
+ *
+ * Delays are "a long way back plus the letter's lag" rather than a plain
+ * lag, so every letter starts mid-cycle in the right phase instead of the
+ * first cycle beginning with letters frozen in place.
+ */
+
+.tx {
+  display: inline-block;
+  white-space: pre;
+}
+
+.tx-l {
+  display: inline-block;
+  will-change: transform;
+}
+
+/* A sine-like wave: ease-in-out between two extremes is close enough to a
+   sine that nobody can tell, and far cheaper than keyframing one. */
+.tx-motion-wave .tx-l {
+  animation: tx-wave var(--tx-speed) ease-in-out infinite;
+  animation-delay: calc(var(--tx-i) * var(--tx-speed) * 0.08 - var(--tx-speed) * 20);
+}
+
+/* A hop that runs along the name, then a rest. */
+.tx-motion-bounce .tx-l {
+  animation: tx-hop var(--tx-speed) cubic-bezier(0.3, 0, 0.3, 1) infinite;
+  animation-delay: calc(var(--tx-i) * var(--tx-speed) * 0.045 - var(--tx-speed) * 20);
+}
+
+/* The colour cycle is slower than the motion, so the two never lock into one
+   repeating pattern, and spread over half a cycle so the whole gradient
+   shows across any name. */
+.tx-fill .tx-c {
+  animation-duration: calc(var(--tx-speed) * 2.5);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-delay: calc(var(--tx-f) * var(--tx-speed) * 1.25 - var(--tx-speed) * 50);
+}
+
+@keyframes tx-wave {
+  0%, 100% { transform: translateY(var(--tx-amp)); }
+  50% { transform: translateY(calc(var(--tx-amp) * -1)); }
+}
+
+@keyframes tx-hop {
+  0% { transform: translateY(0); }
+  12% { transform: translateY(calc(var(--tx-amp) * -1.6)); }
+  24%, 100% { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-l {
+    animation: none !important;
+  }
+}
+
+.tx-stops-2 .tx-c { animation-name: tx-color-2; }
+@keyframes tx-color-2 {
+  0.0% { color: var(--tx-c0); }
+  100.0% { color: var(--tx-c1); }
+}
+
+.tx-stops-3 .tx-c { animation-name: tx-color-3; }
+@keyframes tx-color-3 {
+  0.0% { color: var(--tx-c0); }
+  50.0% { color: var(--tx-c1); }
+  100.0% { color: var(--tx-c2); }
+}
+
+.tx-stops-4 .tx-c { animation-name: tx-color-4; }
+@keyframes tx-color-4 {
+  0.0% { color: var(--tx-c0); }
+  33.333% { color: var(--tx-c1); }
+  66.667% { color: var(--tx-c2); }
+  100.0% { color: var(--tx-c3); }
+}
+
+.tx-stops-5 .tx-c { animation-name: tx-color-5; }
+@keyframes tx-color-5 {
+  0.0% { color: var(--tx-c0); }
+  25.0% { color: var(--tx-c1); }
+  50.0% { color: var(--tx-c2); }
+  75.0% { color: var(--tx-c3); }
+  100.0% { color: var(--tx-c4); }
+}
+
+.tx-stops-6 .tx-c { animation-name: tx-color-6; }
+@keyframes tx-color-6 {
+  0.0% { color: var(--tx-c0); }
+  20.0% { color: var(--tx-c1); }
+  40.0% { color: var(--tx-c2); }
+  60.0% { color: var(--tx-c3); }
+  80.0% { color: var(--tx-c4); }
+  100.0% { color: var(--tx-c5); }
+}
+
+.tx-stops-7 .tx-c { animation-name: tx-color-7; }
+@keyframes tx-color-7 {
+  0.0% { color: var(--tx-c0); }
+  16.667% { color: var(--tx-c1); }
+  33.333% { color: var(--tx-c2); }
+  50.0% { color: var(--tx-c3); }
+  66.667% { color: var(--tx-c4); }
+  83.333% { color: var(--tx-c5); }
+  100.0% { color: var(--tx-c6); }
+}
+
+.tx-stops-8 .tx-c { animation-name: tx-color-8; }
+@keyframes tx-color-8 {
+  0.0% { color: var(--tx-c0); }
+  14.286% { color: var(--tx-c1); }
+  28.571% { color: var(--tx-c2); }
+  42.857% { color: var(--tx-c3); }
+  57.143% { color: var(--tx-c4); }
+  71.429% { color: var(--tx-c5); }
+  85.714% { color: var(--tx-c6); }
+  100.0% { color: var(--tx-c7); }
+}
+
+.tx-stops-9 .tx-c { animation-name: tx-color-9; }
+@keyframes tx-color-9 {
+  0.0% { color: var(--tx-c0); }
+  12.5% { color: var(--tx-c1); }
+  25.0% { color: var(--tx-c2); }
+  37.5% { color: var(--tx-c3); }
+  50.0% { color: var(--tx-c4); }
+  62.5% { color: var(--tx-c5); }
+  75.0% { color: var(--tx-c6); }
+  87.5% { color: var(--tx-c7); }
+  100.0% { color: var(--tx-c8); }
+}
+

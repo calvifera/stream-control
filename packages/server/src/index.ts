@@ -7,7 +7,7 @@ import { Server } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@streaming/shared';
 import { env, ensureDirs, DATA_DIR, MEDIA_DIR, OVERLAY_DIST } from './env.js';
 import { createLogger, logBus } from './logger.js';
-import { Hub } from './hub.js';
+import { Hub, LOG_ROOM } from './hub.js';
 import { createApiRouter } from './http/api.js';
 import { AVATAR_DIR } from './state/avatars.js';
 import { TunnelController } from './tunnel.js';
@@ -32,7 +32,9 @@ async function main(): Promise<void> {
   hub.attach(io);
   const tunnel = new TunnelController(hub, env.port);
 
-  logBus.on('log', (entry) => io.emit('log', entry));
+  // Only to sockets that read logs. Overlays and the chat panel opt out, so a
+  // busy server doesn't re-render them for every line it writes.
+  logBus.on('log', (entry) => io.to(LOG_ROOM).emit('log', entry));
 
   app.use(cors());
   app.use(express.json({ limit: '2mb' }));

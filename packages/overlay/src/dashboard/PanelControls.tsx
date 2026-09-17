@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_CHAT_PANEL, type AppConfig, type ChatPanelConfig } from '@streaming/shared';
 import { api } from '../lib/api.js';
 
 /**
@@ -52,6 +51,18 @@ export function KillTtsButton(): JSX.Element {
   );
 }
 
+export interface PanelSettingsProps {
+  opacity: number;
+  fontScale: number;
+  alwaysOnTop: boolean;
+  /** Null while the config hasn't loaded, which hides the speech switch. */
+  ttsEnabled: boolean | null;
+  onOpacity: (value: number) => void;
+  onFontScale: (value: number) => void;
+  onAlwaysOnTop: (value: boolean) => void;
+  onTtsEnabled: (value: boolean) => void;
+}
+
 /**
  * Settings, in a popover anchored to the panel's own header.
  *
@@ -59,33 +70,31 @@ export function KillTtsButton(): JSX.Element {
  * from there means looking at the slider instead of at the thing it changes.
  * Here the panel is directly underneath, over the game, so the value can be
  * set by eye in one pass.
+ *
+ * The values arrive from the page rather than from the config, because the
+ * page previews a drag before the server has saved it. See `useDraft`.
  */
-export function PanelSettingsMenu({ config }: { config: AppConfig | null }): JSX.Element {
+export function PanelSettingsMenu(props: PanelSettingsProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const holder = useRef<HTMLDivElement | null>(null);
-  const panel: ChatPanelConfig = config?.chatPanel ?? DEFAULT_CHAT_PANEL;
 
   // Click anywhere else to dismiss. Registered only while open, so the panel
   // is not paying for a document listener for the hours it is not.
   useEffect(() => {
     if (!open) return;
-    const away = (event: MouseEvent): void => {
+    const away = (event: PointerEvent): void => {
       if (!holder.current?.contains(event.target as Node)) setOpen(false);
     };
     const escape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') setOpen(false);
     };
-    document.addEventListener('mousedown', away);
+    document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', escape);
     return () => {
-      document.removeEventListener('mousedown', away);
+      document.removeEventListener('pointerdown', away);
       document.removeEventListener('keydown', escape);
     };
   }, [open]);
-
-  const set = (over: Partial<ChatPanelConfig>): void => {
-    void api.patchConfig({ chatPanel: { ...panel, ...over } }).catch(() => undefined);
-  };
 
   return (
     <div className="panel-settings" ref={holder}>
@@ -112,42 +121,54 @@ export function PanelSettingsMenu({ config }: { config: AppConfig | null }): JSX
         <div className="panel-menu" role="dialog" aria-label="Panel settings">
           <label className="panel-menu-row">
             <span>
-              Opacity <em>{Math.round(panel.opacity * 100)}%</em>
+              Opacity <em>{Math.round(props.opacity * 100)}%</em>
             </span>
             <input
               type="range"
               min={0}
               max={1}
               step={0.02}
-              value={panel.opacity}
-              onChange={(event) => set({ opacity: Number(event.target.value) })}
+              value={props.opacity}
+              onChange={(event) => props.onOpacity(Number(event.target.value))}
             />
           </label>
 
           <label className="panel-menu-row">
             <span>
-              Text size <em>{Math.round(panel.fontScale * 100)}%</em>
+              Text size <em>{Math.round(props.fontScale * 100)}%</em>
             </span>
             <input
               type="range"
               min={0.6}
               max={2.5}
               step={0.05}
-              value={panel.fontScale}
-              onChange={(event) => set({ fontScale: Number(event.target.value) })}
+              value={props.fontScale}
+              onChange={(event) => props.onFontScale(Number(event.target.value))}
             />
           </label>
 
           <label className="panel-menu-check">
             <input
               type="checkbox"
-              checked={panel.alwaysOnTop}
-              onChange={(event) => set({ alwaysOnTop: event.target.checked })}
+              checked={props.alwaysOnTop}
+              onChange={(event) => props.onAlwaysOnTop(event.target.checked)}
             />
             <span>Always on top</span>
           </label>
 
-          <TtsSwitch config={config} />
+          {/* Kept in the menu rather than the header on purpose: turning TTS
+              off is a decision you have to remember to undo, and it should
+              not share a row with the button you press in a hurry. */}
+          {props.ttsEnabled !== null ? (
+            <label className="panel-menu-check">
+              <input
+                type="checkbox"
+                checked={props.ttsEnabled}
+                onChange={(event) => props.onTtsEnabled(event.target.checked)}
+              />
+              <span>{props.ttsEnabled ? 'Speech on' : 'Speech off'}</span>
+            </label>
+          ) : null}
 
           <p className="panel-menu-note">
             Opacity applies to the background only — text stays fully solid at every setting.
@@ -155,32 +176,5 @@ export function PanelSettingsMenu({ config }: { config: AppConfig | null }): JSX
         </div>
       ) : null}
     </div>
-  );
-}
-
-/**
- * The sustained counterpart to the kill button.
- *
- * Kept in the menu rather than the header on purpose: turning TTS off is a
- * decision you have to remember to undo, and it should not share a row with
- * the button you hit in a hurry.
- */
-function TtsSwitch({ config }: { config: AppConfig | null }): JSX.Element | null {
-  if (!config) return null;
-  const enabled = config.tts.enabled;
-
-  return (
-    <label className="panel-menu-check">
-      <input
-        type="checkbox"
-        checked={enabled}
-        onChange={(event) => {
-          void api
-            .patchConfig({ tts: { ...config.tts, enabled: event.target.checked } })
-            .catch(() => undefined);
-        }}
-      />
-      <span>{enabled ? 'Speech on' : 'Speech off'}</span>
-    </label>
   );
 }

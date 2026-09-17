@@ -37,7 +37,7 @@ import { synthesizeWithTikTok, TIKTOK_TTS_ENDPOINTS } from '../tts/tiktokProvide
 import type { ProviderId } from '../tts/providers/types.js';
 import type { TunnelController } from '../tunnel.js';
 import { env } from '../env.js';
-import { openPanel, panelStatus } from '../panel.js';
+import { openExternal, openPanel, panelStatus } from '../panel.js';
 import { parseSecretKey, secrets } from '../secrets.js';
 
 const asError = (res: Response, status: number, message: string): Response =>
@@ -1010,6 +1010,34 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
       res.json({ ok: true, removed: listKey(reference) });
     }),
   );
+
+  /** The profile card the chat panel shows when you click a viewer. */
+  router.get('/viewers/:key/profile', (req, res) => {
+    const profile = hub.viewerProfile(req.params.key ?? '');
+    if (!profile) {
+      asError(res, 404, `No record of ${req.params.key}`);
+      return;
+    }
+    res.json(profile);
+  });
+
+  /**
+   * Opens a viewer's platform profile in the default browser on this desktop.
+   *
+   * The URL is built from the stored record, never taken from the request.
+   */
+  router.post('/viewers/:key/open-profile', (req, res) => {
+    if (!isLocalRequest(req)) {
+      asError(res, 403, 'Profiles open on the machine running the server, so this only works there.');
+      return;
+    }
+    const url = hub.viewerProfile(req.params.key ?? '')?.profileUrl;
+    if (!url || !openExternal(url)) {
+      asError(res, 404, 'This viewer has no profile page to open.');
+      return;
+    }
+    res.json({ ok: true });
+  });
 
   router.get('/users/:username', (req, res) => {
     const user = hub.directory.get(req.params.username);

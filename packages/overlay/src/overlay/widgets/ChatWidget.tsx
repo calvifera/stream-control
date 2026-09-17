@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  describeGiftWithMessage,
+  describeSubscribe,
   nameColor,
   PLATFORM_INFO,
   tierFor,
@@ -8,9 +10,12 @@ import {
   type HighlightTier,
   type StreamEvent,
   type StreamUser,
+  type TextEffect,
 } from '@streaming/shared';
 import { onStreamEvent, useLive } from '../../lib/store.js';
 import { PlatformLogo } from '../../lib/PlatformLogo.js';
+import { MessageParts, renderableParts } from '../../lib/MessageParts.js';
+import { AnimatedText } from '../../lib/AnimatedText.js';
 import { ANIMATION_CLASS } from '../style.js';
 
 interface Props {
@@ -37,6 +42,9 @@ function isRelevant(event: StreamEvent, settings: ChatOverlaySettings): boolean 
     case 'chat':
       // A dropped message has no text left to render.
       return !(settings.hideFiltered && event.displayText === null);
+    // An emote sent on its own — how a TikTok fan-club emote usually arrives.
+    case 'emote':
+      return renderableParts(event) !== null;
     case 'gift':
       return settings.showGifts && event.repeatEnd;
     case 'follow':
@@ -44,7 +52,8 @@ function isRelevant(event: StreamEvent, settings: ChatOverlaySettings): boolean 
     case 'join':
       return settings.showJoins;
     case 'subscribe':
-      return settings.showFollows;
+      // One line for a gift bomb, not one per recipient as well.
+      return settings.showFollows && !event.giftBombMember;
     default:
       return false;
   }
@@ -122,6 +131,7 @@ export function ChatWidget({ settings }: Props): JSX.Element {
   }, [rows, settings.newestFirst, settings.mergeRuns, tiers]);
 
   const animation = ANIMATION_CLASS[settings.animation];
+  const moving = settings.highlightMotion !== 'none';
   const density = settings.density === 'compact' ? 'chat-compact' : 'chat-comfortable';
 
   return (
@@ -152,7 +162,9 @@ export function ChatWidget({ settings }: Props): JSX.Element {
                   title={tier?.label}
                   style={
                     tier
-                      ? tierStyle(tier)
+                      ? moving
+                        ? { color: tier.colors[tier.colors.length - 1] }
+                        : tierStyle(tier)
                       : {
                           color: settings.colorfulNames
                             ? nameColor(event.platform, event.user?.uniqueId ?? '')
@@ -160,20 +172,37 @@ export function ChatWidget({ settings }: Props): JSX.Element {
                         }
                   }
                 >
-                  {nameOf(event.user)}
+                  {tier && moving ? (
+                    <AnimatedText text={nameOf(event.user)} effect={tierEffect(settings.highlightMotion)} colors={tier.colors} />
+                  ) : (
+                    nameOf(event.user)
+                  )}
                   {/* Inside the name, so it takes the name's colour. Only what
                       someone *said* gets one — "bob: followed the stream"
                       reads as a quotation of something they typed. */}
-                  {event.type === 'chat' ? ':' : ''}
+                  {event.type === 'chat' || event.type === 'emote' ? ':' : ''}
                 </span>
               </>
             )}
-            <span className="chat-text">{describe(event)}</span>
+            <span className="chat-text">
+              <Body event={event} />
+            </span>
           </div>
         </div>
       ))}
     </div>
   );
+}
+
+/**
+ * A highlighted name in motion.
+ *
+ * The tier's gradient is a single clip across the whole name, and that clip
+ * paints nothing once letters move independently — so a moving name takes
+ * the tier's colours letter by letter instead, flowing the same way.
+ */
+function tierEffect(motion: ChatOverlaySettings['highlightMotion']): TextEffect {
+  return { motion, fill: 'gradient', colors: [], amplitude: 0.08, speed: 1.8 };
 }
 
 /**
@@ -243,16 +272,24 @@ function Badges({ user }: { user: NonNullable<StreamEvent['user']> }): JSX.Eleme
   );
 }
 
+function Body({ event }: { event: StreamEvent }): JSX.Element {
+  if (event.type === 'chat' || event.type === 'emote') {
+    const parts = renderableParts(event);
+    if (parts) return <MessageParts parts={parts} className="chat-emote" />;
+  }
+  return <>{describe(event)}</>;
+}
+
 function describe(event: StreamEvent): string {
   switch (event.type) {
     case 'chat':
       return event.displayText ?? '';
     case 'gift':
-      return `sent ${event.repeatCount}x ${event.giftName}`;
+      return describeGiftWithMessage(event);
     case 'follow':
       return 'followed the stream';
     case 'subscribe':
-      return 'subscribed';
+      return describeSubscribe(event);
     case 'join':
       return 'joined';
     default:

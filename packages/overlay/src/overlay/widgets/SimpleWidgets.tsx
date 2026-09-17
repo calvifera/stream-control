@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  describeGift,
+  describeSubscribe,
   buildTemplateVars,
   renderHtmlTemplate,
   type CounterOverlaySettings,
@@ -177,9 +179,9 @@ function tickerText(event: StreamEvent): string | null {
     case 'share':
       return `${name} shared`;
     case 'subscribe':
-      return `${name} subscribed`;
+      return event.giftBombMember ? null : `${name} ${describeSubscribe(event)}`;
     case 'gift':
-      return `${name} sent ${event.repeatCount}x ${event.giftName}`;
+      return `${name} ${describeGift(event)}`;
     case 'chat':
       return event.displayText ? `${name}: ${event.displayText}` : null;
     default:

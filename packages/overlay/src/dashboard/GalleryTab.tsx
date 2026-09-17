@@ -26,6 +26,8 @@ const BLURB: Record<OverlayType, string> = {
   leaderboard: 'Top gifters for the session, ranked.',
   counter: 'Big numbers: viewers, likes, follows, diamonds.',
   slideshow: 'Cycles a folder of images, with a choice of transitions.',
+  giftSpotlight: 'One animated card per gift, drawn the way each platform draws it: cheermotes, Super Chats, combos.',
+  giftRain: 'Gift pictures raining across the screen, one per gift in a combo.',
   custom: 'Your own HTML and CSS, driven by the same event data.',
 };
 

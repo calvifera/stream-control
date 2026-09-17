@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  describeGiftWithMessage,
+  describeSubscribe,
   messageDisplay,
   listKey,
   PLATFORM_INFO,
@@ -7,6 +9,7 @@ import {
   viewerKey,
   tierFor,
   tierStyle,
+  type ChatTrust,
   type HighlightTier,
   type Platform,
   type StreamEvent,
@@ -14,8 +17,10 @@ import {
 } from '@streaming/shared';
 import { api } from '../lib/api.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
+import { MessageParts, renderableParts } from '../lib/MessageParts.js';
 import { PlatformStats } from './PlatformStats.js';
-import { useLive } from '../lib/store.js';
+import { useLiveSelect } from '../lib/store.js';
+import { ViewerCard } from './ViewerCard.js';
 
 /**
  * The unified chat log.
@@ -27,27 +32,51 @@ import { useLive } from '../lib/store.js';
 type Tab = 'all' | Platform;
 
 /** Events worth showing in a chat log. Likes and joins would drown it. */
-const SHOWN = new Set(['chat', 'gift', 'follow', 'subscribe', 'share', 'system']);
+const SHOWN = new Set(['chat', 'emote', 'gift', 'follow', 'subscribe', 'share', 'system']);
 
 interface Props {
-  /** Compact mode drops the header chrome for the pop-out window. */
+  /**
+   * Compact mode, for the desktop panel and the pop-out window.
+   *
+   * Also the light mode: it renders fewer rows, jumps to new messages instead
+   * of easing, and skips the arrival animation. Those windows sit over a game
+   * that is competing for the same processor and graphics card.
+   */
   dense?: boolean;
 }
 
-export function ChatLog({ dense = false }: Props): JSX.Element {
-  const { events, snapshot, config, stats } = useLive();
+/** Rows kept on screen in compact mode. The buffer holds 200. */
+const DENSE_ROWS = 100;
+
+const NO_TIERS: HighlightTier[] = [];
+const NO_ENTRIES: string[] = [];
+
+export const ChatLog = memo(function ChatLog({ dense = false }: Props): JSX.Element {
+  // Read piece by piece, so a stats tick doesn't re-render the log.
+  const events = useLiveSelect((s) => s.events);
+  const connectionMap = useLiveSelect((s) => s.snapshot?.connections);
+  // The same list every chat overlay reads, so a viewer marked notable on stream
+  // is marked notable here too.
+  const tiers = useLiveSelect((s) => s.config?.highlights) ?? NO_TIERS;
+  const trustedList = useLiveSelect((s) => s.config?.users.trusted) ?? NO_ENTRIES;
+  const penaltyBox = useLiveSelect((s) => s.config?.users.penaltyBox);
+
   const [tab, setTab] = useState<Tab>('all');
-  const [pinned, setPinned] = useState<StreamEvent | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<StreamUser | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
   /** Handle for the in-flight scroll animation; 0 when none is running. */
   const frameRef = useRef(0);
 
-  const connections = snapshot?.connections ?? {};
-  // The same list every chat overlay reads, so a viewer marked notable on stream
-  // is marked notable here too.
-  const tiers = config?.highlights ?? [];
+  const connections = connectionMap ?? {};
+
+  // Sets built once per config change, so each row's check is a lookup rather
+  // than a scan of the whole list.
+  const trustedKeys = useMemo(() => new Set(trustedList.map(listKey)), [trustedList]);
+  const mutedKeys = useMemo(
+    () => new Set((penaltyBox ?? []).map((entry) => listKey(entry.username))),
+    [penaltyBox],
+  );
   // A tab appears when the platform is connected, or when the buffer already
   // holds messages from it — otherwise test events and demo data would be
   // unfilterable. An always-visible tab that can never have content is just a
@@ -57,13 +86,16 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
     (p) => seen.has(p) || (connections[p] && connections[p]!.status !== 'idle'),
   );
 
-  const visible = useMemo(
-    () =>
-      events.filter(
-        (event) => SHOWN.has(event.type) && (tab === 'all' || event.platform === tab),
-      ),
-    [events, tab],
-  );
+  const visible = useMemo(() => {
+    const shown = events.filter(
+      (event) =>
+        SHOWN.has(event.type) &&
+        (tab === 'all' || event.platform === tab) &&
+        // A gift bomb is one line; its recipients would repeat it N times.
+        !(event.type === 'subscribe' && event.giftBombMember),
+    );
+    return dense ? shown.slice(-DENSE_ROWS) : shown;
+  }, [events, tab, dense]);
 
   /*
    * Newest at the bottom, like every chat client — but only auto-scroll when
@@ -112,6 +144,16 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
       return;
     }
 
+    /*
+     * Compact mode jumps as well. An eased scroll needs a frame for every step,
+     * and a game that is starving the panel of frames leaves the log stuck
+     * partway down, which reads as frozen. A jump costs one layout.
+     */
+    if (dense) {
+      snap();
+      return;
+    }
+
     // A loop already running retargets on its own — `step` recomputes the
     // destination every frame — so starting a second one would only make two
     // animations fight over the same scrollTop.
@@ -132,7 +174,7 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
     };
 
     frameRef.current = view.requestAnimationFrame(step);
-  }, []);
+  }, [dense]);
 
   /*
    * Re-pin whenever new content arrives.
@@ -252,7 +294,8 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
    */
   const seenRef = useRef<Set<string>>(new Set());
   const settledRef = useRef(false);
-  const isFresh = (id: string): boolean => settledRef.current && !seenRef.current.has(id);
+  const isFresh = (id: string): boolean =>
+    !dense && settledRef.current && !seenRef.current.has(id);
 
   useEffect(() => {
     /*
@@ -268,16 +311,24 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
     settledRef.current = true;
   }, [events]);
 
-  const copyHandle = useCallback((user: StreamUser) => {
-    const handle = `@${user.uniqueId}`;
-    void navigator.clipboard
-      .writeText(handle)
-      .then(() => {
-        setCopied(handle);
-        window.setTimeout(() => setCopied(null), 1200);
-      })
-      .catch(() => undefined);
+  const openViewer = useCallback((user: StreamUser) => {
+    setViewer((current) =>
+      current && userKeyOf(current) === userKeyOf(user) ? null : user,
+    );
   }, []);
+  const closeViewer = useCallback(() => setViewer(null), []);
+
+  // The newest event from the open card's viewer, so the card refetches when
+  // they do something and its numbers stay current.
+  const viewerRefresh = useMemo(() => {
+    if (!viewer) return null;
+    const key = userKeyOf(viewer);
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const user = events[i]?.user;
+      if (user && userKeyOf(user) === key) return events[i]!.id;
+    }
+    return null;
+  }, [viewer, events]);
 
   return (
     <div className={dense ? 'chatlog chatlog-dense' : 'chatlog'}>
@@ -312,26 +363,11 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
           numbers already shown as a combined total elsewhere, and the whole
           point of it is the per-platform split. */}
       {tab !== 'all' ? (
-        <PlatformStats
+        <LivePlatformStats
           platform={tab}
-          stats={stats}
           connected={connections[tab]?.status === 'connected'}
           liveSince={connections[tab]?.liveSince ?? null}
         />
-      ) : null}
-
-      {pinned ? (
-        <div className="chatlog-pinned">
-          <span className="chatlog-pinned-label">Pinned</span>
-          <ChatRow
-            event={pinned}
-            tier={highlightOf(pinned, tiers)}
-            showPlatform={tab === 'all'}
-            onCopy={copyHandle}
-            onPin={() => setPinned(null)}
-            pinned
-          />
-        </div>
       ) : null}
 
       <div className="chatlog-scroll" ref={scrollRef} onScroll={onScroll}>
@@ -342,23 +378,42 @@ export function ChatLog({ dense = false }: Props): JSX.Element {
               : 'Waiting for messages…'}
           </p>
         ) : (
-          visible.map((event) => (
-            <ChatRow
-              key={event.id}
-              event={event}
-              tier={highlightOf(event, tiers)}
-              showPlatform={tab === 'all'}
-              fresh={isFresh(event.id)}
-              onCopy={copyHandle}
-              onPin={() => setPinned((current) => (current?.id === event.id ? null : event))}
-            />
-          ))
+          visible.map((event) => {
+            const key = event.user ? userKeyOf(event.user) : '';
+            return (
+              <ChatRow
+                key={event.id}
+                event={event}
+                tier={highlightOf(event, tiers)}
+                showPlatform={tab === 'all'}
+                fresh={isFresh(event.id)}
+                trusted={key !== '' && trustedKeys.has(key)}
+                muted={key !== '' && mutedKeys.has(key)}
+                selected={viewer !== null && key === userKeyOf(viewer)}
+                onOpen={openViewer}
+              />
+            );
+          })
         )}
       </div>
 
-      {copied ? <div className="chatlog-toast">Copied {copied}</div> : null}
+      {viewer ? (
+        <ViewerCard user={viewer} refreshKey={viewerRefresh} onClose={closeViewer} />
+      ) : null}
     </div>
   );
+});
+
+const userKeyOf = (user: StreamUser): string => viewerKey(user.platform, user.uniqueId);
+
+/** The per-platform strip, reading stats itself so they don't re-render the log. */
+function LivePlatformStats(props: {
+  platform: Platform;
+  connected: boolean;
+  liveSince: number | null;
+}): JSX.Element {
+  const stats = useLiveSelect((s) => s.stats);
+  return <PlatformStats {...props} stats={stats} />;
 }
 
 /**
@@ -380,19 +435,28 @@ function highlightOf(event: StreamEvent, tiers: readonly HighlightTier[]): Highl
   });
 }
 
-function ChatRow({
+/**
+ * One line of the log.
+ *
+ * Memoized, with every prop either a primitive or a stable reference, so a
+ * new message renders one new row instead of all of them.
+ */
+const ChatRow = memo(function ChatRow({
   event,
   tier,
-  onCopy,
-  onPin,
+  onOpen,
   showPlatform = true,
-  pinned = false,
+  selected = false,
   fresh = false,
+  trusted,
+  muted,
 }: {
   event: StreamEvent;
   tier: HighlightTier | null;
-  onCopy: (user: StreamUser) => void;
-  onPin: () => void;
+  /** Opens the profile card for the person who sent this. */
+  onOpen: (user: StreamUser) => void;
+  trusted: boolean;
+  muted: boolean;
   /**
    * Whether to mark which platform this came from.
    *
@@ -401,12 +465,14 @@ function ChatRow({
    * once per message and costs width that the message could use.
    */
   showPlatform?: boolean;
-  pinned?: boolean;
+  /** This person's profile card is open. */
+  selected?: boolean;
   /** Just arrived, so it animates in. Rows already on screen must not. */
   fresh?: boolean;
 }): JSX.Element {
   const info = PLATFORM_INFO[event.platform];
   const user = event.user;
+  const open = user ? () => onOpen(user) : undefined;
 
   /*
    * Captured once, at mount.
@@ -427,26 +493,18 @@ function ChatRow({
    * chat read as though half of it were being said out loud. A notice is one
    * quiet line: it stays in the stack, in order, and stops competing.
    */
-  const notice = event.type !== 'chat';
+  const notice = event.type !== 'chat' && event.type !== 'emote';
 
   if (notice) {
     return (
       <div
-        className={`chatnotice${animate ? ' chatrow-fresh' : ''}`}
+        className={`chatnotice${animate ? ' chatrow-fresh' : ''}${selected ? ' chatrow-selected' : ''}`}
         style={{ borderLeftColor: info.color }}
-        onClick={onPin}
+        onClick={open}
       >
         {showPlatform ? <PlatformMark platform={event.platform} /> : null}
         {user ? (
-          <button
-            type="button"
-            className="chatnotice-who"
-            title={`Copy @${user.uniqueId}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onCopy(user);
-            }}
-          >
+          <button type="button" className="chatnotice-who" title={`View @${user.uniqueId}`}>
             {user.nickname}
           </button>
         ) : null}
@@ -457,11 +515,11 @@ function ChatRow({
 
   return (
     <div
-      className={`chatrow${pinned ? ' chatrow-pinned' : ''}${animate ? ' chatrow-fresh' : ''}`}
+      className={`chatrow${selected ? ' chatrow-selected' : ''}${animate ? ' chatrow-fresh' : ''}`}
       // The accent bar is the point: it reads peripherally while you are
       // playing, which a small logo glyph does not.
       style={{ borderLeftColor: info.color }}
-      onClick={onPin}
+      onClick={open}
     >
       <Avatar user={user} platform={event.platform} />
 
@@ -472,12 +530,8 @@ function ChatRow({
             <button
               type="button"
               className={tier ? 'chatrow-handle chatrow-handle-tier' : 'chatrow-handle'}
-              title={tier ? `${tier.label} — copy @${user.uniqueId}` : `Copy @${user.uniqueId}`}
+              title={tier ? `${tier.label} — view @${user.uniqueId}` : `View @${user.uniqueId}`}
               style={tier ? tierStyle(tier) : undefined}
-              onClick={(e) => {
-                e.stopPropagation();
-                onCopy(user);
-              }}
             >
               {user.nickname}
             </button>
@@ -486,13 +540,33 @@ function ChatRow({
           )}
           {user?.isModerator ? <span className="chatrow-badge" title="Moderator">🛡</span> : null}
           {user?.isSubscriber ? <span className="chatrow-badge" title="Subscriber">★</span> : null}
+          {event.type === 'chat' ? <TrustTag trust={event.trust} trusted={trusted} /> : null}
         </div>
 
-        <MessageText event={event} />
+        <MessageText event={event} trusted={trusted} />
 
-        {user ? <RowActions user={user} /> : null}
+        {user ? <RowActions user={user} trusted={trusted} muted={muted} /> : null}
       </div>
     </div>
+  );
+});
+
+/**
+ * A small tag for a viewer in strict mode.
+ *
+ * Shown only for the low and new bands. A tag on every row would be noise,
+ * and the point is to catch your eye on the few people worth a look.
+ */
+function TrustTag({ trust, trusted }: { trust: ChatTrust | undefined; trusted: boolean }): JSX.Element | null {
+  if (!trust || trusted) return null;
+  if (trust.band !== 'low' && trust.band !== 'new') return null;
+  return (
+    <span
+      className={`chatrow-trust chatrow-trust-${trust.band}`}
+      title={`Trust score ${trust.score}. Click the row for details.`}
+    >
+      {trust.band === 'low' ? 'low trust' : 'new'}
+    </span>
   );
 }
 
@@ -506,7 +580,9 @@ function ChatRow({
 function Avatar({ user, platform }: { user: StreamUser | null; platform: Platform }): JSX.Element {
   const info = PLATFORM_INFO[platform];
   if (user?.avatarUrl) {
-    return <img className="chatrow-avatar" src={user.avatarUrl} alt="" loading="lazy" />;
+    return (
+      <img className="chatrow-avatar" src={user.avatarUrl} alt="" loading="lazy" decoding="async" />
+    );
   }
   const letter = (user?.nickname || user?.uniqueId || '?').trim().charAt(0).toUpperCase() || '?';
   return (
@@ -544,15 +620,19 @@ function PlatformMark({ platform }: { platform: Platform }): JSX.Element {
  * is which on hover. The socket pushes the new config to every client, so a
  * mute applied here also lights up in the dashboard.
  */
-function RowActions({ user }: { user: StreamUser }): JSX.Element {
-  const { config } = useLive();
+function RowActions({
+  user,
+  trusted,
+  muted,
+}: {
+  user: StreamUser;
+  trusted: boolean;
+  muted: boolean;
+}): JSX.Element {
   const [busy, setBusy] = useState<'mute' | 'trust' | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
   const key = viewerKey(user.platform, user.uniqueId);
-  const users = config?.users;
-  const muted = users?.penaltyBox.some((entry) => listKey(entry.username) === key) ?? false;
-  const trusted = users?.trusted.some((entry) => listKey(entry) === key) ?? false;
 
   const run =
     (which: 'mute' | 'trust', label: string, action: () => Promise<unknown>) =>
@@ -639,23 +719,37 @@ function RowActions({ user }: { user: StreamUser }): JSX.Element {
  * Host surfaces only. Overlays render `displayText`, so none of this reaches
  * the stream.
  */
-function MessageText({ event }: { event: StreamEvent }): JSX.Element {
-  const { config } = useLive();
-
+function MessageText({ event, trusted }: { event: StreamEvent; trusted: boolean }): JSX.Element {
+  if (event.type === 'emote') {
+    const parts = renderableParts(event);
+    return (
+      <div className="chatrow-text">
+        {parts ? <MessageParts parts={parts} className="chatrow-emote" /> : '[emote]'}
+      </div>
+    );
+  }
   if (event.type !== 'chat') {
     return <div className="chatrow-text">{describe(event)}</div>;
   }
 
-  const trusted =
-    config?.users.trusted.some(
-      (entry) => listKey(entry) === viewerKey(event.user.platform, event.user.uniqueId),
-    ) ?? false;
-
   // The tier decision lives in shared/chatDisplay so it can be tested without
   // a browser; this function only paints what it is told.
   const display = messageDisplay(event, { trusted });
+  const held = event.trust?.held ?? null;
+  const parts = renderableParts(event);
   if (display.tier === 'plain') {
-    return <div className="chatrow-text">{describe(event)}</div>;
+    return (
+      <div className="chatrow-text">
+        {parts ? <MessageParts parts={parts} className="chatrow-emote" /> : describe(event)}
+        {/* Trust held it back from speech. Amber rather than red: nothing
+            was caught, the viewer just hasn't earned the benefit of the doubt. */}
+        {held ? (
+          <span className="chatrow-notread chatrow-held" title={held}>
+            not read
+          </span>
+        ) : null}
+      </div>
+    );
   }
 
   const reason = event.filterReason ?? 'filtered';
@@ -690,13 +784,11 @@ function describe(event: StreamEvent): string {
       // `displayText` is the filtered form; null means the filter dropped it.
       return event.displayText ?? '[removed by filter]';
     case 'gift':
-      return `sent ${event.repeatCount}× ${event.giftName}${
-        event.totalDiamonds > 0 ? ` (${event.totalDiamonds})` : ''
-      }`;
+      return describeGiftWithMessage(event);
     case 'follow':
       return 'followed';
     case 'subscribe':
-      return event.isGifted ? 'was gifted a subscription' : `subscribed (${event.subMonths} mo)`;
+      return describeSubscribe(event);
     case 'share':
       // Twitch raids arrive as shares; the count is the raider count.
       return event.shareCount > 1 ? `brought ${event.shareCount} viewers` : 'shared the stream';

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { STREAM_EVENT_LABELS, type StreamEvent } from '@streaming/shared';
+import { describeGiftWithMessage, describeSubscribe, STREAM_EVENT_LABELS, type StreamEvent } from '@streaming/shared';
 import { TestEventPanel } from './TestEventPanel.js';
 import { useLive } from '../lib/store.js';
 import { Panel } from './controls.js';
@@ -100,7 +100,7 @@ function summarize(event: StreamEvent): string {
         ? `${who} — dropped (${event.filterReason ?? 'filtered'})`
         : `${who}: ${event.displayText}${event.filtered ? ' (filtered)' : ''}`;
     case 'gift':
-      return `${who} sent ${event.repeatCount}x ${event.giftName} (${event.totalDiamonds} diamonds)`;
+      return `${who} ${describeGiftWithMessage(event)}`;
     case 'follow':
       return `${who} followed`;
     case 'share':
@@ -110,7 +110,7 @@ function summarize(event: StreamEvent): string {
     case 'join':
       return `${who} joined`;
     case 'subscribe':
-      return `${who} subscribed (${event.subMonths}mo)`;
+      return `${who} ${describeSubscribe(event)}`;
     case 'envelope':
       return `${who} dropped a ${event.coins}-coin treasure box`;
     case 'question':

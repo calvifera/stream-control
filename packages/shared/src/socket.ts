@@ -71,6 +71,8 @@ export interface ClientToServerEvents {
     overlayId?: string;
     listener?: boolean;
     fallback?: boolean;
+    /** False to skip server log lines. Overlays never receive them. */
+    logs?: boolean;
   }) => void;
   'tts:done': (id: string) => void;
   'tts:error': (payload: { id: string; message: string }) => void;

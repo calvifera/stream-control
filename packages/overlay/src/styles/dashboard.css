@@ -1942,6 +1942,8 @@ select.input option { background: var(--bg-raised); color: var(--text); }
  * ------------------------------------------------------------------ */
 
 .chatlog {
+  /* Anchors the profile card, which covers the log rather than pushing it. */
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -2054,7 +2056,7 @@ select.input option { background: var(--bg-raised); color: var(--text); }
 }
 
 .chatrow:hover { background: var(--bg-hover); }
-.chatrow-pinned { background: var(--accent-soft); }
+.chatrow-selected { background: var(--accent-soft); }
 
 .chatrow-avatar {
   width: 32px;
@@ -2239,22 +2241,6 @@ select.input option { background: var(--bg-raised); color: var(--text); }
 }
 
 .chatrow-actions button:hover { color: var(--text); border-color: var(--border-bright); }
-
-.chatlog-pinned {
-  flex: none;
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
-  padding: 4px;
-  background: var(--accent-soft);
-}
-
-.chatlog-pinned-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  padding-left: 6px;
-}
 
 .chatlog-toast {
   position: fixed;
@@ -2738,7 +2724,7 @@ body.chat-popout-body::after {
   border-color: rgba(255, 255, 255, 0.24);
 }
 
-.chat-panel .chatlog-pinned {
+.chat-panel .chatrow-selected {
   background: rgba(37, 244, 238, 0.14);
 }
 
@@ -2909,16 +2895,19 @@ body.chat-popout-body::after {
 }
 
 /*
- * Anchored under the button, and allowed to escape the panel's own bounds.
+ * Pinned under the header, and allowed to escape the panel's rounded clip.
  *
- * The panel is often only a couple of hundred pixels wide, so a menu confined
- * inside it would be unusable. `.chat-panel` therefore drops its overflow
- * clipping while the menu is open — see `.chat-panel:has(.panel-menu)` below.
+ * `position: fixed` places the menu against the window rather than inside
+ * `.chat-panel`, so the panel's `overflow: hidden` doesn't cut it off. This
+ * replaces a `:has()` rule that lifted the clipping while the menu was open,
+ * which made the browser re-check that selector on every chat message.
  */
 .panel-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: -4px;
+  position: fixed;
+  top: 36px;
+  left: 8px;
+  max-height: calc(100vh - 44px);
+  overflow-y: auto;
   z-index: 50;
   width: 214px;
   padding: 10px;
@@ -2952,7 +2941,12 @@ body.chat-popout-body::after {
 
 .panel-menu-row input[type='range'] {
   width: 100%;
+  /* A taller hit area than the default track, which is a few pixels high and
+     easy to miss in a window this small. */
+  height: 18px;
   margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .panel-menu-check {
@@ -2972,12 +2966,6 @@ body.chat-popout-body::after {
   color: var(--text-dim);
 }
 
-/* The panel clips its children so the rounded corners hold; that would also
-   clip this menu, which has to hang below the header. Lifted only while a
-   menu is actually open. */
-.chat-panel:has(.panel-menu) {
-  overflow: visible;
-}
 
 /* --------------------------------------------------------------- *
  * Per-platform stats strip
@@ -3284,3 +3272,372 @@ body.chat-popout-body::after {
 /* Kept visible without hover, or the confirmation would vanish the moment the
    pointer moved — which is exactly when you want to read it. */
 .chatrow .chatrow-actions-done { display: flex; }
+
+/* --------------------------------------------------------------- *
+ * Trust markers in the chat log
+ * --------------------------------------------------------------- */
+
+.chatrow-trust {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.chatrow-trust-low {
+  background: rgba(248, 113, 113, 0.16);
+  color: #fca5a5;
+}
+
+.chatrow-trust-new {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-muted);
+}
+
+/* Held by trust rather than caught by the filter, so amber, not red. */
+.chatrow-held {
+  background: rgba(251, 191, 36, 0.14);
+  border-color: rgba(251, 191, 36, 0.4);
+  color: var(--warn);
+}
+
+/* --------------------------------------------------------------- *
+ * Viewer profile card
+ *
+ * Covers the log rather than pushing it, so the rows underneath don't reflow
+ * and the scroll position is where you left it when the card closes. Opaque
+ * for the same reason as the settings menu: a translucent card over
+ * translucent chat over a moving game is unreadable.
+ * --------------------------------------------------------------- */
+
+.vcard {
+  position: absolute;
+  top: 38px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: #12141c;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text);
+  cursor: default;
+}
+
+.vcard-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px 8px;
+  border-top: 3px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.vcard-avatar {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-input);
+}
+
+.vcard-avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.vcard-who {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.vcard-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vcard-handle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.vcard-handle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vcard-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.vcard-badge {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.vcard-badge-good { background: rgba(52, 211, 153, 0.15); color: var(--ok); }
+.vcard-badge-bad { background: rgba(248, 113, 113, 0.16); color: #fca5a5; }
+
+.vcard-close {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.vcard-close:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
+
+.vcard-empty {
+  margin: 0;
+  padding: 18px 12px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.vcard-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 10px 8px;
+  scrollbar-width: thin;
+}
+
+.vcard-section { padding: 8px 0 4px; }
+.vcard-section + .vcard-section { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+
+.vcard-section h4 {
+  margin: 0 0 6px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vcard-trust-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.vcard-trust-band {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.vcard-trust-track {
+  height: 5px;
+  margin: 2px 0 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.vcard-trust-fill {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+}
+
+span.vcard-trust-low { color: #fca5a5; }
+span.vcard-trust-new { color: var(--warn); }
+span.vcard-trust-neutral { color: var(--text-muted); }
+span.vcard-trust-regular,
+span.vcard-trust-trusted { color: var(--ok); }
+
+.vcard-trust-fill.vcard-trust-low { background: var(--error); }
+.vcard-trust-fill.vcard-trust-new { background: var(--warn); }
+.vcard-trust-fill.vcard-trust-neutral { background: var(--text-muted); }
+.vcard-trust-fill.vcard-trust-regular,
+.vcard-trust-fill.vcard-trust-trusted { background: var(--ok); }
+
+.vcard-factors {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vcard-factors li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.vcard-factors em {
+  flex: none;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.vcard-plus { color: var(--ok); }
+.vcard-minus { color: #fca5a5; }
+
+.vcard-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+  gap: 4px;
+}
+
+.vcard-stat {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.vcard-stat strong {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vcard-stat span {
+  color: var(--text-dim);
+  font-size: 9.5px;
+}
+
+.vcard-stat-warn strong { color: var(--warn); }
+
+.vcard-note {
+  margin: 5px 0 0;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.vcard-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vcard-msg {
+  display: flex;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.vcard-msg time {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vcard-msg-flagged span { color: var(--warn); }
+.vcard-msg-severe span { color: #fca5a5; }
+
+.vcard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.vcard-actions button {
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.vcard-actions button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.11); }
+.vcard-actions button:disabled { opacity: 0.45; cursor: default; }
+.vcard-actions button.is-on { border-color: var(--accent-line); color: var(--accent); }
+
+.vcard-flash {
+  width: 100%;
+  color: var(--accent);
+  font-size: 10.5px;
+}
+
+/* --------------------------------------------------------------- *
+ * Light rendering for windows that sit over a game
+ *
+ * The panel and the pop-out share the processor and graphics card with
+ * whatever is being played. Each rule here removes work that repeats every
+ * frame or every message, and none of it changes what the text says.
+ * --------------------------------------------------------------- */
+
+/* The highlight sweep repaints every highlighted name on every frame, for as
+   long as it is on screen. The gradient stays; only the motion goes. */
+.chat-panel .chatrow-handle-tier,
+.chat-popout-body .chatrow-handle-tier {
+  animation: none !important;
+  filter: none;
+}
+
+/* Hover fades are a frame loop too, and nobody hovers while playing. */
+.chat-panel .chatrow,
+.chat-panel .chatlog-tab,
+.chat-panel .panel-btn,
+.chat-popout-body .chatrow,
+.chat-popout-body .chatlog-tab {
+  transition: none;
+}
+
+/* Keeps a new row's layout from spilling into the rows around it. */
+.chat-panel .chatrow,
+.chat-panel .chatnotice,
+.chat-popout-body .chatrow,
+.chat-popout-body .chatnotice {
+  contain: layout style;
+}
+
+/* The card's shadow is a large blur recomposited over the game. */
+.chat-panel .vcard,
+.chat-panel .panel-menu {
+  box-shadow: none;
+}

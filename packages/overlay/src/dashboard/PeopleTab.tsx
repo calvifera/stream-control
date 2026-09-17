@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  DEFAULT_TRUST,
   displayHandle,
   listKey,
   PLATFORM_INFO,
@@ -8,6 +9,7 @@ import {
   NEUTRAL_VOICE_PROFILE,
   settingsFor,
   type AppConfig,
+  type TrustConfig,
   type TtsProvider,
   type UserVoiceProfile,
   type VoiceSettings,
@@ -308,6 +310,8 @@ export function PeopleTab({ config, patch }: Props): JSX.Element {
           </Field>
         </Row>
       </Panel>
+
+      <TrustPanel config={config} patch={patch} />
 
       <TwitchModerationPanel config={config} patch={patch} />
       <YouTubeModerationPanel config={config} patch={patch} />
@@ -706,6 +710,92 @@ function YouTubeModerationPanel({
           Anything older has to be lifted in YouTube Studio.
         </p>
       ) : null}
+    </Panel>
+  );
+}
+
+/**
+ * Viewer trust settings.
+ *
+ * Strict mode only ever holds messages back from speech. Nothing here hides a
+ * message from chat, and a strike still needs a severe-list block to have
+ * happened first.
+ */
+function TrustPanel({
+  config,
+  patch,
+}: {
+  config: AppConfig;
+  patch: (partial: Record<string, unknown>) => void;
+}): JSX.Element {
+  const trust = config.trust ?? DEFAULT_TRUST;
+  const set = (over: Partial<TrustConfig>): void => patch({ trust: { ...trust, ...over } });
+
+  return (
+    <Panel
+      title="Trust score"
+      description="Scores each viewer from 0 to 100 using how long they have been around, what they have given, and how they behave this stream. Click anyone in the chat log to see their score and why."
+    >
+      <Row>
+        <Toggle
+          label="Enabled"
+          checked={trust.enabled}
+          onChange={(enabled) => set({ enabled })}
+        />
+        <Field
+          label="Strict mode below"
+          hint="Viewers under this score don't get oddly spelled messages or sound-alikes of severe terms read aloud. A brand-new viewer starts at about 30."
+        >
+          <NumberInput
+            value={trust.strictBelow}
+            onChange={(strictBelow) => set({ strictBelow })}
+            min={0}
+            max={100}
+          />
+        </Field>
+      </Row>
+
+      <Row>
+        <Toggle
+          label="Strike retries after a severe block"
+          hint="A strict-mode viewer who sends something similar soon after a severe term was blocked gets a strike. Uses the automatic penalty settings."
+          checked={trust.strikeOnRetry}
+          onChange={(strikeOnRetry) => set({ strikeOnRetry })}
+        />
+        <Field label="Retry window (seconds)">
+          <NumberInput
+            value={trust.retryWindowSeconds}
+            onChange={(retryWindowSeconds) => set({ retryWindowSeconds })}
+            min={10}
+            max={600}
+          />
+        </Field>
+      </Row>
+
+      <Row>
+        <Toggle
+          label="Hold new viewers"
+          hint="No speech for someone new until they reach either limit. Subscribers and anyone who has gifted skip the wait. Their messages still show in chat."
+          checked={trust.holdNewViewers}
+          onChange={(holdNewViewers) => set({ holdNewViewers })}
+        />
+        <Field label="Messages">
+          <NumberInput
+            value={trust.holdMessages}
+            onChange={(holdMessages) => set({ holdMessages })}
+            min={0}
+            max={50}
+          />
+        </Field>
+        <Field label="Minutes">
+          <NumberInput
+            value={trust.holdMinutes}
+            onChange={(holdMinutes) => set({ holdMinutes })}
+            min={0}
+            max={120}
+          />
+        </Field>
+      </Row>
     </Panel>
   );
 }

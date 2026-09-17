@@ -14,6 +14,9 @@ import {
   type TtsRule,
 } from './config.js';
 import type { HighlightTier } from './highlights.js';
+import { DEFAULT_TRUST } from './trust.js';
+import { HOP_EFFECT, NO_TEXT_EFFECT, WAVE_GRADIENT_EFFECT } from './textEffects.js';
+import { defaultSoundSettings } from './gifts/sounds.js';
 
 const style = (over: Partial<OverlayStyle> = {}): OverlayStyle => ({ ...DEFAULT_STYLE, ...over });
 
@@ -48,6 +51,7 @@ export const DEFAULT_OVERLAYS: OverlaySource[] = [
         showHighlights: true,
         platforms: [],
         mergeRuns: false,
+        highlightMotion: 'none',
       },
     },
   },
@@ -80,6 +84,8 @@ export const DEFAULT_OVERLAYS: OverlaySource[] = [
         },
         soundUrl: '',
         soundVolume: 0.7,
+        nameEffect: { ...NO_TEXT_EFFECT },
+        giftSounds: defaultSoundSettings(false),
       },
     },
   },
@@ -212,6 +218,7 @@ export function defaultSettingsFor(type: OverlayType): OverlaySettings {
           showHighlights: true,
           platforms: [],
           mergeRuns: false,
+          highlightMotion: 'none',
         },
       };
     case 'alerts':
@@ -231,6 +238,8 @@ export function defaultSettingsFor(type: OverlayType): OverlaySettings {
           },
           soundUrl: '',
           soundVolume: 0.7,
+          nameEffect: { ...WAVE_GRADIENT_EFFECT },
+          giftSounds: defaultSoundSettings(true),
         },
       };
     case 'tts':
@@ -297,6 +306,47 @@ export function defaultSettingsFor(type: OverlayType): OverlaySettings {
           once: false,
         },
       };
+    case 'giftSpotlight':
+      return {
+        type: 'giftSpotlight',
+        giftSpotlight: {
+          platforms: [],
+          // Roughly a dollar-ish nowhere and "anything at all" everywhere: a
+          // new source should show that it works on the first gift.
+          minValue: { tiktok: 1, twitch: 1, youtube: 0 },
+          includeGiftedSubs: true,
+          durationMs: 6000,
+          scaleDuration: true,
+          showAvatar: true,
+          showValue: true,
+          showMessage: true,
+          mediaSize: 180,
+          animation: 'pop',
+          soundUrl: '',
+          soundVolume: 0.7,
+          maxQueue: 20,
+          mediaRules: [],
+          nameEffect: { ...WAVE_GRADIENT_EFFECT },
+          valueEffect: { ...HOP_EFFECT, colors: [...HOP_EFFECT.colors] },
+          sounds: defaultSoundSettings(true),
+        },
+      };
+    case 'giftRain':
+      return {
+        type: 'giftRain',
+        giftRain: {
+          platforms: [],
+          minValue: { tiktok: 1, twitch: 1, youtube: 0 },
+          includeGiftedSubs: true,
+          maxPerGift: 25,
+          maxOnScreen: 120,
+          spriteSize: 72,
+          fallSeconds: 5,
+          direction: 'fall',
+          mediaRules: [],
+          sounds: defaultSoundSettings(false),
+        },
+      };
     case 'custom':
       return {
         type: 'custom',
@@ -322,6 +372,8 @@ export function createOverlay(type: OverlayType, id: string, name?: string): Ove
     leaderboard: [380, 420],
     counter: [640, 110],
     slideshow: [800, 450],
+    giftSpotlight: [900, 560],
+    giftRain: [1920, 1080],
     custom: [640, 400],
   };
   const [width, height] = sizes[type];
@@ -522,6 +574,7 @@ export function createDefaultConfig(username = ''): AppConfig {
       penaltyBox: [],
       voiceProfiles: [],
     },
+    trust: { ...DEFAULT_TRUST },
     tts: {
       enabled: true,
       provider: 'tiktok',

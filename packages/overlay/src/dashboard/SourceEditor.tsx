@@ -4,6 +4,8 @@ import {
   PLATFORMS,
   STREAM_EVENT_LABELS,
   STREAM_EVENT_TYPES,
+  TEXT_MOTION_LABELS,
+  TEXT_MOTIONS,
   type ChatOverlaySettings,
   type OverlaySettings,
   type OverlaySource,
@@ -26,6 +28,8 @@ import {
 } from './controls.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
 import { SlideshowSettings } from './SlideshowSettings.js';
+import { GiftRainSettings, GiftSpotlightSettings } from './GiftSourceSettings.js';
+import { SoundBracketsEditor, TextEffectEditor } from './EffectControls.js';
 
 const ANIMATIONS = ['fade', 'slide-left', 'slide-right', 'slide-up', 'pop', 'none'] as const;
 
@@ -293,6 +297,18 @@ export function SettingsEditor({
               onChange={(hideFiltered) => set({ hideFiltered })}
             />
           </Row>
+          <Row>
+            <Field
+              label="Highlighted names move"
+              hint="A subtle wave or hop through the names of viewers in a highlight tier, in the tier's colours"
+            >
+              <Select
+                value={s.highlightMotion}
+                onChange={(highlightMotion) => set({ highlightMotion })}
+                options={TEXT_MOTIONS.map((m) => ({ value: m, label: TEXT_MOTION_LABELS[m] }))}
+              />
+            </Field>
+          </Row>
         </>
       );
     }
@@ -336,6 +352,16 @@ export function SettingsEditor({
               <Slider value={s.soundVolume} onChange={(soundVolume) => set({ soundVolume })} />
             </Field>
           </Row>
+          <TextEffectEditor
+            label="Name effect ({{nickname}} in templates)"
+            effect={s.nameEffect}
+            onChange={(nameEffect) => set({ nameEffect })}
+          />
+          <SoundBracketsEditor
+            settings={s.giftSounds}
+            onChange={(giftSounds) => set({ giftSounds })}
+            hint="When on, gifts and gifted subs play their price bracket's sound instead of the sound above. Amounts are rough dollars on every platform."
+          />
           <Field label="Templates" hint="One per event type. Same placeholders as TTS.">
             <div className="template-grid">
               {s.eventTypes.map((type) => (
@@ -521,6 +547,26 @@ export function SettingsEditor({
         <SlideshowSettings
           settings={s}
           onChange={(next) => onChange({ type: 'slideshow', slideshow: { ...s, ...next } })}
+        />
+      );
+    }
+
+    case 'giftSpotlight': {
+      const s = settings.giftSpotlight;
+      return (
+        <GiftSpotlightSettings
+          settings={s}
+          onChange={(next) => onChange({ type: 'giftSpotlight', giftSpotlight: { ...s, ...next } })}
+        />
+      );
+    }
+
+    case 'giftRain': {
+      const s = settings.giftRain;
+      return (
+        <GiftRainSettings
+          settings={s}
+          onChange={(next) => onChange({ type: 'giftRain', giftRain: { ...s, ...next } })}
         />
       );
     }

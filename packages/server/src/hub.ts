@@ -1,7 +1,19 @@
-import { listKey, PLATFORM_INFO, readViewerKey, userKey, viewerKey } from '@streaming/shared';
+import {
+  listKey,
+  PLATFORM_INFO,
+  profileUrl,
+  readViewerKey,
+  userKey,
+  viewerKey,
+} from '@streaming/shared';
 import type { Server, Socket } from 'socket.io';
 import type {
   AppConfig,
+  ChatEvent,
+  GiftEvent,
+  StreamUser,
+  TrustConfig,
+  ViewerProfile,
   ProfileUpdate,
   TestEventOutcome,
   ClientToServerEvents,
@@ -12,7 +24,8 @@ import type {
   TunnelState,
 } from '@streaming/shared';
 import { ConfigStore } from './config/store.js';
-import { FilterEngine } from './pipeline/filters.js';
+import { FilterEngine, type FilterResult } from './pipeline/filters.js';
+import { TrustTracker, type TrustSubject } from './state/trust.js';
 import { RuleEngine, type RuleRejection } from './pipeline/rules.js';
 import { SessionState } from './state/session.js';
 import { UserDirectory, normalize } from './state/directory.js';
@@ -28,6 +41,7 @@ import { TwitchProfiles } from './twitch/helix.js';
 import { TwitchModeration } from './twitch/moderation.js';
 import { YouTubeModeration } from './youtube/moderation.js';
 import { TwitchLive } from './twitch/live.js';
+import { TwitchCheermotes } from './twitch/cheermotes.js';
 import { AuthManager } from './auth/manager.js';
 import { TtsEngine } from './tts/engine.js';
 import { createLogger } from './logger.js';
@@ -40,6 +54,8 @@ const isLive = (status: string): boolean =>
   status === 'connected' || status === 'connecting' || status === 'reconnecting';
 
 const HISTORY_LIMIT = 150;
+/** Socket.IO room for clients that display server logs. */
+export const LOG_ROOM = 'logs';
 /** Stats and leaderboard are chatty; batch them into one update per tick. */
 const BROADCAST_INTERVAL_MS = 500;
 
@@ -61,6 +77,7 @@ export class Hub {
   readonly directory = new UserDirectory();
   readonly retention = new RetentionTracker();
   readonly review = new ReviewFeed();
+  readonly trust = new TrustTracker();
   readonly avatars = new AvatarStore();
   readonly slideshows = new SlideshowStore();
   readonly avatarPoller: AvatarPoller;
@@ -75,6 +92,7 @@ export class Hub {
   readonly twitchModeration: TwitchModeration;
   readonly youtubeModeration: YouTubeModeration;
   readonly twitchLive: TwitchLive;
+  readonly twitchCheermotes: TwitchCheermotes;
 
   private io: TypedServer | null = null;
   private clients = new Map<string, ClientInfo>();
@@ -93,6 +111,10 @@ export class Hub {
     this.tts = new TtsEngine(this.resolveTtsConfig(config));
     this.tiktok = new TikTokManager(config.connection);
     this.twitch = new TwitchManager(config.twitch);
+    // A channel's own cheermotes, when app credentials exist. Its prefixes
+    // tell a cheer apart from an ordinary word ending in a number.
+    this.twitchCheermotes = new TwitchCheermotes(this.auth);
+    this.twitch.setCheerPrefixes(() => this.twitchCheermotes.prefixes());
     this.twitchModeration = new TwitchModeration(
       this.auth,
       config.twitch.moderation,
@@ -107,6 +129,7 @@ export class Hub {
     // was edited.
     if (config.twitch.enabled && config.twitch.channel) {
       this.twitchLive.watch(config.twitch.channel);
+      this.twitchCheermotes.watch(config.twitch.channel);
     }
     this.youtube = new YouTubeManager(config.youtube, this.auth);
     this.youtubeModeration = new YouTubeModeration(this.auth, config.youtube.moderation);
@@ -142,6 +165,7 @@ export class Hub {
     this.tiktok.on('state', () => this.broadcastConnections());
     this.tiktok.on('sessionStart', () => {
       this.session.reset();
+      this.trust.reset();
       this.rules.resetCooldowns();
       this.history = [];
       this.markStatsDirty();
@@ -209,6 +233,7 @@ export class Hub {
     this.twitchModeration.setConfig(next.twitch.moderation, next.twitch.channel);
     this.youtubeModeration.setConfig(next.youtube.moderation);
     this.twitchLive.watch(next.twitch.enabled ? next.twitch.channel : '');
+    this.twitchCheermotes.watch(next.twitch.enabled ? next.twitch.channel : '');
     this.youtube.setConfig(next.youtube);
     this.io?.emit('config', next);
   }
@@ -276,29 +301,37 @@ export class Hub {
     }
   }
 
-  private considerPenalty(event: StreamEvent, severity: string, evasion: boolean, reason: string): void {
-    if (event.type !== 'chat') return;
-    if (severity !== 'severe') return;
+  /** Returns true when a strike was recorded. */
+  private considerPenalty(event: ChatEvent, severity: string, evasion: boolean, reason: string): boolean {
+    if (severity !== 'severe') return false;
+    const auto = this.config.get().users.autoPenalty;
+    if (auto.onlyCountEvasion && !evasion) return false;
+    return this.strike(event, reason);
+  }
 
+  /**
+   * Records a strike, and moves the viewer to the penalty box once they reach
+   * the threshold. Returns true when a strike was recorded.
+   */
+  private strike(event: ChatEvent, reason: string): boolean {
     const config = this.config.get();
     const auto = config.users.autoPenalty;
-    if (!auto.enabled) return;
-    if (auto.onlyCountEvasion && !evasion) return;
+    if (!auto.enabled) return false;
 
     const handle = userKey(event.user);
-    if (!handle) return;
+    if (!handle) return false;
 
     if (auto.exemptTrusted && config.users.trusted.some((u) => listKey(u) === handle)) {
       log.info(`Trusted user @${handle} tripped the severe filter — no strike recorded`);
-      return;
+      return false;
     }
 
-    if (config.users.penaltyBox.some((entry) => listKey(entry.username) === handle)) return;
+    if (config.users.penaltyBox.some((entry) => listKey(entry.username) === handle)) return false;
 
     const strikes = this.directory.recordStrike(event.user, event.text, reason);
     log.warn(`@${handle} strike ${strikes}/${auto.strikesBeforePenalty}: ${reason}`);
 
-    if (strikes < auto.strikesBeforePenalty) return;
+    if (strikes < auto.strikesBeforePenalty) return true;
 
     const entry = {
       username: handle,
@@ -324,6 +357,162 @@ export class Hub {
       level: 'warn',
       text: `@${handle} was muted from TTS: ${reason}`,
     });
+    return true;
+  }
+
+  /** The facts about a viewer that trust scoring reads. */
+  private trustSubject(key: string, user: StreamUser | null): TrustSubject {
+    const users = this.config.get().users;
+    return {
+      key,
+      known: this.directory.get(key),
+      onTrustedList: users.trusted.some((entry) => listKey(entry) === key),
+      isHost: user?.isHost ?? false,
+      isModerator: user?.isModerator ?? false,
+      isSubscriber: user?.isSubscriber ?? false,
+      isFollower: user?.isFollower ?? false,
+      isVerified: user?.isVerified ?? false,
+      fansClubLevel: user?.fansClubLevel ?? 0,
+    };
+  }
+
+  /**
+   * Scores the speaker, decides whether trust holds this message back from
+   * speech, and strikes a deliberate retry of a severe term.
+   *
+   * Runs before the directory counts the message, so "new viewer" means the
+   * messages they had sent before this one.
+   */
+  private applyTrust(
+    event: ChatEvent,
+    result: FilterResult,
+    nearMiss: boolean,
+    allowStrike: boolean,
+  ): void {
+    const config = this.config.get().trust;
+    const key = userKey(event.user);
+    const subject = this.trustSubject(key, event.user);
+
+    const assessment = this.trust.observe(
+      subject,
+      {
+        text: event.text,
+        filtered: result.text === null,
+        severity: result.severity,
+        evasion: result.evasion,
+        nearMiss,
+      },
+      // Test events are counted too. This memory only lasts the session, and
+      // counting them is what lets the test panel show a retry being caught.
+      config,
+    );
+    const { score } = assessment;
+
+    let held: string | null = null;
+    if (config.enabled && result.text !== null && score.band !== 'trusted') {
+      if (score.strict && nearMiss) {
+        held = 'low trust: sounds like a severe term';
+      } else if (score.strict && assessment.signals.length > 0) {
+        held = `low trust: ${assessment.signals[0]}`;
+      } else if (config.holdNewViewers && this.isHeldAsNew(subject, config)) {
+        held = `new viewer: speech starts after ${config.holdMessages} messages or ${config.holdMinutes} minutes`;
+      }
+    }
+
+    event.trust = { score: score.score, band: score.band, held, signals: assessment.signals };
+    if (held) this.trust.markHeld(key);
+
+    if (allowStrike && config.enabled && config.strikeOnRetry && assessment.severeRetry && score.strict) {
+      this.strike(event, 'retried a severe term after it was blocked');
+    }
+  }
+
+  /**
+   * Whether a viewer is still inside the new-viewer hold.
+   *
+   * Held while both limits are unmet, so a limit of zero turns the hold off.
+   * Subscribers and anyone who has gifted skip it: they have already put
+   * something in.
+   */
+  private isHeldAsNew(subject: TrustSubject, config: TrustConfig): boolean {
+    if (subject.isSubscriber) return false;
+    const known = subject.known;
+    if ((known?.diamonds ?? 0) > 0 || (known?.gifts ?? 0) > 0) return false;
+    const messages = known?.messages ?? 0;
+    const minutes = (Date.now() - (known?.firstSeen ?? Date.now())) / 60_000;
+    return messages < config.holdMessages && minutes < config.holdMinutes;
+  }
+
+  /**
+   * Everything the chat panel shows when you click a viewer, or null for
+   * someone this server has no record of.
+   */
+  viewerProfile(reference: string): ViewerProfile | null {
+    const { platform, handle } = readViewerKey(reference);
+    const key = viewerKey(platform, handle);
+    const known = this.directory.get(key);
+    const live = this.session.findByHandle(platform, handle);
+
+    const chats = this.history.filter(
+      (event): event is ChatEvent => event.type === 'chat' && userKey(event.user) === key,
+    );
+    const user = live?.user ?? chats[chats.length - 1]?.user ?? null;
+    if (!known && !user) return null;
+
+    const config = this.config.get();
+    const subject = this.trustSubject(key, user);
+    const session = this.trust.sessionFor(key);
+    const username = known?.username ?? handle;
+    const userId = user?.userId || known?.userId || '';
+
+    return {
+      key,
+      platform,
+      username,
+      displayName: user?.nickname || known?.displayName || handle,
+      avatarUrl: this.avatars.publicPath(username) ?? user?.avatarUrl ?? known?.avatarUrl ?? null,
+      profileUrl: profileUrl(platform, username, userId),
+      trusted: subject.onTrustedList,
+      muted: config.users.penaltyBox.some((entry) => listKey(entry.username) === key),
+      moderator: subject.isModerator,
+      subscriber: subject.isSubscriber,
+      follower: subject.isFollower,
+      verified: subject.isVerified,
+      followerCount: user?.followerCount ?? 0,
+      trust: this.trust.score(subject, config.trust),
+      session: {
+        messages: live?.comments ?? 0,
+        gifts: live?.gifts ?? 0,
+        diamonds: live?.diamonds ?? 0,
+        likes: live?.likes ?? 0,
+        shares: live?.shares ?? 0,
+        filtered: session.filtered,
+        held: session.held,
+        firstSeen: session.firstSeen,
+      },
+      lifetime: known
+        ? {
+            firstSeen: known.firstSeen,
+            lastSeen: known.lastSeen,
+            daysSeen: known.daysSeen ?? 1,
+            messages: known.messages,
+            gifts: known.gifts ?? 0,
+            diamonds: known.diamonds ?? 0,
+            follows: known.follows ?? 0,
+            strikes: known.strikes,
+          }
+        : null,
+      recent: chats
+        .slice(-5)
+        .reverse()
+        .map((event) => ({
+          ts: event.ts,
+          text: event.redacted ? '[removed by filter]' : event.text,
+          filtered: event.filtered,
+          severity: event.filterSeverity,
+          held: event.trust?.held ?? null,
+        })),
+    };
   }
 
   attach(io: TypedServer): void {
@@ -331,8 +520,13 @@ export class Hub {
 
     io.on('connection', (socket: TypedSocket) => {
       this.clients.set(socket.id, { role: 'dashboard', listener: false, fallback: false });
+      // Joined by default so an older dashboard that never says otherwise
+      // keeps its log tab working.
+      void socket.join(LOG_ROOM);
 
       socket.on('hello', (info) => {
+        if (info.role === 'overlay' || info.logs === false) void socket.leave(LOG_ROOM);
+        else void socket.join(LOG_ROOM);
         this.clients.set(socket.id, {
           role: info.role,
           overlayId: info.overlayId,
@@ -471,6 +665,35 @@ export class Hub {
   }
 
   /**
+   * Readies a gift's platform detail for the stream.
+   *
+   * The message a viewer pays to attach — a Super Chat's comment, the words
+   * around a cheer — is shown on stream by the gift sources, so it goes
+   * through the same filter chat does. Without this, paying a dollar would
+   * be a way around the wordlist.
+   *
+   * Strikes are not applied here: the filter decides what is shown, and
+   * penalties stay tied to ordinary chat where their thresholds were tuned.
+   */
+  private prepareGift(event: GiftEvent): void {
+    const detail = event.detail;
+    if (detail.message) {
+      detail.displayMessage = this.filters.apply(detail.message, event.user).text;
+    }
+
+    if (detail.kind === 'twitch-cheer') {
+      const custom = this.twitchCheermotes.resolve(detail.prefix, event.totalDiamonds);
+      if (custom?.animationUrl || custom?.imageUrl) {
+        detail.media = {
+          animationUrl: custom.animationUrl ?? detail.media.animationUrl,
+          imageUrl: custom.imageUrl ?? detail.media.imageUrl,
+        };
+        event.giftImageUrl = detail.media.imageUrl;
+      }
+    }
+  }
+
+  /**
    * The single path every event takes: filter -> aggregate -> rules -> fan out.
    *
    * Returns what happened, which is only interesting for a spoofed event: the
@@ -492,14 +715,27 @@ export class Hub {
       event.filterSeverity = result.severity;
       filtered = result.filtered;
       filterReason = result.reason;
-      this.considerPenalty(event, result.severity, result.evasion, result.reason ?? 'severe term');
+      const struck = this.considerPenalty(
+        event,
+        result.severity,
+        result.evasion,
+        result.reason ?? 'severe term',
+      );
 
-      // Observational only, and only for what got through — a message the
-      // filter already stopped needs no review. Never changes the outcome.
-      const filterConfig = this.config.get().filters;
-      if (filterConfig.enabled && filterConfig.reviewNearMatches && result.text !== null) {
-        const severe = this.config.get().users.severe;
-        const terms = [...severe.words, ...severe.phrases];
+      // Only for what got through — a message the filter already stopped
+      // needs no review. The review feed never changes the outcome; trust
+      // uses the same check to decide whether speech skips the message.
+      const current = this.config.get();
+      const filterConfig = current.filters;
+      const terms = [...current.users.severe.words, ...current.users.severe.phrases];
+      const nearMiss =
+        filterConfig.enabled &&
+        result.text !== null &&
+        terms.length > 0 &&
+        (filterConfig.reviewNearMatches || current.trust.enabled) &&
+        this.review.sounds(event.text, terms);
+
+      if (nearMiss && filterConfig.reviewNearMatches) {
         for (const entry of this.review.observe(event.text, event.user.uniqueId, terms)) {
           log.info(
             `Near miss: "${entry.phrase}" sounds like "${entry.term}" ` +
@@ -507,7 +743,13 @@ export class Hub {
           );
         }
       }
+
+      // A message that already earned a strike for evasion doesn't earn a
+      // second one for being a retry.
+      this.applyTrust(event, result, nearMiss, !struck);
     }
+
+    if (event.type === 'gift') this.prepareGift(event);
 
     if (event.user && this.filters.isUserBlocked(event.user.platform, event.user.uniqueId)) {
       // Blocked users are dropped entirely: no overlay, no stats, no TTS.
@@ -557,12 +799,12 @@ export class Hub {
     }
 
     const config = this.config.get();
-    const { matches, rejections } = this.rules.evaluate(
-      event,
-      this.resolveTtsConfig(config),
-      this.session,
-      config.users,
-    );
+    // Trust holds speech only. The message still reaches chat and overlays.
+    const held = event.type === 'chat' ? (event.trust?.held ?? null) : null;
+    const { matches, rejections } =
+      held && config.tts.enabled
+        ? { matches: [], rejections: [{ ruleId: 'trust', ruleName: 'Trust score', reason: held }] }
+        : this.rules.evaluate(event, this.resolveTtsConfig(config), this.session, config.users);
 
     const outcome: TestEventOutcome = {
       eventId: event.id,
