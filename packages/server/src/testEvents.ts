@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  Platform,
-  StreamEvent,
-  StreamEventType,
-  StreamUser,
-  TestEventSpec,
+import {
+  bandForCents,
+  formatUnit,
+  type GiftEvent,
+  type Platform,
+  type StreamEvent,
+  type StreamUser,
+  type TestEventSpec,
 } from '@streaming/shared';
+import { normalizeTwitchBits } from './twitch/normalize.js';
 
 const NAMES = [
   ['glitchcat', 'Glitch Cat'],
@@ -89,6 +92,98 @@ const base = (
   synthetic: true,
 });
 
+const SUPER_CHAT_TEXT = ['love the stream!', 'hello from the other side', 'keep it up'];
+
+/**
+ * A gift the way the chosen platform would really send it.
+ *
+ * A TikTok Rose on a Twitch test is not a test of anything — the Twitch
+ * renderer, threshold unit and media rules would never see a cheer. So the
+ * shape follows the platform: diamonds and a gift on TikTok, a cheer in bits
+ * on Twitch, a Super Chat in cents on YouTube. `diamonds` is read as the
+ * platform's own unit.
+ */
+function testGift(spec: TestEventSpec, user: StreamUser): GiftEvent {
+  const { platform } = spec;
+
+  if (platform === 'twitch') {
+    const bits = spec.diamonds ?? pick([1, 100, 500, 1000, 5000, 10000]);
+    const message = spec.text ?? `Cheer${bits} ${pick(MESSAGES)}`;
+    return {
+      ...base(platform),
+      ...normalizeTwitchBits(
+        { tags: { bits: String(bits) }, prefix: '', command: 'PRIVMSG', params: [], text: message },
+        '',
+      ),
+      user,
+      synthetic: true,
+    };
+  }
+
+  if (platform === 'youtube') {
+    const cents = spec.diamonds ?? pick([200, 500, 1000, 2000, 5000, 10000]);
+    const band = bandForCents(cents);
+    const label = `$${(cents / 100).toFixed(2)}`;
+    const message = spec.text ?? pick(SUPER_CHAT_TEXT);
+    return {
+      ...base(platform),
+      type: 'gift',
+      user,
+      giftId: 'super-chat',
+      giftName: 'Super Chat',
+      giftImageUrl: null,
+      diamondCount: cents,
+      repeatCount: 1,
+      repeatEnd: true,
+      streakable: false,
+      totalDiamonds: cents,
+      detail: {
+        kind: 'youtube-super-chat',
+        platform: 'youtube',
+        tier: band.tier,
+        value: { amount: cents, unit: 'cents', known: true, label },
+        media: { imageUrl: null, animationUrl: null },
+        message,
+        displayMessage: message,
+        colors: band.colors,
+      },
+    };
+  }
+
+  const [randomGift, randomDiamonds] = pick(GIFTS);
+  const giftName = spec.giftName?.trim() || randomGift;
+  const diamondCount = spec.diamonds ?? randomDiamonds;
+  const repeatCount =
+    spec.repeatCount ?? (diamondCount <= 5 ? 1 + Math.floor(Math.random() * 20) : 1);
+  return {
+    ...base(platform),
+    type: 'gift',
+    user,
+    giftId: '5655',
+    giftName,
+    giftImageUrl: null,
+    diamondCount,
+    repeatCount,
+    repeatEnd: true,
+    streakable: diamondCount <= 5,
+    totalDiamonds: diamondCount * repeatCount,
+    detail: {
+      kind: 'tiktok-gift',
+      platform: 'tiktok',
+      value: {
+        amount: diamondCount,
+        unit: 'diamonds',
+        known: true,
+        label: formatUnit(diamondCount, 'diamonds'),
+      },
+      media: { imageUrl: null, animationUrl: null },
+      message: null,
+      displayMessage: null,
+      colors: null,
+    },
+  };
+}
+
 /**
  * Synthesizes a realistic event so overlays, filters and TTS rules can be
  * designed and tested without waiting for a real viewer to do something.
@@ -117,26 +212,8 @@ export function createTestEvent(spec: TestEventSpec): StreamEvent {
         emotes: [],
       };
     }
-    case 'gift': {
-      const [randomGift, randomDiamonds] = pick(GIFTS);
-      const giftName = spec.giftName?.trim() || randomGift;
-      const diamondCount = spec.diamonds ?? randomDiamonds;
-      const repeatCount =
-        spec.repeatCount ?? (diamondCount <= 5 ? 1 + Math.floor(Math.random() * 20) : 1);
-      return {
-        ...base(platform),
-        type: 'gift',
-        user,
-        giftId: '5655',
-        giftName,
-        giftImageUrl: null,
-        diamondCount,
-        repeatCount,
-        repeatEnd: true,
-        streakable: diamondCount <= 5,
-        totalDiamonds: diamondCount * repeatCount,
-      };
-    }
+    case 'gift':
+      return testGift(spec, user);
     case 'follow':
       return { ...base(platform), type: 'follow', user, totalFollowCount: 1 };
     case 'share':
@@ -152,7 +229,16 @@ export function createTestEvent(spec: TestEventSpec): StreamEvent {
     case 'join':
       return { ...base(platform), type: 'join', user, memberCount: 42, isFirstJoin: true };
     case 'subscribe':
-      return { ...base(platform), type: 'subscribe', user, subMonths: 1, isGifted: false };
+      return {
+        ...base(platform),
+        type: 'subscribe',
+        user,
+        subMonths: 1,
+        isGifted: (spec.repeatCount ?? 1) > 1,
+        tier: platform === 'twitch' ? '1' : null,
+        // A count above one spoofs a gift bomb, so bomb alerts can be tested.
+        ...((spec.repeatCount ?? 1) > 1 ? { giftCount: spec.repeatCount } : {}),
+      };
     case 'envelope':
       return { ...base(platform), type: 'envelope', user, coins: 99, peopleCount: 10 };
     case 'question':

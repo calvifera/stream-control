@@ -15,6 +15,9 @@ import type {
 } from 'tiktok-live-connector';
 import {
   anonymousUser,
+  formatUnit,
+  insertEmotes,
+  type MessagePart,
   type ChatEvent,
   type EmoteEvent,
   type EnvelopeEvent,
@@ -44,6 +47,32 @@ function imageUrl(image: ImageModel | undefined): string | null {
   const url = image?.urlList?.find((u) => typeof u === 'string' && u.length > 0);
   return url ?? null;
 }
+
+/**
+ * TikTok's own emotes — fan-club, subscriber and custom — as message parts.
+ *
+ * TikTok removes the emote from `content` completely and sends its image with
+ * the character position it belongs at. Rendering `content` alone is why a
+ * fan-club emote "just didn't show up": there was nothing of it in the text.
+ * The position is taken as a code point index; TikTok does not document the
+ * unit, and for messages without emoji before the emote the two agree.
+ */
+function chatParts(content: string, emotes: WebcastChatMessage['emotes'] | undefined): MessagePart[] | undefined {
+  const placed = (emotes ?? []).flatMap((entry) => {
+    const url = imageUrl(entry.emote?.image);
+    if (!url) return [];
+    return [{ index: toInt(entry.index, 0), url, name: EMOTE_NAME, id: entry.emote?.emoteId }];
+  });
+  if (placed.length === 0) return undefined;
+  return insertEmotes(content, placed);
+}
+
+/**
+ * TikTok sends no name for an emote, so it gets a readable placeholder rather
+ * than its numeric id — this is what alt text shows and what a line reads as
+ * when flattened back to text.
+ */
+const EMOTE_NAME = '[emote]';
 
 /**
  * `followInfo.followStatus`: 0 stranger, 1 follows the host, 2 mutual.
@@ -126,6 +155,7 @@ export function normalizeChat(msg: WebcastChatMessage, host: string): ChatEvent 
     emotes: (msg.emotes ?? [])
       .map((e) => imageUrl(e.emote?.image))
       .filter((url): url is string => Boolean(url)),
+    parts: chatParts(msg.content ?? '', msg.emotes),
   };
 }
 
@@ -134,6 +164,8 @@ export function normalizeGift(msg: WebcastGiftMessage, host: string): GiftEvent 
   const repeatCount = Math.max(1, toInt(msg.repeatCount, 1));
   // giftType 1 is the streakable kind; everything else fires once.
   const streakable = toInt(msg.gift?.type, 0) === 1;
+  const image = msg.gift?.image;
+  const still = imageUrl(image) ?? imageUrl(msg.gift?.icon);
 
   return {
     ...baseEvent(),
@@ -141,12 +173,32 @@ export function normalizeGift(msg: WebcastGiftMessage, host: string): GiftEvent 
     user: normalizeUser(msg.user, host),
     giftId: msg.giftId ?? msg.gift?.id ?? '0',
     giftName: msg.gift?.name ?? 'Gift',
-    giftImageUrl: imageUrl(msg.gift?.image) ?? imageUrl(msg.gift?.icon),
+    giftImageUrl: still,
     diamondCount: diamonds,
     repeatCount,
     repeatEnd: streakable ? toInt(msg.repeatEnd, 0) === 1 : true,
     streakable,
     totalDiamonds: diamonds * repeatCount,
+    detail: {
+      kind: 'tiktok-gift',
+      platform: 'tiktok',
+      value: {
+        amount: diamonds,
+        unit: 'diamonds',
+        known: true,
+        label: formatUnit(diamonds, 'diamonds'),
+      },
+      media: {
+        imageUrl: still,
+        // TikTok marks the images that move. Its full-screen gift effects
+        // are downloadable effect bundles rather than images, so an animated
+        // panel image is the most that can be shown directly.
+        animationUrl: image?.isAnimated ? imageUrl(image) : null,
+      },
+      message: null,
+      displayMessage: null,
+      colors: null,
+    },
   };
 }
 
@@ -243,6 +295,11 @@ export function normalizeEmote(msg: WebcastEmoteChatMessage, host: string): Emot
     emoteUrls: (msg.emoteList ?? [])
       .map((e) => imageUrl(e.image))
       .filter((url): url is string => Boolean(url)),
+    // An emote-only message — how TikTok sends a fan-club emote on its own.
+    parts: (msg.emoteList ?? []).flatMap((e): MessagePart[] => {
+      const url = imageUrl(e.image);
+      return url ? [{ type: 'emote', name: EMOTE_NAME, url, id: e.emoteId }] : [];
+    }),
   };
 }
 

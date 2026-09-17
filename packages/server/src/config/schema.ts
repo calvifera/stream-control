@@ -3,6 +3,14 @@ import { z } from 'zod';
 import {
   FALLBACK_PROVIDER_KEY,
   CHAT_DENSITIES,
+  GIFT_MEDIA_KINDS,
+  GIFT_RAIN_DIRECTIONS,
+  HOP_EFFECT,
+  NO_TEXT_EFFECT,
+  TEXT_FILLS,
+  TEXT_MOTIONS,
+  WAVE_GRADIENT_EFFECT,
+  defaultSoundSettings,
   DEFAULT_HIGHLIGHTS,
   DEFAULT_TRUST,
   HIGHLIGHT_CONDITIONS,
@@ -29,6 +37,68 @@ const viewerRef = z
 
 const eventType = z.enum(STREAM_EVENT_TYPES);
 const overlayType = z.enum(OVERLAY_TYPES);
+
+/** A media URL: served from /media, or http(s). Never `javascript:`. */
+const mediaUrl = z
+  .string()
+  .max(2048)
+  .refine((value) => value === '' || /^(\/|https?:\/\/)/i.test(value), {
+    message: 'Use /media/yourfile.gif or an http(s) URL',
+  });
+
+const giftMediaRule = z.object({
+  id: z.string().min(1).max(64),
+  enabled: z.boolean().default(true),
+  platform: z.enum([...PLATFORMS, 'any'] as [string, ...string[]]).default('any'),
+  kinds: z.array(z.enum(GIFT_MEDIA_KINDS as unknown as [string, ...string[]])).default([]),
+  giftName: z.string().max(80).default(''),
+  minValue: z.number().int().min(0).default(0),
+  mediaUrl: mediaUrl.default(''),
+  soundUrl: mediaUrl.default(''),
+});
+
+/** Colours are CSS strings; kept short so a config file cannot smuggle markup. */
+const cssColor = z.string().max(64).regex(/^[#a-zA-Z0-9(),.%\s-]+$/, 'Use a CSS colour');
+
+const textEffect = (fallback: typeof NO_TEXT_EFFECT) =>
+  z
+    .object({
+      motion: z.enum(TEXT_MOTIONS),
+      fill: z.enum(TEXT_FILLS),
+      colors: z.array(cssColor).min(2).max(8),
+      amplitude: z.number().min(0).max(0.6),
+      speed: z.number().min(0.3).max(20),
+    })
+    .default({ ...fallback, colors: [...fallback.colors] });
+
+const soundBracket = z.object({
+  id: z.string().min(1).max(64),
+  minCents: z.number().int().min(0),
+  sound: z
+    .string()
+    .max(2048)
+    .refine((value) => value === '' || /^(builtin:[a-z]+|\/|https?:\/\/)/i.test(value), {
+      message: 'Use a built-in sound, /media/yourfile.mp3 or an http(s) URL',
+    }),
+  volume: z.number().min(0).max(1),
+});
+
+const soundSettings = (enabled: boolean) =>
+  z
+    .object({
+      enabled: z.boolean(),
+      volume: z.number().min(0).max(1),
+      brackets: z.array(soundBracket).max(50),
+    })
+    .default(defaultSoundSettings(enabled));
+
+const platformThresholds = z
+  .object({
+    tiktok: z.number().int().min(0),
+    twitch: z.number().int().min(0),
+    youtube: z.number().int().min(0),
+  })
+  .default({ tiktok: 1, twitch: 1, youtube: 0 });
 
 export const gateSchema = z.object({
   followersOnly: z.boolean(),
@@ -352,6 +422,7 @@ const settingsSchema = z.discriminatedUnion('type', [
       showHighlights: z.boolean().default(true),
       platforms: z.array(z.enum(PLATFORMS)).default([]),
       mergeRuns: z.boolean().default(false),
+      highlightMotion: z.enum(TEXT_MOTIONS).default('none'),
     }),
   }),
   z.object({
@@ -366,6 +437,8 @@ const settingsSchema = z.discriminatedUnion('type', [
       templates: z.record(eventType, z.string()).default({}),
       soundUrl: z.string(),
       soundVolume: z.number().min(0).max(1),
+      nameEffect: textEffect(NO_TEXT_EFFECT),
+      giftSounds: soundSettings(false),
     }),
   }),
   z.object({
@@ -433,6 +506,43 @@ const settingsSchema = z.discriminatedUnion('type', [
       cornerRadius: z.number().int().min(0).max(200),
       showCaption: z.boolean(),
       once: z.boolean(),
+    }),
+  }),
+  z.object({
+    type: z.literal('giftSpotlight'),
+    giftSpotlight: z.object({
+      platforms: z.array(z.enum(PLATFORMS)).default([]),
+      minValue: platformThresholds,
+      includeGiftedSubs: z.boolean().default(true),
+      durationMs: z.number().min(500).max(60000),
+      scaleDuration: z.boolean().default(true),
+      showAvatar: z.boolean().default(true),
+      showValue: z.boolean().default(true),
+      showMessage: z.boolean().default(true),
+      mediaSize: z.number().int().min(16).max(2000).default(180),
+      animation,
+      soundUrl: mediaUrl.default(''),
+      soundVolume: z.number().min(0).max(1).default(0.7),
+      maxQueue: z.number().int().min(0).max(500).default(20),
+      mediaRules: z.array(giftMediaRule).max(200).default([]),
+      nameEffect: textEffect(WAVE_GRADIENT_EFFECT),
+      valueEffect: textEffect(HOP_EFFECT),
+      sounds: soundSettings(true),
+    }),
+  }),
+  z.object({
+    type: z.literal('giftRain'),
+    giftRain: z.object({
+      platforms: z.array(z.enum(PLATFORMS)).default([]),
+      minValue: platformThresholds,
+      includeGiftedSubs: z.boolean().default(true),
+      maxPerGift: z.number().int().min(1).max(200).default(25),
+      maxOnScreen: z.number().int().min(1).max(500).default(120),
+      spriteSize: z.number().int().min(8).max(1000).default(72),
+      fallSeconds: z.number().min(0.5).max(60).default(5),
+      direction: z.enum(GIFT_RAIN_DIRECTIONS).default('fall'),
+      mediaRules: z.array(giftMediaRule).max(200).default([]),
+      sounds: soundSettings(false),
     }),
   }),
   z.object({

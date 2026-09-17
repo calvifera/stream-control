@@ -54,6 +54,7 @@ export class TwitchManager extends EventEmitter {
   private idleTimer: NodeJS.Timeout | null = null;
   private manuallyDisconnected = false;
   private joined = false;
+  private cheerPrefixes: () => ReadonlySet<string> | undefined = () => undefined;
 
   private state: ConnectionState = {
     status: 'idle',
@@ -70,6 +71,11 @@ export class TwitchManager extends EventEmitter {
 
   constructor(private config: TwitchConnectionConfig) {
     super();
+  }
+
+  /** Where to learn the channel's cheermote prefixes, once they are known. */
+  setCheerPrefixes(source: () => ReadonlySet<string> | undefined): void {
+    this.cheerPrefixes = source;
   }
 
   getState(): ConnectionState {
@@ -197,7 +203,7 @@ export class TwitchManager extends EventEmitter {
       return;
     }
 
-    const event = twitchEventFrom(message, target);
+    const event = twitchEventFrom(message, target, this.cheerPrefixes());
     if (event) this.push(event);
   }
 

@@ -1,4 +1,12 @@
+import {
+  bandForCents,
+  CHEER_TIER_COLORS,
+  cheerTier,
+  formatUnit,
+  globalCheermoteUrl,
+} from '@streaming/shared';
 import type { Platform,
+  GiftEvent,
   LeaderboardEntry,
   SessionStats,
   StreamEvent,
@@ -22,6 +30,10 @@ function avatarFor(name: string, index: number): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="${color}" opacity="0.22"/><circle cx="32" cy="32" r="31" fill="none" stroke="${color}" stroke-width="2"/><text x="32" y="41" font-family="Inter,Segoe UI,sans-serif" font-size="24" font-weight="700" fill="${color}" text-anchor="middle">${initials}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
+
+const DEMO_EMOTE = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 28 4 16a7 7 0 0 1 12-9 7 7 0 0 1 12 9z" fill="#fe2c55"/><circle cx="11" cy="13" r="2" fill="#fff"/><circle cx="21" cy="13" r="2" fill="#fff"/></svg>',
+)}`;
 
 const NAMES = [
   'PixelPatty',
@@ -83,31 +95,112 @@ const base = (platform: Platform = 'tiktok'): { id: string; ts: number; platform
   platform,
 });
 
+const SUPER_CHAT_TEXT = ['love this stream!', 'hi from across the world', 'you earned this one'];
+
+/**
+ * A gift in the chosen viewer's platform's own shape, so a preview of the
+ * gift sources shows a cheer on Twitch and a Super Chat on YouTube rather
+ * than TikTok Roses everywhere.
+ */
+function demoGift(user: StreamUser): GiftEvent {
+  const shared = { ...base(user.platform), type: 'gift' as const, user, repeatEnd: true };
+
+  if (user.platform === 'twitch') {
+    const bits = pick([1, 100, 500, 1000, 5000, 10000]);
+    const tier = cheerTier(bits);
+    const cheerText = pick(MESSAGES);
+    return {
+      ...shared,
+      giftId: `cheer-${tier}`,
+      giftName: 'Bits',
+      giftImageUrl: globalCheermoteUrl(bits, { animated: false }),
+      diamondCount: bits,
+      repeatCount: 1,
+      streakable: false,
+      totalDiamonds: bits,
+      detail: {
+        kind: 'twitch-cheer',
+        platform: 'twitch',
+        prefix: 'cheer',
+        tier,
+        value: { amount: bits, unit: 'bits', known: true, label: formatUnit(bits, 'bits') },
+        media: {
+          imageUrl: globalCheermoteUrl(bits, { animated: false }),
+          animationUrl: globalCheermoteUrl(bits),
+        },
+        message: cheerText,
+        displayMessage: cheerText,
+        colors: { primary: CHEER_TIER_COLORS[tier], secondary: CHEER_TIER_COLORS[tier], text: '#fff' },
+      },
+    };
+  }
+
+  if (user.platform === 'youtube') {
+    const cents = pick([200, 500, 1000, 2000, 5000, 10000]);
+    const band = bandForCents(cents);
+    const message = pick(SUPER_CHAT_TEXT);
+    return {
+      ...shared,
+      giftId: 'super-chat',
+      giftName: 'Super Chat',
+      giftImageUrl: null,
+      diamondCount: cents,
+      repeatCount: 1,
+      streakable: false,
+      totalDiamonds: cents,
+      detail: {
+        kind: 'youtube-super-chat',
+        platform: 'youtube',
+        tier: band.tier,
+        value: { amount: cents, unit: 'cents', known: true, label: `$${(cents / 100).toFixed(2)}` },
+        media: { imageUrl: null, animationUrl: null },
+        message,
+        displayMessage: message,
+        colors: band.colors,
+      },
+    };
+  }
+
+  const gift = pick(GIFTS);
+  const repeatCount = gift.diamonds > 100 ? 1 : 1 + Math.floor(Math.random() * 8);
+  return {
+    ...shared,
+    giftId: gift.name.toLowerCase().replace(/\s+/g, '-'),
+    giftName: gift.name,
+    giftImageUrl: null,
+    diamondCount: gift.diamonds,
+    repeatCount,
+    streakable: gift.diamonds <= 100,
+    totalDiamonds: gift.diamonds * repeatCount,
+    detail: {
+      kind: 'tiktok-gift',
+      platform: 'tiktok',
+      value: {
+        amount: gift.diamonds,
+        unit: 'diamonds',
+        known: true,
+        label: formatUnit(gift.diamonds, 'diamonds'),
+      },
+      // Invented data never fetches a real gift picture; the TikTok card
+      // shows its glow and combo without one.
+      media: { imageUrl: null, animationUrl: null },
+      message: null,
+      displayMessage: null,
+      colors: null,
+    },
+  };
+}
+
 /** One synthetic event, weighted toward chat so previews look like a real room. */
 export function demoEvent(type?: StreamEvent['type']): StreamEvent {
   const user = pick(DEMO_USERS);
   const kind =
     type ??
-    pick(['chat', 'chat', 'chat', 'chat', 'gift', 'follow', 'like', 'share', 'subscribe', 'join'] as const);
+    pick(['chat', 'chat', 'chat', 'chat', 'gift', 'gift', 'follow', 'like', 'share', 'subscribe', 'join'] as const);
 
   switch (kind) {
-    case 'gift': {
-      const gift = pick(GIFTS);
-      const repeatCount = gift.diamonds > 100 ? 1 : 1 + Math.floor(Math.random() * 8);
-      return {
-        ...base(user.platform),
-        type: 'gift',
-        user,
-        giftId: gift.name.toLowerCase().replace(/\s+/g, '-'),
-        giftName: gift.name,
-        giftImageUrl: null,
-        diamondCount: gift.diamonds,
-        repeatCount,
-        repeatEnd: true,
-        streakable: gift.diamonds <= 100,
-        totalDiamonds: gift.diamonds * repeatCount,
-      } as unknown as StreamEvent;
-    }
+    case 'gift':
+      return demoGift(user);
     case 'follow':
       return { ...base(user.platform), type: 'follow', user, totalFollowCount: 1240 + seq } as unknown as StreamEvent;
     case 'like':
@@ -126,7 +219,8 @@ export function demoEvent(type?: StreamEvent['type']): StreamEvent {
         type: 'subscribe',
         user,
         subMonths: 1 + Math.floor(Math.random() * 12),
-        isGifted: Math.random() < 0.3,
+        // Gifted ones arrive as a small bomb, so the gift sources have one to show.
+        ...(Math.random() < 0.3 ? { isGifted: true, giftCount: 5 } : { isGifted: false }),
       } as unknown as StreamEvent;
     case 'join':
       return {
@@ -138,6 +232,9 @@ export function demoEvent(type?: StreamEvent['type']): StreamEvent {
       } as unknown as StreamEvent;
     default: {
       const text = pick(MESSAGES);
+      // Some lines end in a channel emote, so previews show how emotes sit in
+      // a message. Drawn inline rather than fetched, like the avatars.
+      const withEmote = Math.random() < 0.35;
       return {
         ...base(user.platform),
         type: 'chat',
@@ -147,6 +244,9 @@ export function demoEvent(type?: StreamEvent['type']): StreamEvent {
         filtered: false,
         filterReason: null,
         emotes: [],
+        ...(withEmote
+          ? { parts: [{ type: 'text', text: `${text} ` }, { type: 'emote', name: ':_heart:', url: DEMO_EMOTE }] }
+          : {}),
       } as unknown as StreamEvent;
     }
   }

@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  describeGiftWithMessage,
+  describeSubscribe,
   messageDisplay,
   listKey,
   PLATFORM_INFO,
@@ -15,6 +17,7 @@ import {
 } from '@streaming/shared';
 import { api } from '../lib/api.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
+import { MessageParts, renderableParts } from '../lib/MessageParts.js';
 import { PlatformStats } from './PlatformStats.js';
 import { useLiveSelect } from '../lib/store.js';
 import { ViewerCard } from './ViewerCard.js';
@@ -29,7 +32,7 @@ import { ViewerCard } from './ViewerCard.js';
 type Tab = 'all' | Platform;
 
 /** Events worth showing in a chat log. Likes and joins would drown it. */
-const SHOWN = new Set(['chat', 'gift', 'follow', 'subscribe', 'share', 'system']);
+const SHOWN = new Set(['chat', 'emote', 'gift', 'follow', 'subscribe', 'share', 'system']);
 
 interface Props {
   /**
@@ -85,7 +88,11 @@ export const ChatLog = memo(function ChatLog({ dense = false }: Props): JSX.Elem
 
   const visible = useMemo(() => {
     const shown = events.filter(
-      (event) => SHOWN.has(event.type) && (tab === 'all' || event.platform === tab),
+      (event) =>
+        SHOWN.has(event.type) &&
+        (tab === 'all' || event.platform === tab) &&
+        // A gift bomb is one line; its recipients would repeat it N times.
+        !(event.type === 'subscribe' && event.giftBombMember),
     );
     return dense ? shown.slice(-DENSE_ROWS) : shown;
   }, [events, tab, dense]);
@@ -486,7 +493,7 @@ const ChatRow = memo(function ChatRow({
    * chat read as though half of it were being said out loud. A notice is one
    * quiet line: it stays in the stack, in order, and stops competing.
    */
-  const notice = event.type !== 'chat';
+  const notice = event.type !== 'chat' && event.type !== 'emote';
 
   if (notice) {
     return (
@@ -713,6 +720,14 @@ function RowActions({
  * the stream.
  */
 function MessageText({ event, trusted }: { event: StreamEvent; trusted: boolean }): JSX.Element {
+  if (event.type === 'emote') {
+    const parts = renderableParts(event);
+    return (
+      <div className="chatrow-text">
+        {parts ? <MessageParts parts={parts} className="chatrow-emote" /> : '[emote]'}
+      </div>
+    );
+  }
   if (event.type !== 'chat') {
     return <div className="chatrow-text">{describe(event)}</div>;
   }
@@ -721,10 +736,11 @@ function MessageText({ event, trusted }: { event: StreamEvent; trusted: boolean 
   // a browser; this function only paints what it is told.
   const display = messageDisplay(event, { trusted });
   const held = event.trust?.held ?? null;
+  const parts = renderableParts(event);
   if (display.tier === 'plain') {
     return (
       <div className="chatrow-text">
-        {describe(event)}
+        {parts ? <MessageParts parts={parts} className="chatrow-emote" /> : describe(event)}
         {/* Trust held it back from speech. Amber rather than red: nothing
             was caught, the viewer just hasn't earned the benefit of the doubt. */}
         {held ? (
@@ -768,13 +784,11 @@ function describe(event: StreamEvent): string {
       // `displayText` is the filtered form; null means the filter dropped it.
       return event.displayText ?? '[removed by filter]';
     case 'gift':
-      return `sent ${event.repeatCount}× ${event.giftName}${
-        event.totalDiamonds > 0 ? ` (${event.totalDiamonds})` : ''
-      }`;
+      return describeGiftWithMessage(event);
     case 'follow':
       return 'followed';
     case 'subscribe':
-      return event.isGifted ? 'was gifted a subscription' : `subscribed (${event.subMonths} mo)`;
+      return describeSubscribe(event);
     case 'share':
       // Twitch raids arrive as shares; the count is the raider count.
       return event.shareCount > 1 ? `brought ${event.shareCount} viewers` : 'shared the stream';

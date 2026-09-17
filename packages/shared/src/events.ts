@@ -1,5 +1,7 @@
 import type { Platform } from './platforms.js';
 import type { ChatTrust } from './trust.js';
+import type { GiftDetail, SubTier } from './gifts/model.js';
+import type { MessagePart } from './messageParts.js';
 
 /**
  * Normalized event model.
@@ -149,6 +151,15 @@ export interface ChatEvent extends StreamEventBase {
    */
   trust?: ChatTrust;
   emotes: string[];
+  /**
+   * The message with its emotes as pictures, where the platform supplied any.
+   *
+   * Absent when the message is plain text. Renderers use it only while the
+   * filter left the message untouched — a censored message is rebuilt from
+   * `displayText`, and splicing images back into censored text would put
+   * them in the wrong places.
+   */
+  parts?: MessagePart[];
 }
 
 export interface GiftEvent extends StreamEventBase {
@@ -164,8 +175,14 @@ export interface GiftEvent extends StreamEventBase {
   repeatEnd: boolean;
   /** True for streakable gifts. Non-streakable gifts fire once with repeatEnd. */
   streakable: boolean;
-  /** diamondCount * repeatCount. */
+  /**
+   * diamondCount * repeatCount — in the platform's own unit despite the name:
+   * diamonds on TikTok, bits on Twitch, cents on YouTube. `detail.value` says
+   * which.
+   */
   totalDiamonds: number;
+  /** Everything platform-specific about the gift. See `gifts/model.ts`. */
+  detail: GiftDetail;
 }
 
 export interface FollowEvent extends StreamEventBase {
@@ -201,6 +218,23 @@ export interface SubscribeEvent extends StreamEventBase {
   subMonths: number;
   /** Subscription was gifted by someone else. */
   isGifted: boolean;
+  /** Paid tier, where the platform reports one. */
+  tier?: SubTier | null;
+  /** YouTube's membership level name, which channels name themselves. */
+  levelName?: string | null;
+  /**
+   * Subscriptions bought in one go — the announcement of a gift bomb, from
+   * the person who paid. Absent for a single subscription.
+   */
+  giftCount?: number;
+  /**
+   * One recipient of a gift bomb that was already announced with its total.
+   * Counted as zero in totals and skipped by alerts; see
+   * `subscriptionWeight`.
+   */
+  giftBombMember?: boolean;
+  /** Who received a gifted subscription, when the event is the gifter's. */
+  recipient?: string | null;
 }
 
 export interface EnvelopeEvent extends StreamEventBase {
@@ -220,6 +254,8 @@ export interface EmoteEvent extends StreamEventBase {
   type: 'emote';
   user: StreamUser;
   emoteUrls: string[];
+  /** The same emotes as message parts, so chat can draw them like a message. */
+  parts?: MessagePart[];
 }
 
 export interface RoomStatsEvent extends StreamEventBase {

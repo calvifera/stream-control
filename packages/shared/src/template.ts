@@ -1,4 +1,5 @@
 import type { StreamEvent } from './events.js';
+import { describeGift, describeSubscribe, giftTotalLabel, giftVisual } from './gifts/describe.js';
 
 /**
  * Placeholder values available to TTS templates, alert templates and custom
@@ -24,6 +25,13 @@ export function buildTemplateVars(event: StreamEvent, extra: TemplateVars = {}):
     months: '',
     viewers: '',
     coins: '',
+    value: '',
+    tier: '',
+    giftAnimation: '',
+    giftKind: '',
+    recipient: '',
+    giftCount: '',
+    summary: '',
   };
 
   switch (event.type) {
@@ -38,6 +46,13 @@ export function buildTemplateVars(event: StreamEvent, extra: TemplateVars = {}):
       vars.giftImage = event.giftImageUrl ?? '';
       vars.count = String(event.repeatCount);
       vars.diamonds = String(event.totalDiamonds);
+      // Filtered text only — this can be shown on stream or spoken.
+      vars.message = event.detail.displayMessage ?? '';
+      vars.value = giftTotalLabel(event);
+      vars.giftAnimation = giftVisual(event.detail.media) ?? '';
+      vars.giftKind = event.detail.kind;
+      vars.summary = describeGift(event);
+      if ('tier' in event.detail) vars.tier = String(event.detail.tier);
       break;
     case 'like':
       vars.count = String(event.likeCount);
@@ -54,6 +69,10 @@ export function buildTemplateVars(event: StreamEvent, extra: TemplateVars = {}):
       break;
     case 'subscribe':
       vars.months = String(event.subMonths);
+      vars.tier = event.tier ?? event.levelName ?? '';
+      vars.recipient = event.recipient ?? '';
+      vars.giftCount = event.giftCount ? String(event.giftCount) : '';
+      vars.summary = describeSubscribe(event);
       break;
     case 'envelope':
       vars.coins = String(event.coins);

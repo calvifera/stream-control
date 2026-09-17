@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   buildTemplateVars,
+  giftVisual,
+  type GiftShowcaseEvent,
   renderTemplate,
   type AlertsOverlaySettings,
   type StreamEvent,
 } from '@streaming/shared';
 import { onStreamEvent } from '../../lib/store.js';
 import { ANIMATION_CLASS } from '../style.js';
+import { AnimatedText } from '../../lib/AnimatedText.js';
+import { bracketSound, playSound } from '../../lib/giftSounds.js';
 
 interface Props {
   settings: AlertsOverlaySettings;
@@ -15,6 +19,10 @@ interface Props {
 interface Alert {
   id: string;
   text: string;
+  /** The viewer's name, drawn with the name effect wherever NAME_MARK sits in `text`. */
+  name: string;
+  /** A price-bracket sound, which replaces the alert sound for this one. */
+  sound: { sound: string; volume: number } | null;
   avatarUrl: string | null;
   imageUrl: string | null;
 }
@@ -41,7 +49,9 @@ export function AlertsWidget({ settings }: Props): JSX.Element {
       showing.current = true;
       setCurrent(next);
 
-      if (settings.soundUrl && audioRef.current) {
+      if (next.sound) {
+        playSound(next.sound.sound, next.sound.volume);
+      } else if (settings.soundUrl && audioRef.current) {
         audioRef.current.volume = settings.soundVolume;
         audioRef.current.currentTime = 0;
         // Autoplay is blocked until the page has been interacted with in a
@@ -71,7 +81,9 @@ export function AlertsWidget({ settings }: Props): JSX.Element {
           {settings.showAvatar && current.avatarUrl ? (
             <img className="alert-avatar" src={current.avatarUrl} alt="" />
           ) : null}
-          <span className="alert-text">{current.text}</span>
+          <span className="alert-text">
+            <AlertText text={current.text} name={current.name} settings={settings} />
+          </span>
           {settings.showGiftImage && current.imageUrl ? (
             <img className="alert-gift" src={current.imageUrl} alt="" />
           ) : null}
@@ -81,25 +93,69 @@ export function AlertsWidget({ settings }: Props): JSX.Element {
   );
 }
 
+/**
+ * Stands in for the name while the template renders, so the name can then
+ * be drawn as its own animated element. A private-use character, which no
+ * nickname can contain once the template has run.
+ */
+const NAME_MARK = '\uE000';
+
+function AlertText({
+  text,
+  name,
+  settings,
+}: {
+  text: string;
+  name: string;
+  settings: AlertsOverlaySettings;
+}): JSX.Element {
+  const pieces = text.split(NAME_MARK);
+  return (
+    <>
+      {pieces.map((piece, i) => (
+        <span key={i}>
+          {piece}
+          {i < pieces.length - 1 ? <AnimatedText text={name} effect={settings.nameEffect} /> : null}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function toAlert(event: StreamEvent, settings: AlertsOverlaySettings): Alert | null {
   if (!settings.eventTypes.includes(event.type)) return null;
+  // A gift bomb alerts once, from the buyer, not again for every recipient.
+  if (event.type === 'subscribe' && event.giftBombMember) return null;
 
   if (event.type === 'gift') {
     // Wait for the streak to finish, then apply the diamond threshold.
     if (!event.repeatEnd) return null;
-    if (event.totalDiamonds < settings.minDiamonds) return null;
+    // A Power-up's price is not reported; unknown is not the same as free.
+    if (event.detail?.value.known !== false && event.totalDiamonds < settings.minDiamonds) return null;
   }
 
   const template = settings.templates[event.type];
   if (!template) return null;
 
-  const text = renderTemplate(template, buildTemplateVars(event)).trim();
+  const vars = buildTemplateVars(event);
+  const name = vars.nickname ?? '';
+  // Any mark a viewer managed to put in their own message must not become a name.
+  for (const key of Object.keys(vars)) vars[key] = (vars[key] ?? '').split(NAME_MARK).join('');
+  const text = renderTemplate(template, { ...vars, nickname: NAME_MARK }).trim();
   if (!text) return null;
+
+  const showcase =
+    event.type === 'gift' || (event.type === 'subscribe' && event.isGifted)
+      ? (event as GiftShowcaseEvent)
+      : null;
 
   return {
     id: event.id,
     text,
+    name,
+    sound: showcase ? bracketSound(showcase, settings.giftSounds) : null,
     avatarUrl: event.user?.avatarUrl ?? null,
-    imageUrl: event.type === 'gift' ? event.giftImageUrl : null,
+    // The moving version when there is one: a cheermote GIF, an animated sticker.
+    imageUrl: event.type === 'gift' ? ((event.detail && giftVisual(event.detail.media)) ?? event.giftImageUrl) : null,
   };
 }

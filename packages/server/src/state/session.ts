@@ -1,4 +1,4 @@
-import { emptyPlatformStats, normalizeHandle, viewerKey } from '@streaming/shared';
+import { emptyPlatformStats, normalizeHandle, subscriptionWeight, viewerKey } from '@streaming/shared';
 import type {
   LeaderboardEntry,
   Platform,
@@ -173,9 +173,11 @@ export class SessionState {
         break;
       }
       case 'subscribe': {
-        this.stats.subscribers += 1;
+        // A gift bomb counts once, as its size, not again per recipient.
+        const weight = subscriptionWeight(event);
+        this.stats.subscribers += weight;
         this.entryFor(event.user);
-        this.platformStats(event.user.platform).subscribers += 1;
+        this.platformStats(event.user.platform).subscribers += weight;
         break;
       }
       case 'join': {

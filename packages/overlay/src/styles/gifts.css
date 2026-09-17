@@ -1,0 +1,481 @@
+/* Gift sources and in-message emotes. Imported by the widgets that use them. */
+
+/* --------------------------------------------------------------- *
+ * Emotes inside messages
+ * --------------------------------------------------------------- */
+
+/* Sized to the line so an emote reads as a word, not an attachment. */
+.chat-emote {
+  height: 1.5em;
+  width: auto;
+  vertical-align: middle;
+  margin: -0.25em 0.08em;
+  object-fit: contain;
+}
+
+.chat-compact .chat-emote {
+  height: 1.3em;
+  margin-block: -0.2em;
+}
+
+/* The chat log and pop-out. */
+.chatrow-emote {
+  height: 1.6em;
+  width: auto;
+  vertical-align: middle;
+  margin: -0.3em 0.08em;
+  object-fit: contain;
+}
+
+/* Dashboard: the custom media rules editor. */
+.gift-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gift-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 10px;
+}
+
+.gift-rule-preview {
+  height: 64px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  align-self: center;
+}
+
+/* Dashboard: text effect and sound bracket editors. */
+.fx-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 10px;
+}
+
+.fx-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Tall enough that a hop never clips against the box. */
+.fx-preview {
+  padding: 0.35em 0.6em;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.fx-colors,
+.fx-sampler {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fx-color {
+  position: relative;
+  display: inline-flex;
+}
+
+.fx-color input {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.fx-color-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.fx-sounds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fx-bracket {
+  display: grid;
+  grid-template-columns: 110px minmax(160px, 1fr) minmax(120px, 180px) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.fx-bracket-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+}
+
+.fx-bracket-amount,
+.fx-bracket-sound {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .fx-bracket {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* --------------------------------------------------------------- *
+ * Gift spotlight
+ * --------------------------------------------------------------- */
+
+.gift-spotlight {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.gs-frame {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.gs-card {
+  --gs-tier: var(--accent-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--gap) * 0.75);
+  max-width: 100%;
+  text-align: center;
+  text-shadow: var(--text-shadow);
+}
+
+.gs-stage {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.gs-media {
+  object-fit: contain;
+  animation: gs-bob 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45));
+}
+
+.gs-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gs-avatar {
+  width: 1.7em;
+  height: 1.7em;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--gs-tier);
+}
+
+.gs-name {
+  font-weight: 800;
+  color: var(--accent-color);
+  -webkit-text-stroke: var(--text-stroke);
+  paint-order: stroke fill;
+}
+
+.gs-headline {
+  font-weight: 700;
+  -webkit-text-stroke: var(--text-stroke);
+  paint-order: stroke fill;
+}
+
+.gs-value {
+  font-weight: 900;
+  font-size: 1.25em;
+  color: var(--gs-tier);
+  -webkit-text-stroke: var(--text-stroke);
+  paint-order: stroke fill;
+}
+
+.gs-message {
+  max-width: 34em;
+  padding: calc(var(--padding) * 0.6) var(--padding);
+  border-radius: var(--radius);
+  background: var(--item-bg);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.gs-combo {
+  position: absolute;
+  right: -0.4em;
+  bottom: -0.1em;
+  font-size: 1.6em;
+  font-weight: 900;
+  font-style: italic;
+  color: #fff;
+  -webkit-text-stroke: 0.08em #000;
+  paint-order: stroke fill;
+  animation: gs-combo 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* TikTok: its own cyan-and-pink glow behind the gift. */
+.gs-tiktok {
+  --gs-tier: #fe2c55;
+}
+
+.gs-tiktok .gs-stage::before {
+  content: '';
+  position: absolute;
+  inset: 12% 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(37, 244, 238, 0.45), rgba(254, 44, 85, 0.25) 55%, transparent 72%);
+  filter: blur(14px);
+  animation: gs-pulse 1.6s ease-in-out infinite;
+  z-index: -1;
+}
+
+/* Twitch cheer: a burst in the tier colour. */
+.gs-twitch-cheer .gs-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--gs-tier), transparent 68%);
+  opacity: 0.55;
+  filter: blur(18px);
+  animation: gs-pulse 1.2s ease-in-out infinite;
+  z-index: -1;
+}
+
+.gs-twitch-powerup {
+  --gs-tier: #a970ff;
+}
+
+.gs-gigantify .gs-media {
+  animation:
+    gs-gigantify 900ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    gs-bob 2.4s 900ms ease-in-out infinite;
+}
+
+.gs-effect .gs-message {
+  background: linear-gradient(90deg, #ff4d8d, #a970ff, #00c8ff, #3dffa8, #ff4d8d);
+  background-size: 300% 100%;
+  color: #fff;
+  animation: gs-rainbow 3s linear infinite;
+}
+
+.gs-sparkle {
+  line-height: 1;
+  color: #a970ff;
+  animation: gs-spin-pulse 1.8s ease-in-out infinite;
+}
+
+/* YouTube Super Chat: YouTube's own two-tone card. */
+.gs-superchat {
+  --gs-head: #1565c0;
+  --gs-body: #1565c0;
+  --gs-ink: #fff;
+  --gs-tier: var(--gs-body);
+}
+
+.gs-sc {
+  position: relative;
+  overflow: hidden;
+  min-width: 16em;
+  max-width: 34em;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  color: var(--gs-ink);
+  text-shadow: none;
+  text-align: left;
+}
+
+/* A sheen that sweeps across once, like light catching the card. */
+.gs-sc::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: gs-sheen 1.4s 350ms ease-out both;
+  pointer-events: none;
+}
+
+.gs-sc-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(var(--padding) * 0.7) var(--padding);
+  background: var(--gs-head);
+}
+
+.gs-sc-who {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.gs-sc .gs-name {
+  color: inherit;
+  opacity: 0.85;
+  -webkit-text-stroke: 0;
+  font-size: 0.85em;
+}
+
+.gs-sc-amount {
+  font-weight: 900;
+  font-size: 1.2em;
+}
+
+.gs-sc-body {
+  padding: calc(var(--padding) * 0.7) var(--padding);
+  background: var(--gs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* The top band glows, as it is the one people pay for to be seen. */
+.gs-superchat.gs-tier-7 .gs-sc {
+  animation: gs-glow 1.6s ease-in-out infinite;
+}
+
+.gs-supersticker {
+  --gs-tier: var(--gs-body, #1565c0);
+}
+
+.gs-gift-icon {
+  line-height: 1;
+  animation:
+    gs-shake 900ms ease-in-out 2,
+    gs-bob 2.4s 1.8s ease-in-out infinite;
+}
+
+@keyframes gs-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes gs-pulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.45; }
+  50% { transform: scale(1.08); opacity: 0.8; }
+}
+
+@keyframes gs-combo {
+  from { transform: scale(2.2) rotate(-12deg); opacity: 0; }
+  to { transform: scale(1) rotate(-6deg); opacity: 1; }
+}
+
+@keyframes gs-gigantify {
+  from { transform: scale(0.2); }
+  to { transform: scale(1); }
+}
+
+@keyframes gs-rainbow {
+  to { background-position: 300% 0; }
+}
+
+@keyframes gs-spin-pulse {
+  0%, 100% { transform: rotate(0) scale(1); }
+  50% { transform: rotate(180deg) scale(1.2); }
+}
+
+@keyframes gs-sheen {
+  to { transform: translateX(120%); }
+}
+
+@keyframes gs-glow {
+  0%, 100% { box-shadow: 0 0 12px 2px var(--gs-body); }
+  50% { box-shadow: 0 0 32px 8px var(--gs-body); }
+}
+
+@keyframes gs-shake {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-14deg); }
+  40% { transform: rotate(12deg); }
+  60% { transform: rotate(-8deg); }
+  80% { transform: rotate(5deg); }
+}
+
+/* --------------------------------------------------------------- *
+ * Gift rain
+ * --------------------------------------------------------------- */
+
+.gift-rain {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.gift-sprite {
+  position: absolute;
+  top: 0;
+  animation-name: gift-fall;
+  animation-timing-function: cubic-bezier(0.45, 0, 0.75, 1);
+  animation-fill-mode: both;
+  will-change: transform;
+}
+
+.gift-rain-rise .gift-sprite {
+  animation-name: gift-rise;
+  animation-timing-function: cubic-bezier(0.25, 0, 0.55, 1);
+}
+
+.gift-sprite-media {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+}
+
+.gift-sprite-coin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 900;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.25), 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* Starts above the source and ends below it, whatever the source's height. */
+@keyframes gift-fall {
+  from { transform: translate(0, -120%) rotate(0); }
+  90% { opacity: 1; }
+  to { transform: translate(var(--drift), calc(100vh + 20%)) rotate(var(--spin)); opacity: 0.6; }
+}
+
+@keyframes gift-rise {
+  from { transform: translate(0, calc(100vh + 20%)) rotate(0); opacity: 0; }
+  10% { opacity: 1; }
+  to { transform: translate(var(--drift), -120%) rotate(var(--spin)); opacity: 0; }
+}

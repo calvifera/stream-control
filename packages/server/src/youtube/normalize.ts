@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  ChatEvent,
-  GiftEvent,
-  StreamEvent,
-  StreamUser,
-  SubscribeEvent,
-  SystemEvent,
+import {
+  bandForCents,
+  bandForTier,
+  formatUnit,
+  type ChatEvent,
+  type GiftEvent,
+  type StreamEvent,
+  type StreamUser,
+  type SubscribeEvent,
+  type SystemEvent,
 } from '@streaming/shared';
 
 /**
@@ -44,7 +47,12 @@ export interface YouTubeChatMessage {
     textMessageDetails?: { messageText?: string };
     superChatDetails?: YouTubeAmount & { userComment?: string };
     superStickerDetails?: YouTubeAmount & {
-      superStickerMetadata?: { stickerId?: string; altText?: string };
+      superStickerMetadata?: { stickerId?: string; altText?: string; altTextLanguage?: string };
+    };
+    giftMembershipReceivedDetails?: {
+      memberLevelName?: string;
+      gifterChannelId?: string;
+      associatedMembershipGiftingMessageId?: string;
     };
     newSponsorDetails?: { memberLevelName?: string; isUpgrade?: boolean };
     memberMilestoneChatDetails?: {
@@ -89,6 +97,21 @@ export function centsFrom(amount: YouTubeAmount | undefined): number {
   const micros = Number(amount?.amountMicros ?? 0);
   if (!Number.isFinite(micros) || micros <= 0) return 0;
   return Math.round(micros / 10_000);
+}
+
+/**
+ * The Super Chat colour band.
+ *
+ * The API states it as `tier`, which is exact for the viewer's own currency;
+ * the amount is only a fallback, and is read as if it were dollars.
+ */
+function bandOf(amount: YouTubeAmount | undefined, cents: number) {
+  return amount?.tier ? bandForTier(amount.tier) : bandForCents(cents);
+}
+
+/** How the amount reads to a viewer: YouTube's own string, else a number. */
+function amountLabel(amount: YouTubeAmount | undefined, cents: number): string {
+  return amount?.amountDisplayString || formatUnit(cents, 'cents');
 }
 
 export function youtubeUser(author: YouTubeAuthorDetails | undefined): StreamUser {
@@ -183,6 +206,8 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
     case 'superChatEvent': {
       const details = snippet.superChatDetails;
       const cents = centsFrom(details);
+      const band = bandOf(details, cents);
+      const comment = details?.userComment?.trim() || null;
       return {
         ...base(ts),
         type: 'gift',
@@ -199,6 +224,16 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         repeatEnd: true,
         streakable: false,
         totalDiamonds: cents,
+        detail: {
+          kind: 'youtube-super-chat',
+          platform: 'youtube',
+          tier: band.tier,
+          value: { amount: cents, unit: 'cents', known: true, label: amountLabel(details, cents) },
+          media: { imageUrl: null, animationUrl: null },
+          message: comment,
+          displayMessage: comment,
+          colors: band.colors,
+        },
       } satisfies GiftEvent;
     }
 
@@ -206,6 +241,7 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
       const details = snippet.superStickerDetails;
       const cents = centsFrom(details);
       const alt = details?.superStickerMetadata?.altText;
+      const band = bandOf(details, cents);
       return {
         ...base(ts),
         type: 'gift',
@@ -218,6 +254,19 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         repeatEnd: true,
         streakable: false,
         totalDiamonds: cents,
+        detail: {
+          kind: 'youtube-super-sticker',
+          platform: 'youtube',
+          tier: band.tier,
+          stickerLabel: alt ?? null,
+          value: { amount: cents, unit: 'cents', known: true, label: amountLabel(details, cents) },
+          // The Data API names the sticker but gives no picture of it; the
+          // watch-page reader does, and is the default source for that reason.
+          media: { imageUrl: null, animationUrl: null },
+          message: null,
+          displayMessage: null,
+          colors: band.colors,
+        },
       } satisfies GiftEvent;
     }
 
@@ -228,6 +277,7 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         user,
         subMonths: 1,
         isGifted: false,
+        levelName: snippet.newSponsorDetails?.memberLevelName ?? null,
       } satisfies SubscribeEvent;
 
     case 'memberMilestoneChatEvent':
@@ -237,6 +287,7 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         user,
         subMonths: snippet.memberMilestoneChatDetails?.memberMonth ?? 1,
         isGifted: false,
+        levelName: snippet.memberMilestoneChatDetails?.memberLevelName ?? null,
       } satisfies SubscribeEvent;
 
     case 'giftMembershipReceivedEvent':
@@ -246,15 +297,17 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         user,
         subMonths: 1,
         isGifted: true,
+        levelName: snippet.giftMembershipReceivedDetails?.memberLevelName ?? null,
+        // The purchase announcement already counted this one.
+        giftBombMember: true,
       } satisfies SubscribeEvent;
 
     /*
      * Someone buying memberships for other people.
      *
-     * Modelled as one subscribe from the *buyer* rather than N from the
-     * recipients: the recipients each get their own
-     * `giftMembershipReceivedEvent`, so counting both would double every
-     * gifted membership in the session totals.
+     * One subscribe from the *buyer*, carrying the count. The recipients each
+     * get their own `giftMembershipReceivedEvent`, marked as part of this, so
+     * totals count the purchase once rather than twice.
      */
     case 'membershipGiftingEvent':
       return {
@@ -263,6 +316,8 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         user,
         subMonths: 1,
         isGifted: true,
+        giftCount: Math.max(1, snippet.membershipGiftingDetails?.giftMembershipsCount ?? 1),
+        levelName: snippet.membershipGiftingDetails?.giftMembershipsLevelName ?? null,
       } satisfies SubscribeEvent;
 
     case 'chatEndedEvent':

@@ -2,6 +2,9 @@ import type { HighlightTier } from './highlights.js';
 import type { Platform } from './platforms.js';
 import type { StreamEventType } from './events.js';
 import { DEFAULT_TTS_VOICE } from './voices.js';
+import type { GiftMediaRule } from './gifts/media.js';
+import type { GiftSoundSettings } from './gifts/sounds.js';
+import type { TextEffect, TextMotion } from './textEffects.js';
 import type { TrustConfig } from './trust.js';
 
 /* ------------------------------------------------------------------ *
@@ -576,6 +579,8 @@ export const OVERLAY_TYPES = [
   'leaderboard',
   'counter',
   'slideshow',
+  'giftSpotlight',
+  'giftRain',
   'custom',
 ] as const;
 
@@ -680,6 +685,12 @@ export interface ChatOverlaySettings {
    * long message at a glance.
    */
   mergeRuns: boolean;
+  /**
+   * Movement for highlighted names — a wave or a hop running through the
+   * letters. Colours stay the tier's own. Only highlighted viewers move, so
+   * the effect keeps meaning something in a busy chat.
+   */
+  highlightMotion: TextMotion;
 }
 
 export interface AlertsOverlaySettings {
@@ -696,6 +707,83 @@ export interface AlertsOverlaySettings {
   /** URL of a sound to play with the alert. Served from /media. */
   soundUrl: string;
   soundVolume: number;
+  /** Applied to `{{nickname}}` wherever the template uses it. */
+  nameEffect: TextEffect;
+  /**
+   * Gift sounds by price bracket. When on, gifts play their bracket's sound
+   * instead of `soundUrl`; other alerts keep `soundUrl`.
+   */
+  giftSounds: GiftSoundSettings;
+}
+
+/**
+ * One big, animated card per gift, drawn the way its platform draws it.
+ *
+ * Unlike `alerts`, which renders every event type from one text template,
+ * this is built only for paid support, and each platform gets its own
+ * renderer: a TikTok gift with its combo count, a Twitch cheermote at the
+ * right tier, a Super Chat in its colour band with the message on it.
+ */
+export interface GiftSpotlightOverlaySettings {
+  /** Empty shows every platform. */
+  platforms: Platform[];
+  /**
+   * Smallest gift worth a card, per platform, in that platform's own unit:
+   * diamonds, bits, cents. One shared number would mean wildly different
+   * amounts of money on each.
+   */
+  minValue: Record<Platform, number>;
+  /** Also show gift bombs of subs and memberships. */
+  includeGiftedSubs: boolean;
+  durationMs: number;
+  /** Let bigger gifts stay on screen longer, up to twice `durationMs`. */
+  scaleDuration: boolean;
+  showAvatar: boolean;
+  showValue: boolean;
+  /** The viewer's message, filtered. Super Chats and cheers carry one. */
+  showMessage: boolean;
+  /** Height of the gift picture, in px. */
+  mediaSize: number;
+  animation: OverlayAnimation;
+  /**
+   * Fallback sound, used when bracket sounds are off and no media rule names
+   * its own.
+   */
+  soundUrl: string;
+  soundVolume: number;
+  /** Cards waiting beyond this many are dropped, oldest first. 0 keeps all. */
+  maxQueue: number;
+  mediaRules: GiftMediaRule[];
+  nameEffect: TextEffect;
+  valueEffect: TextEffect;
+  /** Sounds by price bracket. A media rule's sound still wins. */
+  sounds: GiftSoundSettings;
+}
+
+export const GIFT_RAIN_DIRECTIONS = ['fall', 'rise'] as const;
+export type GiftRainDirection = (typeof GIFT_RAIN_DIRECTIONS)[number];
+
+/**
+ * Gift pictures raining across the source, one per gift in a combo.
+ *
+ * The ambient counterpart to the spotlight: it never queues, so a busy
+ * stream looks busy instead of falling minutes behind.
+ */
+export interface GiftRainOverlaySettings {
+  platforms: Platform[];
+  minValue: Record<Platform, number>;
+  includeGiftedSubs: boolean;
+  /** Sprites for one event, so a 99× combo does not bury the stream. */
+  maxPerGift: number;
+  /** Hard cap on sprites at once, oldest removed first. */
+  maxOnScreen: number;
+  spriteSize: number;
+  /** Time for one sprite to cross the source. */
+  fallSeconds: number;
+  direction: GiftRainDirection;
+  mediaRules: GiftMediaRule[];
+  /** Off by default: the rain is ambient, and a spotlight usually plays sound. */
+  sounds: GiftSoundSettings;
 }
 
 export interface TtsOverlaySettings {
@@ -761,6 +849,8 @@ export type OverlaySettings =
   | { type: 'leaderboard'; leaderboard: LeaderboardOverlaySettings }
   | { type: 'counter'; counter: CounterOverlaySettings }
   | { type: 'slideshow'; slideshow: SlideshowOverlaySettings }
+  | { type: 'giftSpotlight'; giftSpotlight: GiftSpotlightOverlaySettings }
+  | { type: 'giftRain'; giftRain: GiftRainOverlaySettings }
   | { type: 'custom'; custom: CustomOverlaySettings };
 
 export const SLIDESHOW_TRANSITIONS = [

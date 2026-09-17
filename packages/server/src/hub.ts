@@ -10,6 +10,7 @@ import type { Server, Socket } from 'socket.io';
 import type {
   AppConfig,
   ChatEvent,
+  GiftEvent,
   StreamUser,
   TrustConfig,
   ViewerProfile,
@@ -40,6 +41,7 @@ import { TwitchProfiles } from './twitch/helix.js';
 import { TwitchModeration } from './twitch/moderation.js';
 import { YouTubeModeration } from './youtube/moderation.js';
 import { TwitchLive } from './twitch/live.js';
+import { TwitchCheermotes } from './twitch/cheermotes.js';
 import { AuthManager } from './auth/manager.js';
 import { TtsEngine } from './tts/engine.js';
 import { createLogger } from './logger.js';
@@ -90,6 +92,7 @@ export class Hub {
   readonly twitchModeration: TwitchModeration;
   readonly youtubeModeration: YouTubeModeration;
   readonly twitchLive: TwitchLive;
+  readonly twitchCheermotes: TwitchCheermotes;
 
   private io: TypedServer | null = null;
   private clients = new Map<string, ClientInfo>();
@@ -108,6 +111,10 @@ export class Hub {
     this.tts = new TtsEngine(this.resolveTtsConfig(config));
     this.tiktok = new TikTokManager(config.connection);
     this.twitch = new TwitchManager(config.twitch);
+    // A channel's own cheermotes, when app credentials exist. Its prefixes
+    // tell a cheer apart from an ordinary word ending in a number.
+    this.twitchCheermotes = new TwitchCheermotes(this.auth);
+    this.twitch.setCheerPrefixes(() => this.twitchCheermotes.prefixes());
     this.twitchModeration = new TwitchModeration(
       this.auth,
       config.twitch.moderation,
@@ -122,6 +129,7 @@ export class Hub {
     // was edited.
     if (config.twitch.enabled && config.twitch.channel) {
       this.twitchLive.watch(config.twitch.channel);
+      this.twitchCheermotes.watch(config.twitch.channel);
     }
     this.youtube = new YouTubeManager(config.youtube, this.auth);
     this.youtubeModeration = new YouTubeModeration(this.auth, config.youtube.moderation);
@@ -225,6 +233,7 @@ export class Hub {
     this.twitchModeration.setConfig(next.twitch.moderation, next.twitch.channel);
     this.youtubeModeration.setConfig(next.youtube.moderation);
     this.twitchLive.watch(next.twitch.enabled ? next.twitch.channel : '');
+    this.twitchCheermotes.watch(next.twitch.enabled ? next.twitch.channel : '');
     this.youtube.setConfig(next.youtube);
     this.io?.emit('config', next);
   }
@@ -656,6 +665,35 @@ export class Hub {
   }
 
   /**
+   * Readies a gift's platform detail for the stream.
+   *
+   * The message a viewer pays to attach — a Super Chat's comment, the words
+   * around a cheer — is shown on stream by the gift sources, so it goes
+   * through the same filter chat does. Without this, paying a dollar would
+   * be a way around the wordlist.
+   *
+   * Strikes are not applied here: the filter decides what is shown, and
+   * penalties stay tied to ordinary chat where their thresholds were tuned.
+   */
+  private prepareGift(event: GiftEvent): void {
+    const detail = event.detail;
+    if (detail.message) {
+      detail.displayMessage = this.filters.apply(detail.message, event.user).text;
+    }
+
+    if (detail.kind === 'twitch-cheer') {
+      const custom = this.twitchCheermotes.resolve(detail.prefix, event.totalDiamonds);
+      if (custom?.animationUrl || custom?.imageUrl) {
+        detail.media = {
+          animationUrl: custom.animationUrl ?? detail.media.animationUrl,
+          imageUrl: custom.imageUrl ?? detail.media.imageUrl,
+        };
+        event.giftImageUrl = detail.media.imageUrl;
+      }
+    }
+  }
+
+  /**
    * The single path every event takes: filter -> aggregate -> rules -> fan out.
    *
    * Returns what happened, which is only interesting for a spoofed event: the
@@ -710,6 +748,8 @@ export class Hub {
       // second one for being a retry.
       this.applyTrust(event, result, nearMiss, !struck);
     }
+
+    if (event.type === 'gift') this.prepareGift(event);
 
     if (event.user && this.filters.isUserBlocked(event.user.platform, event.user.uniqueId)) {
       // Blocked users are dropped entirely: no overlay, no stats, no TTS.

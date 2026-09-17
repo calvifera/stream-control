@@ -42,6 +42,7 @@
     "check:google-legacy": "tsx src/checks/google-legacy.ts",
     "check:archive": "tsx src/checks/archive.ts",
     "check:twitch": "tsx src/checks/twitch.ts",
+    "check:gifts": "tsx src/checks/gifts.ts",
     "check:youtube": "tsx src/checks/youtube.ts",
     "check:moderation": "tsx src/checks/moderation.ts",
     "check:secrets": "tsx src/checks/secrets.ts",
