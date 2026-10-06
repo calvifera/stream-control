@@ -174,18 +174,8 @@ export class TrustTracker {
     }
   }
 
-  /**
-   * Counts one chat message and returns the viewer's score after it.
-   *
-   * `record: false` scores a message without remembering it, for test events
-   * that should behave like real ones without leaving a mark.
-   */
-  observe(
-    subject: TrustSubject,
-    message: TrustObservation,
-    config: TrustConfig,
-    record = true,
-  ): TrustAssessment {
+  /** Counts one chat message and returns the viewer's score after it. */
+  observe(subject: TrustSubject, message: TrustObservation, config: TrustConfig): TrustAssessment {
     const now = Date.now();
     const spelling = textSignals(message.text);
     // The filter's own evasion finding is reported alongside, but counted on
@@ -202,24 +192,22 @@ export class TrustTracker {
         spelling.length > 0 ||
         soundsSimilar(block.key, message.text));
 
-    if (record) {
-      const memory = this.memoryFor(subject.key, now);
-      memory.messages += 1;
-      if (message.filtered) memory.filtered += 1;
-      if (message.severity === 'severe') memory.severe += 1;
-      if (message.evasion) memory.evasions += 1;
-      if (spelling.length > 0) memory.oddMessages += 1;
-      if (message.nearMiss) memory.nearMisses += 1;
-      if (retry) memory.retries += 1;
-      // Only a dropped message counts as a block to retry. A censored one was
-      // still delivered, so there is nothing to have another go at.
-      if (message.filtered) {
-        memory.lastBlock = { ts: now, key: message.text, severe: message.severity === 'severe' };
-      }
+    const memory = this.memoryFor(subject.key, now);
+    memory.messages += 1;
+    if (message.filtered) memory.filtered += 1;
+    if (message.severity === 'severe') memory.severe += 1;
+    if (message.evasion) memory.evasions += 1;
+    if (spelling.length > 0) memory.oddMessages += 1;
+    if (message.nearMiss) memory.nearMisses += 1;
+    if (retry) memory.retries += 1;
+    // Only a dropped message counts as a block to retry. A censored one was
+    // still delivered, so there is nothing to have another go at.
+    if (message.filtered) {
+      memory.lastBlock = { ts: now, key: message.text, severe: message.severity === 'severe' };
     }
 
     return {
-      score: this.score(subject, config, record ? undefined : message),
+      score: this.score(subject, config),
       signals,
       retry,
       severeRetry: retry && Boolean(block?.severe),
@@ -245,11 +233,9 @@ export class TrustTracker {
   /**
    * The score, with every factor that moved it.
    *
-   * Starts at 50, which is "nothing known either way". `pending` folds in a
-   * message that was not recorded, so a test event still shows the score it
-   * would have caused.
+   * Starts at 50, which is "nothing known either way".
    */
-  score(subject: TrustSubject, config: TrustConfig, pending?: TrustObservation): TrustScore {
+  score(subject: TrustSubject, config: TrustConfig): TrustScore {
     const factors: TrustFactor[] = [];
     const add = (label: string, delta: number): void => {
       if (delta !== 0) factors.push({ label, delta });
@@ -291,11 +277,11 @@ export class TrustTracker {
 
     const memory = this.memory.get(subject.key);
     const counts = {
-      filtered: (memory?.filtered ?? 0) + (pending?.filtered ? 1 : 0),
-      severe: (memory?.severe ?? 0) + (pending?.severity === 'severe' ? 1 : 0),
-      evasions: (memory?.evasions ?? 0) + (pending?.evasion ? 1 : 0),
-      odd: (memory?.oddMessages ?? 0) + (pending && textSignals(pending.text).length > 0 ? 1 : 0),
-      nearMisses: (memory?.nearMisses ?? 0) + (pending?.nearMiss ? 1 : 0),
+      filtered: memory?.filtered ?? 0,
+      severe: memory?.severe ?? 0,
+      evasions: memory?.evasions ?? 0,
+      odd: memory?.oddMessages ?? 0,
+      nearMisses: memory?.nearMisses ?? 0,
       retries: memory?.retries ?? 0,
     };
 
