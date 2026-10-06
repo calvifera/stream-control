@@ -43,7 +43,7 @@ export function buildTemplateVars(event: StreamEvent, extra: TemplateVars = {}):
       break;
     case 'gift':
       vars.gift = event.giftName;
-      vars.giftImage = event.giftImageUrl ?? '';
+      vars.giftImage = event.detail.media.imageUrl ?? '';
       vars.count = String(event.repeatCount);
       vars.diamonds = String(event.totalDiamonds);
       // Filtered text only — this can be shown on stream or spoken.

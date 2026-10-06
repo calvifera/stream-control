@@ -38,17 +38,22 @@ async function main(): Promise<void> {
         penaltyBox: [],
         trusted: [],
       },
+      // Off so that only the penalty rules are under test. A named viewer is a
+      // stranger, and trust scoring has its own rule — strike a stranger who
+      // retries a blocked term — which would otherwise fire on the very
+      // messages this checks are *not* penalised. That rule is covered in
+      // check:trust.
+      trust: { enabled: false },
     }),
   });
 
   console.log('auto-penalty on a disguised severe term');
 
   // Ethiopic spelling of the severe term — a deliberate bypass.
-  const event = await post<{ user: { uniqueId: string } }>('/test-event', {
-    type: 'chat',
-    text: 'ገበታ',
-  });
-  const offender = event.user.uniqueId.toLowerCase();
+  // Named rather than random: the endpoint reports what happened to the event,
+  // not who the invented viewer was, so the test has to choose its own.
+  const offender = 'penalty-check-offender';
+  await post('/test-event', { type: 'chat', text: 'ገበታ', username: offender });
 
   await new Promise((resolve) => setTimeout(resolve, 400));
   let config = await json<Config>('/config');
@@ -68,42 +73,34 @@ async function main(): Promise<void> {
     }),
   });
 
-  const swear = await post<{ user: { uniqueId: string } }>('/test-event', {
-    type: 'chat',
-    text: 'fiddlesticks',
-  });
+  const swearer = 'penalty-check-swearer';
+  await post('/test-event', { type: 'chat', text: 'fiddlesticks', username: swearer });
   await new Promise((resolve) => setTimeout(resolve, 400));
   config = await json<Config>('/config');
   check(
     'an ordinary blocklist hit records no penalty',
-    !config.users.penaltyBox.some((e) => readViewerKey(e.username).handle === swear.user.uniqueId.toLowerCase()),
+    !config.users.penaltyBox.some((e) => readViewerKey(e.username).handle === swearer),
   );
 
   console.log('\nplainly typed severe term with onlyCountEvasion on');
 
-  const plain = await post<{ user: { uniqueId: string } }>('/test-event', {
-    type: 'chat',
-    text: 'gebeta',
-  });
+  const typist = 'penalty-check-typist';
+  await post('/test-event', { type: 'chat', text: 'gebeta', username: typist });
   await new Promise((resolve) => setTimeout(resolve, 400));
   config = await json<Config>('/config');
   check(
     'no penalty when the term was not disguised',
-    !config.users.penaltyBox.some((e) => readViewerKey(e.username).handle === plain.user.uniqueId.toLowerCase()),
+    !config.users.penaltyBox.some((e) => readViewerKey(e.username).handle === typist),
   );
 
-  console.log('\npenalty box mutes TTS');
+  console.log('\nclearing the penalty box');
 
-  const muted = config.users.penaltyBox[0]?.username;
-  // Stored qualified now; the bare handle is what the assertions compare.
   await json('/config', {
     method: 'PATCH',
-    body: JSON.stringify({
-      users: { penaltyBox: [] },
-      tts: { enabled: true },
-    }),
+    body: JSON.stringify({ users: { penaltyBox: [] } }),
   });
-  check('cleanup left the penalty box empty', muted === undefined || true);
+  config = await json<Config>('/config');
+  check('emptying it takes effect', config.users.penaltyBox.length === 0, JSON.stringify(config.users.penaltyBox));
 
     console.log(`\n${passed} passed, ${failed} failed`);
     if (failed > 0) process.exitCode = 1;

@@ -4,16 +4,17 @@ import {
   MAX_CAPABILITIES,
   PLATFORM_INFO,
   PLATFORMS,
+  routeYouTubeTarget,
   type AppConfig,
   type AuthOverview,
-  type ConnectionStatus,
+  type ConnectionState,
   type Platform,
   type PlatformAuthState,
   type PlatformCapabilities,
 } from '@streaming/shared';
 import { api } from '../lib/api.js';
 import { useLive } from '../lib/store.js';
-import { Panel, StatusDot } from './controls.js';
+import { Panel, StatusDot, Toggle } from './controls.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
 
 /**
@@ -31,6 +32,10 @@ interface Props {
 
 /** Everything a card needs that differs between platforms. */
 interface PlatformWiring {
+  /** Which config section holds this platform's connection settings. */
+  section: 'connection' | 'twitch' | 'youtube';
+  /** What reconnecting means here, where it is more than "try again". */
+  reconnectHint: string;
   /** Current handle/channel, from config. */
   handle: (config: AppConfig) => string;
   /** Persist a changed handle. */
@@ -44,6 +49,8 @@ interface PlatformWiring {
 
 const WIRING: Record<Platform, PlatformWiring> = {
   tiktok: {
+    section: 'connection',
+    reconnectHint: 'Also retries while the host is offline, so you can start this before going live',
     handle: (config) => config.connection.username,
     setHandle: (config, username) => ({ connection: { ...config.connection, username } }),
     connect: (handle) => api.connect(handle),
@@ -52,6 +59,8 @@ const WIRING: Record<Platform, PlatformWiring> = {
     note: 'No sign-in exists for TikTok — the live connection is read-only by nature.',
   },
   twitch: {
+    section: 'twitch',
+    reconnectHint: 'Rejoin the channel if the connection drops',
     handle: (config) => config.twitch.channel,
     setHandle: (config, channel) => ({ twitch: { ...config.twitch, channel } }),
     connect: (handle) => api.twitchConnect(handle),
@@ -60,33 +69,15 @@ const WIRING: Record<Platform, PlatformWiring> = {
     note: 'Chat reads without any sign-in. Registering an app adds avatars; signing in adds moderation.',
   },
   youtube: {
+    section: 'youtube',
+    reconnectHint: 'Keep looking for your broadcast if the connection drops or it has not started yet',
     // Optional for the same reason as the stats slice: between rebuilding the
     // dashboard and restarting the server, this section does not exist yet.
     // Reading straight through it would throw and take the whole tab down,
     // which is a far worse failure than an empty field.
     handle: (config) => config.youtube?.videoId || config.youtube?.handle || '',
-    /*
-     * One field for two different things, routed by shape.
-     *
-     * A channel and a video are separate settings underneath, but nobody
-     * arrives holding "a channel id" — they arrive holding something they
-     * copied, and it is a @handle, a channel URL or a link to the stream.
-     * Asking which kind it is would be asking the reader to know something
-     * the string already says. Setting one clears the other, because holding
-     * both would leave which one wins to guesswork.
-     */
-    setHandle: (config, value) => {
-      const trimmed = value.trim();
-      const looksLikeVideo =
-        /(?:v=|youtu\.be\/|\/live\/)[\w-]{11}/.test(trimmed) || /^[\w-]{11}$/.test(trimmed);
-      return {
-        youtube: {
-          ...(config.youtube ?? {}),
-          videoId: looksLikeVideo ? trimmed : '',
-          handle: looksLikeVideo ? '' : trimmed,
-        },
-      };
-    },
+    // One field for a stream or a channel, routed by what was typed.
+    setHandle: (config, value) => ({ youtube: { ...(config.youtube ?? {}), ...routeYouTubeTarget(value) } }),
     connect: (handle) => api.youtubeConnect(handle),
     disconnect: () => api.youtubeDisconnect(),
     placeholder: '@handle, channel link, or a video link',
@@ -120,7 +111,6 @@ export function PlatformsPanel({ config, patch }: Props): JSX.Element {
       title="Platforms"
       description="Connect each service and sign in where it unlocks more. Everything you connect feeds one chat log."
     >
-
       <div className="platform-grid">
         {PLATFORMS.map((platform) => (
           <PlatformCard
@@ -128,7 +118,7 @@ export function PlatformsPanel({ config, patch }: Props): JSX.Element {
             platform={platform}
             config={config}
             patch={patch}
-            status={connections[platform]?.status ?? 'idle'}
+            state={connections[platform]}
             auth={auth?.[platform] ?? null}
             onAuthChanged={reload}
           />
@@ -142,24 +132,26 @@ function PlatformCard({
   platform,
   config,
   patch,
-  status,
+  state,
   auth,
   onAuthChanged,
 }: {
   platform: Platform;
   config: AppConfig;
   patch: (partial: Record<string, unknown>) => void;
-  status: ConnectionStatus;
+  state: ConnectionState | undefined;
   auth: PlatformAuthState | null;
   onAuthChanged: () => void;
 }): JSX.Element {
   const info = PLATFORM_INFO[platform];
   const wiring = WIRING[platform];
+  const status = state?.status ?? 'idle';
+  const options = config[wiring.section];
   const [handle, setHandleLocal] = useState(() => wiring.handle(config));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Another dashboard (or the Connect tab) may change the handle underneath us.
+  // Another open dashboard may change the handle underneath us.
   useEffect(() => setHandleLocal(wiring.handle(config)), [config, wiring]);
 
   const live = status === 'connected' || status === 'connecting' || status === 'reconnecting';
@@ -242,7 +234,7 @@ function PlatformCard({
               type="button"
               className="chip chip-signin"
               disabled={busy || !auth.appConfigured}
-              title={auth.appConfigured ? undefined : 'Needs client credentials in .env first'}
+              title={auth.appConfigured ? undefined : "Add this platform's client credentials on the Keys tab first"}
               onClick={signIn}
             >
               <PlatformLogo platform={platform} size={13} color="currentColor" />
@@ -252,14 +244,37 @@ function PlatformCard({
         ) : null}
       </div>
 
+      {/* Why it is not connected is the thing you need while it is not, and
+          the status word alone ("error") does not say. */}
+      <p className="platform-detail muted">
+        {state?.roomId ? <span>room {state.roomId}</span> : null}
+        {state?.reconnectAttempts ? <span>retry #{state.reconnectAttempts}</span> : null}
+        {state?.lastError ? <span className="error-text">{state.lastError}</span> : null}
+      </p>
+
       {platform === 'youtube' ? <YouTubeSource config={config} patch={patch} auth={auth} /> : null}
       {error ? <p className="muted platform-note platform-error">{error}</p> : null}
       {platform === 'youtube' && live && config.youtube?.source === 'api' ? <QuotaMeter /> : null}
       {auth ? <CapabilityList platform={platform} capabilities={auth.capabilities} /> : null}
+
       {auth?.nextStep ? <p className="muted platform-note">{auth.nextStep}</p> : null}
       {!auth?.nextStep && wiring.note ? (
         <p className="muted platform-note">{wiring.note}</p>
       ) : null}
+
+      <div className="platform-options">
+        <Toggle
+          label="Reconnect automatically"
+          hint={wiring.reconnectHint}
+          checked={options.autoReconnect}
+          onChange={(autoReconnect) => patch({ [wiring.section]: { autoReconnect } })}
+        />
+        <Toggle
+          label="Connect on startup"
+          checked={options.connectOnStartup}
+          onChange={(connectOnStartup) => patch({ [wiring.section]: { connectOnStartup } })}
+        />
+      </div>
     </div>
   );
 }

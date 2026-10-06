@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  describeGiftWithMessage,
-  describeSubscribe,
+  describeEvent,
   nameColor,
   PLATFORM_INFO,
-  tierFor,
+  tierForEvent,
   tierStyle,
   type ChatOverlaySettings,
-  type HighlightTier,
   type StreamEvent,
   type StreamUser,
   type TextEffect,
@@ -118,7 +116,7 @@ export function ChatWidget({ settings }: Props): JSX.Element {
       event,
       // Resolved once per row here rather than in the JSX: it walks every
       // tier, and a chat overlay re-renders on every single message.
-      tier: highlightOf(event, tiers),
+      tier: tierForEvent(tiers, event),
       continues:
         settings.mergeRuns &&
         event.type === 'chat' &&
@@ -212,18 +210,6 @@ function tierEffect(motion: ChatOverlaySettings['highlightMotion']): TextEffect 
  * them (an old one from the replay buffer, or a spoofed one) reads as zero,
  * which correctly means "not notable" rather than throwing.
  */
-function highlightOf(event: StreamEvent, tiers: readonly HighlightTier[]): HighlightTier | null {
-  if (!event.user || tiers.length === 0) return null;
-  return tierFor(tiers, {
-    platform: event.user.platform,
-    isSubscriber: event.user.isSubscriber,
-    isModerator: event.user.isModerator,
-    isHost: event.user.isHost,
-    sessionGiven: event.giving?.session ?? 0,
-    lifetimeGiven: event.giving?.lifetime ?? 0,
-  });
-}
-
 /** Same person, for run collapsing. Keyed on the pair, never the handle. */
 function sameSpeaker(event: StreamEvent, previous: StreamEvent | undefined): boolean {
   if (!previous?.user || !event.user) return false;
@@ -281,18 +267,6 @@ function Body({ event }: { event: StreamEvent }): JSX.Element {
 }
 
 function describe(event: StreamEvent): string {
-  switch (event.type) {
-    case 'chat':
-      return event.displayText ?? '';
-    case 'gift':
-      return describeGiftWithMessage(event);
-    case 'follow':
-      return 'followed the stream';
-    case 'subscribe':
-      return describeSubscribe(event);
-    case 'join':
-      return 'joined';
-    default:
-      return '';
-  }
+  if (event.type === 'chat') return event.displayText ?? '';
+  return describeEvent(event) ?? '';
 }

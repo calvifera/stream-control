@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { describeGiftWithMessage, describeSubscribe, STREAM_EVENT_LABELS, type StreamEvent } from '@streaming/shared';
+import { describeEvent, type StreamEvent } from '@streaming/shared';
 import { TestEventPanel } from './TestEventPanel.js';
 import { useLive } from '../lib/store.js';
 import { Panel } from './controls.js';
@@ -94,34 +94,11 @@ export function LogTab(): JSX.Element {
 
 function summarize(event: StreamEvent): string {
   const who = event.user ? `@${event.user.uniqueId}` : '';
-  switch (event.type) {
-    case 'chat':
-      return event.displayText === null
-        ? `${who} — dropped (${event.filterReason ?? 'filtered'})`
-        : `${who}: ${event.displayText}${event.filtered ? ' (filtered)' : ''}`;
-    case 'gift':
-      return `${who} ${describeGiftWithMessage(event)}`;
-    case 'follow':
-      return `${who} followed`;
-    case 'share':
-      return `${who} shared`;
-    case 'like':
-      return `${who} sent ${event.likeCount} likes`;
-    case 'join':
-      return `${who} joined`;
-    case 'subscribe':
-      return `${who} ${describeSubscribe(event)}`;
-    case 'envelope':
-      return `${who} dropped a ${event.coins}-coin treasure box`;
-    case 'question':
-      return `${who} asked: ${event.text}`;
-    case 'roomStats':
-      return `${event.viewerCount} viewers`;
-    case 'streamEnd':
-      return event.reason;
-    case 'system':
-      return event.text;
-    case 'emote':
-      return `${who} sent an emote`;
+  if (event.type === 'chat') {
+    return event.displayText === null
+      ? `${who} — dropped (${event.filterReason ?? 'filtered'})`
+      : `${who}: ${event.displayText}${event.filtered ? ' (filtered)' : ''}`;
   }
+  // Events with nobody behind them, like the viewer count, have no name to lead with.
+  return [who, describeEvent(event)].filter(Boolean).join(' ');
 }

@@ -6,10 +6,9 @@
  * mysterious). With GOOGLE_TTS_API_KEY set it does a real round trip.
  * Never prints the key.
  */
-import fs from 'node:fs';
-import { CONFIG_PATH } from '../env.js';
 import { GoogleTtsProvider } from '../tts/providers/google.js';
 import { pitchMultiplierToSemitones, TtsProviderError } from '../tts/providers/types.js';
+import { googleTtsApiKey } from './credentials.js';
 
 let passed = 0;
 let failed = 0;
@@ -22,17 +21,6 @@ const check = (label: string, ok: boolean, detail = ''): void => {
     console.error(`FAIL  ${label}${detail ? ` — ${detail}` : ''}`);
   }
 };
-
-function apiKey(): string {
-  try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as {
-      tts?: { google?: { apiKey?: string } };
-    };
-    return process.env.GOOGLE_TTS_API_KEY?.trim() || config.tts?.google?.apiKey?.trim() || '';
-  } catch {
-    return process.env.GOOGLE_TTS_API_KEY?.trim() ?? '';
-  }
-}
 
 function looksLikeMp3(buffer: Buffer): boolean {
   if (buffer.length < 4) return false;
@@ -64,7 +52,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const key = apiKey();
+  const key = googleTtsApiKey();
   if (!key) {
     console.log('\nNo GOOGLE_TTS_API_KEY set — skipping the live round trip.');
     console.log('Add a key to .env and re-run to verify synthesis end to end.');

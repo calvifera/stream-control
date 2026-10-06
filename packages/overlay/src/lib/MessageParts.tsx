@@ -44,10 +44,12 @@ export function MessageParts({
 /**
  * The parts to draw for a chat line, or null to use its text instead.
  *
- * Only when the filter left the message alone. A censored message's text no
- * longer matches the positions its emotes were given, so it is shown as
- * filtered text without pictures rather than with pictures in the wrong
- * places — and a dropped one shows nothing at all.
+ * This is the viewer-facing form, matched to `displayText`: a message the
+ * filter dropped shows nothing, and one it merely changed shows its pictures
+ * re-fitted to the cleaned text. Treating any change as a reason to hide them
+ * is what made stickers vanish from messages whose only fault was a curly
+ * quote. The host's own flagged lines show the text as sent, and use
+ * `originalParts` for the pictures that go with it.
  */
 export function renderableParts(event: ChatEvent | EmoteEvent): readonly MessagePart[] | null {
   if (event.type === 'emote') {
@@ -55,6 +57,12 @@ export function renderableParts(event: ChatEvent | EmoteEvent): readonly Message
     const fromUrls = event.emoteUrls.map((url): MessagePart => ({ type: 'emote', name: '[emote]', url }));
     return fromUrls.length > 0 ? fromUrls : null;
   }
-  if (event.filtered || event.displayText === null) return null;
+  if (event.displayText === null) return null;
+  const parts = event.displayParts ?? event.parts;
+  return hasEmotes(parts) ? (parts ?? null) : null;
+}
+
+/** The pictures that go with `event.text` — for a line that shows the message as sent. */
+export function originalParts(event: ChatEvent): readonly MessagePart[] | null {
   return hasEmotes(event.parts) ? (event.parts ?? null) : null;
 }

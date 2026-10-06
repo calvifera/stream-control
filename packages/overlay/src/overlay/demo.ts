@@ -113,8 +113,6 @@ function demoGift(user: StreamUser): GiftEvent {
       ...shared,
       giftId: `cheer-${tier}`,
       giftName: 'Bits',
-      giftImageUrl: globalCheermoteUrl(bits, { animated: false }),
-      diamondCount: bits,
       repeatCount: 1,
       streakable: false,
       totalDiamonds: bits,
@@ -129,6 +127,8 @@ function demoGift(user: StreamUser): GiftEvent {
           animationUrl: globalCheermoteUrl(bits),
         },
         message: cheerText,
+        // Invented text that never meets the filter, so it is shown as is. A real
+        // event gets this from the server after filtering.
         displayMessage: cheerText,
         colors: { primary: CHEER_TIER_COLORS[tier], secondary: CHEER_TIER_COLORS[tier], text: '#fff' },
       },
@@ -143,8 +143,6 @@ function demoGift(user: StreamUser): GiftEvent {
       ...shared,
       giftId: 'super-chat',
       giftName: 'Super Chat',
-      giftImageUrl: null,
-      diamondCount: cents,
       repeatCount: 1,
       streakable: false,
       totalDiamonds: cents,
@@ -167,8 +165,6 @@ function demoGift(user: StreamUser): GiftEvent {
     ...shared,
     giftId: gift.name.toLowerCase().replace(/\s+/g, '-'),
     giftName: gift.name,
-    giftImageUrl: null,
-    diamondCount: gift.diamonds,
     repeatCount,
     streakable: gift.diamonds <= 100,
     totalDiamonds: gift.diamonds * repeatCount,
@@ -274,10 +270,9 @@ export const DEMO_STATS: SessionStats = {
     tiktok: {
       viewers: 189,
       peakViewers: 341,
-      // Far larger than `seen`, which is the point: most of an audience never
-      // does anything we can observe.
+      // Far larger than `chatters`: most of an audience never does anything
+      // we can observe.
       reportedTotal: 2140,
-      seen: 604,
       chatters: 74,
       messages: 431,
       diamonds: 2160,
@@ -291,7 +286,6 @@ export const DEMO_STATS: SessionStats = {
       viewers: null,
       peakViewers: 0,
       reportedTotal: null,
-      seen: 58,
       chatters: 22,
       messages: 81,
       diamonds: 0,

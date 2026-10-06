@@ -1,12 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { randomUUID } from 'node:crypto';
 import type {
   ConnectionState,
   StreamEvent,
-  SystemEvent,
   TwitchConnectionConfig,
 } from '@streaming/shared';
 import { createLogger, describeError } from '../logger.js';
+import { systemEvent } from '../systemEvent.js';
 import { parseIrc, twitchEventFrom } from './normalize.js';
 
 const log = createLogger('twitch');
@@ -14,22 +13,6 @@ const log = createLogger('twitch');
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443';
 /** Twitch drops silent connections; it PINGs, but this is the backstop. */
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
-
-const systemEvent = (level: SystemEvent['level'], text: string): SystemEvent => ({
-  id: randomUUID(),
-  ts: Date.now(),
-  platform: 'twitch',
-  type: 'system',
-  user: null,
-  level,
-  text,
-});
-
-export interface TwitchManagerEvents {
-  event: (event: StreamEvent) => void;
-  state: (state: ConnectionState) => void;
-  sessionStart: () => void;
-}
 
 /**
  * Reads a Twitch channel's chat over anonymous IRC.
@@ -192,7 +175,7 @@ export class TwitchManager extends EventEmitter {
       });
       log.info(`Connected to #${target}`);
       this.emit('sessionStart');
-      this.push(systemEvent('info', `Connected to Twitch #${target}`));
+      this.push(systemEvent('twitch', 'info', `Connected to Twitch #${target}`));
       return;
     }
 
@@ -210,7 +193,7 @@ export class TwitchManager extends EventEmitter {
   private fail(reason: string): void {
     log.warn(`Twitch: ${reason}`);
     this.patch({ status: 'error', lastError: reason, connectedAt: null });
-    this.push(systemEvent('error', `Twitch: ${reason}`));
+    this.push(systemEvent('twitch', 'error', `Twitch: ${reason}`));
     this.teardown();
     this.scheduleReconnect();
   }

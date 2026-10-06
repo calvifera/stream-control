@@ -9,10 +9,9 @@
  *
  * Never prints the session id.
  */
-import fs from 'node:fs';
 import { TTS_VOICE_CODES } from '@streaming/shared';
-import { CONFIG_PATH } from '../env.js';
 import { synthesizeWithTikTok, TtsError } from '../tts/tiktokProvider.js';
+import { tiktokSessionId } from './credentials.js';
 
 /**
  * Union of every code seen across the maintained community lists plus the
@@ -58,15 +57,6 @@ const CANDIDATES: string[] = [
 const CONCURRENCY = 3;
 const PROBE_TEXT = 'test';
 
-function sessionId(): string {
-  try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as { tts?: { sessionId?: string } };
-    return process.env.TIKTOK_SESSION_ID?.trim() || config.tts?.sessionId?.trim() || '';
-  } catch {
-    return process.env.TIKTOK_SESSION_ID?.trim() ?? '';
-  }
-}
-
 interface Outcome {
   code: string;
   ok: boolean;
@@ -100,7 +90,7 @@ async function probe(code: string, session: string): Promise<Outcome> {
 }
 
 async function main(): Promise<void> {
-  const session = sessionId();
+  const session = tiktokSessionId();
   if (!session) {
     console.error('No session id found — set TIKTOK_SESSION_ID or paste one in the dashboard.');
     process.exitCode = 1;

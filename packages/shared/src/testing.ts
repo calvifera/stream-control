@@ -82,14 +82,6 @@ export interface TestEventOutcome {
   synthetic: boolean;
 }
 
-export const DEFAULT_TEST_SPEC: TestEventSpec = {
-  type: 'chat',
-  platform: 'tiktok',
-  count: 1,
-  intervalMs: 400,
-  recordToArchive: false,
-};
-
 /**
  * Common viewer shapes, so the usual cases are one click rather than six
  * toggles.

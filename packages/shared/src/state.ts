@@ -33,20 +33,12 @@ export interface PlatformSessionStats {
   /**
    * Everyone who tuned in at all, as the *platform* counts it.
    *
-   * Null where the platform does not report it. Worth having next to `seen`
-   * because the two measure different things and the platform's is the larger
-   * and more honest one: `seen` can only count people who did something
-   * observable, and most of an audience never does.
+   * Null where the platform does not report it. There is no count of our own
+   * to put beside it: a chat connection only ever sees people who do
+   * something, and most of an audience never does, so anything we tallied
+   * would understate the stream badly.
    */
   reportedTotal: number | null;
-  /**
-   * Distinct people seen at all this session, by any event.
-   *
-   * The closest thing to "how many turned up" that a chat connection can
-   * answer, and always far larger than `chatters` — most of an audience never
-   * types anything.
-   */
-  seen: number;
   /** Distinct people who sent at least one message. */
   chatters: number;
   messages: number;
@@ -63,7 +55,6 @@ export function emptyPlatformStats(): PlatformSessionStats {
     viewers: null,
     peakViewers: 0,
     reportedTotal: null,
-    seen: 0,
     chatters: 0,
     messages: 0,
     diamonds: 0,

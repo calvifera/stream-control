@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './env.js';
@@ -36,6 +37,7 @@ export const SECRET_KEYS = [
   'TIKTOK_TARGET_IDC',
   'GOOGLE_TTS_API_KEY',
   'NGROK_AUTHTOKEN',
+  'TUNNEL_BASIC_AUTH',
   'TWITCH_CLIENT_ID',
   'TWITCH_CLIENT_SECRET',
   'GOOGLE_CLIENT_ID',
@@ -66,7 +68,16 @@ export interface SecretStatus {
 
 const SECRETS_PATH = path.join(DATA_DIR, 'secrets.json');
 
-export class SecretStore {
+/**
+ * Emits `change` (with the key) whenever a value is saved or cleared.
+ *
+ * Publishing onto `process.env` reaches anything that reads it at the moment
+ * it needs it. It does not reach anything that copied the value earlier — the
+ * TTS providers and the TikTok signing key both do — so those listen for this
+ * and look again. Without it, a key pasted into the dashboard would sit unused
+ * until some unrelated setting happened to change.
+ */
+export class SecretStore extends EventEmitter {
   private values = new Map<SecretKey, string>();
   /**
    * What `.env` held before this store touched anything.
@@ -80,6 +91,7 @@ export class SecretStore {
   private readonly baseEnv = new Map<SecretKey, string>();
 
   constructor() {
+    super();
     for (const key of SECRET_KEYS) {
       const value = process.env[key]?.trim();
       if (value) this.baseEnv.set(key, value);
@@ -145,6 +157,7 @@ export class SecretStore {
     this.apply();
     // Deliberately logs the key and not the value.
     log.info(`Saved ${key} (${trimmed.length} chars)`);
+    this.emit('change', key);
   }
 
   /** Removes the dashboard's value, revealing whatever `.env` holds. */
@@ -159,6 +172,7 @@ export class SecretStore {
     else delete process.env[key];
 
     log.info(`Cleared ${key}`);
+    this.emit('change', key);
   }
 
   /**

@@ -57,8 +57,64 @@ export const PLATFORM_INFO: Record<Platform, PlatformInfo> = {
   },
 };
 
+/**
+ * The site each platform's public profile pages live on.
+ *
+ * One table, so the page a profile link is built for and the sites the server
+ * agrees to open for one cannot drift apart.
+ */
+export const PROFILE_HOSTS: Record<Platform, string> = {
+  tiktok: 'www.tiktok.com',
+  twitch: 'www.twitch.tv',
+  youtube: 'www.youtube.com',
+};
+
+/**
+ * The public profile page for a viewer, or null when there is no way to build
+ * one from what is known.
+ *
+ * YouTube needs the channel id with its original casing, which is why the
+ * platform user id is taken as well as the handle: the handle is stored
+ * lowercased, and YouTube channel ids are case-sensitive.
+ */
+export function profileUrl(platform: Platform, handle: string, userId: string): string | null {
+  const clean = handle.trim().replace(/^@/, '');
+  const base = `https://${PROFILE_HOSTS[platform]}`;
+  switch (platform) {
+    case 'tiktok':
+      return clean ? `${base}/@${encodeURIComponent(clean)}` : null;
+    case 'twitch':
+      return clean ? `${base}/${encodeURIComponent(clean)}` : null;
+    case 'youtube': {
+      const id = /^UC[\w-]{22}$/.test(userId) ? userId : '';
+      return id ? `${base}/channel/${id}` : null;
+    }
+    default:
+      return null;
+  }
+}
+
 export const isPlatform = (value: unknown): value is Platform =>
   typeof value === 'string' && (PLATFORMS as readonly string[]).includes(value);
+
+/**
+ * Decides whether what somebody typed for YouTube names a stream or a channel.
+ *
+ * One field serves both, because nobody arrives holding "a channel id" — they
+ * arrive holding something they copied, and it is a @handle, a channel link or
+ * a link to the stream. The string already says which; asking would be asking
+ * them to know something it tells us. The two results are mutually exclusive,
+ * since holding both leaves which one wins to guesswork.
+ *
+ * Lives here because the dashboard and the server both route by it, and two
+ * copies of a regex are two chances for them to disagree about what a string is.
+ */
+export function routeYouTubeTarget(input: string): { videoId: string; handle: string } {
+  const trimmed = input.trim();
+  const looksLikeVideo =
+    /(?:v=|youtu\.be\/|\/live\/)[\w-]{11}/.test(trimmed) || /^[\w-]{11}$/.test(trimmed);
+  return looksLikeVideo ? { videoId: trimmed, handle: '' } : { videoId: '', handle: trimmed };
+}
 
 /**
  * Canonical handle form: lowercase, no leading `@`, trimmed.

@@ -102,25 +102,12 @@ async function main(): Promise<void> {
     });
   }
 
-  // Twitch had this setting in its schema from the start and nothing ever read
-  // it, so turning it on did nothing at all. `enabled` is checked too because
-  // it is Twitch's master switch — it already gates auto-reconnect, and a
-  // disabled platform reconnecting itself at boot would be the one place that
-  // switch did not hold.
-  if (
-    config.twitch.connectOnStartup &&
-    config.twitch.enabled &&
-    config.twitch.channel
-  ) {
-    hub.twitch.connect();
-  }
+  if (config.twitch.connectOnStartup && config.twitch.channel) hub.connectTwitch();
 
   // No videoId check, unlike Twitch's channel: YouTube finds whichever
   // broadcast on your own channel is live, so blank is the normal case rather
   // than a missing setting.
-  if (config.youtube.connectOnStartup && config.youtube.enabled) {
-    hub.youtube.connect();
-  }
+  if (config.youtube.connectOnStartup) hub.connectYouTube();
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {

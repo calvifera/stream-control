@@ -39,10 +39,3 @@ export function stripEmoteCodes(text: string): string {
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
-
-/** Whether the text carries at least one shortcode. */
-export function hasEmoteCodes(text: string): boolean {
-  if (!text.includes('[')) return false;
-  SHORTCODE.lastIndex = 0;
-  return SHORTCODE.test(text);
-}

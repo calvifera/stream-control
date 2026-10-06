@@ -41,13 +41,11 @@ export class SessionState {
   private stats: SessionStats = emptyStats();
   private users = new Map<string, LeaderboardEntry>();
   private chatters = new Set<string>();
-  private seen = new Set<string>();
 
   reset(): void {
     this.stats = emptyStats();
     this.users.clear();
     this.chatters.clear();
-    this.seen.clear();
   }
 
   getStats(): SessionStats {
@@ -89,15 +87,6 @@ export class SessionState {
     // disconnect does not un-happen it.
     const slice = this.stats.platforms[platform];
     if (slice) slice.viewers = null;
-  }
-
-  /** True the first time a given user id shows up this session. */
-  markSeen(user: StreamUser | null): boolean {
-    const userId = user ? viewerKey(user.platform, user.userId) : '';
-    if (!userId || this.seen.has(userId)) return false;
-    this.seen.add(userId);
-    if (user) this.platformStats(user.platform).seen += 1;
-    return true;
   }
 
   private entryFor(user: StreamUser): LeaderboardEntry {

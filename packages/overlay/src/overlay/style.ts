@@ -76,7 +76,17 @@ export function nameColor(uniqueId: string): string {
   return `hsl(${hash}, 85%, 68%)`;
 }
 
+/**
+ * Compact enough to sit in a strip: 1.2K rather than 1,240.
+ *
+ * Guards against a non-number rather than trusting the type. The dashboard is
+ * rebuilt and reloaded long before the server it talks to is restarted, so
+ * "this field does not exist yet" is a normal state, not a broken one — and
+ * `Math.round(undefined)` renders a confident `NaN` that looks like a real
+ * measurement.
+ */
 export function formatNumber(value: number): string {
+  if (!Number.isFinite(value)) return '—';
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
   return String(Math.round(value));

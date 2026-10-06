@@ -14,8 +14,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { MPEGDecoder } from 'mpg123-decoder';
-import { DATA_DIR, CONFIG_PATH, ensureDirs } from '../env.js';
+import { DATA_DIR, ensureDirs } from '../env.js';
 import { GoogleTtsProvider } from '../tts/providers/google.js';
+import { googleTtsApiKey } from './credentials.js';
 
 /** The exact parameters observed in Tikfinity's network traffic. */
 const REFERENCE = {
@@ -28,17 +29,6 @@ const REFERENCE = {
 
 const SENTENCE = 'Thanks for the follow, welcome to the stream';
 const OUT_DIR = path.join(DATA_DIR, 'voice-match');
-
-function apiKey(): string {
-  try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as {
-      tts?: { google?: { apiKey?: string } };
-    };
-    return process.env.GOOGLE_TTS_API_KEY?.trim() || config.tts?.google?.apiKey?.trim() || '';
-  } catch {
-    return process.env.GOOGLE_TTS_API_KEY?.trim() ?? '';
-  }
-}
 
 async function fetchReference(gender: 'male' | 'female'): Promise<Buffer> {
   const url = new URL('https://www.google.com/speech-api/v2/synthesize');
@@ -151,7 +141,7 @@ function tierOf(name: string): string {
 }
 
 async function main(): Promise<void> {
-  const key = apiKey();
+  const key = googleTtsApiKey();
   if (!key) {
     console.error('No Google API key found — add one on the TTS tab or in .env.');
     process.exitCode = 1;

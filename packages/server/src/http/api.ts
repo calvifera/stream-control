@@ -33,7 +33,7 @@ import { formatConfigError } from '../config/store.js';
 import { createTestEvent } from '../testEvents.js';
 import { recentLogs } from '../logger.js';
 import type { ArchiveContext, KnownUser } from '../state/directory.js';
-import { synthesizeWithTikTok, TIKTOK_TTS_ENDPOINTS } from '../tts/tiktokProvider.js';
+import { TIKTOK_TTS_ENDPOINTS } from '../tts/tiktokProvider.js';
 import type { ProviderId } from '../tts/providers/types.js';
 import type { TunnelController } from '../tunnel.js';
 import { env } from '../env.js';
@@ -416,14 +416,7 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
   router.post(
     '/twitch/connect',
     wrap((req, res) => {
-      const channel = String((req.body as { channel?: string })?.channel ?? '').trim();
-      const current = hub.config.get().twitch;
-      // Enabling here rather than making the caller send it separately: asking
-      // to connect *is* the intent to have it enabled.
-      hub.config.update({
-        twitch: { ...current, channel: channel || current.channel, enabled: true },
-      });
-      hub.twitch.connect(channel || undefined);
+      hub.connectTwitch(String((req.body as { channel?: string })?.channel ?? '').trim());
       res.json(hub.twitch.getState());
     }),
   );
@@ -431,8 +424,7 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
   router.post(
     '/twitch/disconnect',
     wrap((_req, res) => {
-      hub.twitch.disconnect();
-      hub.config.update({ twitch: { ...hub.config.get().twitch, enabled: false } });
+      hub.disconnectTwitch();
       res.json(hub.twitch.getState());
     }),
   );
@@ -440,30 +432,7 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
   router.post(
     '/youtube/connect',
     wrap((req, res) => {
-      /*
-       * A video id, a watch URL, a @handle or a channel URL — routed by shape.
-       *
-       * This used to write whatever it was given straight into `videoId`,
-       * from a caller that sends whatever is in the Setup field. Once that
-       * field started accepting handles, pressing Connect stamped the handle
-       * into `videoId` as well, and the reader dutifully went looking for a
-       * video called "@calvifera". Routing here rather than trusting the
-       * caller means the two fields cannot contradict each other no matter
-       * who calls this.
-       */
-      const target = String((req.body as { videoId?: string })?.videoId ?? '').trim();
-      const current = hub.config.get().youtube;
-
-      const looksLikeVideo =
-        /(?:v=|youtu\.be\/|\/live\/)[\w-]{11}/.test(target) || /^[\w-]{11}$/.test(target);
-      const routed = target
-        ? looksLikeVideo
-          ? { videoId: target, handle: '' }
-          : { videoId: '', handle: target }
-        : { videoId: current.videoId, handle: current.handle };
-
-      hub.config.update({ youtube: { ...current, ...routed, enabled: true } });
-      hub.youtube.connect();
+      hub.connectYouTube(String((req.body as { videoId?: string })?.videoId ?? '').trim());
       res.json(hub.youtube.getState());
     }),
   );
@@ -471,8 +440,7 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
   router.post(
     '/youtube/disconnect',
     wrap((_req, res) => {
-      hub.youtube.disconnect();
-      hub.config.update({ youtube: { ...hub.config.get().youtube, enabled: false } });
+      hub.disconnectYouTube();
       res.json(hub.youtube.getState());
     }),
   );
@@ -1031,7 +999,7 @@ export function createApiRouter(hub: Hub, tunnel: TunnelController): Router {
       asError(res, 403, 'Profiles open on the machine running the server, so this only works there.');
       return;
     }
-    const url = hub.viewerProfile(req.params.key ?? '')?.profileUrl;
+    const url = hub.viewerProfileUrl(req.params.key ?? '');
     if (!url || !openExternal(url)) {
       asError(res, 404, 'This viewer has no profile page to open.');
       return;

@@ -3,7 +3,6 @@ import {
   listKey,
   meanVisitMs,
   PLATFORM_INFO,
-  PLATFORMS,
   RETENTION_BUCKETS,
   retentionRates,
   type AppConfig,
@@ -398,7 +397,7 @@ function ArchiveSummary({
     >
       {scope && scope.viewers === 0 ? (
         <p className="muted">
-          Nothing recorded from {label} yet. Connect it in the Chat tab and these fill in as
+          Nothing recorded from {label} yet. Connect it on the Setup tab and these fill in as
           people show up.
         </p>
       ) : (

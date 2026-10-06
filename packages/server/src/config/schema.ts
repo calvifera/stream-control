@@ -1,8 +1,9 @@
-import { listKey, PLATFORMS } from '@streaming/shared';
+import { listKey, PLATFORMS, type Platform, type TextEffect } from '@streaming/shared';
 import { z } from 'zod';
 import {
   FALLBACK_PROVIDER_KEY,
   CHAT_DENSITIES,
+  DEFAULT_GIFT_MIN_VALUE,
   GIFT_MEDIA_KINDS,
   GIFT_RAIN_DIRECTIONS,
   HOP_EFFECT,
@@ -10,6 +11,7 @@ import {
   TEXT_FILLS,
   TEXT_MOTIONS,
   WAVE_GRADIENT_EFFECT,
+  cloneTextEffect,
   defaultSoundSettings,
   DEFAULT_HIGHLIGHTS,
   DEFAULT_TRUST,
@@ -49,8 +51,8 @@ const mediaUrl = z
 const giftMediaRule = z.object({
   id: z.string().min(1).max(64),
   enabled: z.boolean().default(true),
-  platform: z.enum([...PLATFORMS, 'any'] as [string, ...string[]]).default('any'),
-  kinds: z.array(z.enum(GIFT_MEDIA_KINDS as unknown as [string, ...string[]])).default([]),
+  platform: z.enum([...PLATFORMS, 'any'] as const).default('any'),
+  kinds: z.array(z.enum(GIFT_MEDIA_KINDS)).default([]),
   giftName: z.string().max(80).default(''),
   minValue: z.number().int().min(0).default(0),
   mediaUrl: mediaUrl.default(''),
@@ -60,7 +62,7 @@ const giftMediaRule = z.object({
 /** Colours are CSS strings; kept short so a config file cannot smuggle markup. */
 const cssColor = z.string().max(64).regex(/^[#a-zA-Z0-9(),.%\s-]+$/, 'Use a CSS colour');
 
-const textEffect = (fallback: typeof NO_TEXT_EFFECT) =>
+const textEffect = (fallback: TextEffect) =>
   z
     .object({
       motion: z.enum(TEXT_MOTIONS),
@@ -69,7 +71,7 @@ const textEffect = (fallback: typeof NO_TEXT_EFFECT) =>
       amplitude: z.number().min(0).max(0.6),
       speed: z.number().min(0.3).max(20),
     })
-    .default({ ...fallback, colors: [...fallback.colors] });
+    .default(() => cloneTextEffect(fallback));
 
 const soundBracket = z.object({
   id: z.string().min(1).max(64),
@@ -90,15 +92,29 @@ const soundSettings = (enabled: boolean) =>
       volume: z.number().min(0).max(1),
       brackets: z.array(soundBracket).max(50),
     })
-    .default(defaultSoundSettings(enabled));
+    .default(() => defaultSoundSettings(enabled));
 
+/** One minimum per platform, taken from `PLATFORMS` so a new platform gets one. */
 const platformThresholds = z
-  .object({
-    tiktok: z.number().int().min(0),
-    twitch: z.number().int().min(0),
-    youtube: z.number().int().min(0),
-  })
-  .default({ tiktok: 1, twitch: 1, youtube: 0 });
+  .object(
+    Object.fromEntries(PLATFORMS.map((platform) => [platform, z.number().int().min(0)])) as Record<
+      Platform,
+      z.ZodNumber
+    >,
+  )
+  .default(() => ({ ...DEFAULT_GIFT_MIN_VALUE }));
+
+/**
+ * The fields both gift sources share, with the defaults a new source starts
+ * from. Spread into each source's own object.
+ */
+const giftFeedFields = (soundsEnabled: boolean) => ({
+  platforms: z.array(z.enum(PLATFORMS)).default([]),
+  minValue: platformThresholds,
+  includeGiftedSubs: z.boolean().default(true),
+  mediaRules: z.array(giftMediaRule).max(200).default([]),
+  sounds: soundSettings(soundsEnabled),
+});
 
 export const gateSchema = z.object({
   followersOnly: z.boolean(),
@@ -351,12 +367,10 @@ export const ttsSchema = z.object({
   enabled: z.boolean(),
   provider: z.enum(['tiktok', 'google', 'google-legacy', 'browser']),
   google: z.object({
-    apiKey: z.string(),
     defaultVoice: z.string(),
     languageCode: z.string(),
   }),
   googleLegacy: z.object({ defaultVoice: z.string() }),
-  sessionId: z.string(),
   // The TTS route 404s without a trailing slash. Repairing it here migrates
   // configs saved before that was understood, and stops a hand-typed URL from
   // silently failing.
@@ -511,9 +525,7 @@ const settingsSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('giftSpotlight'),
     giftSpotlight: z.object({
-      platforms: z.array(z.enum(PLATFORMS)).default([]),
-      minValue: platformThresholds,
-      includeGiftedSubs: z.boolean().default(true),
+      ...giftFeedFields(true),
       durationMs: z.number().min(500).max(60000),
       scaleDuration: z.boolean().default(true),
       showAvatar: z.boolean().default(true),
@@ -524,25 +536,19 @@ const settingsSchema = z.discriminatedUnion('type', [
       soundUrl: mediaUrl.default(''),
       soundVolume: z.number().min(0).max(1).default(0.7),
       maxQueue: z.number().int().min(0).max(500).default(20),
-      mediaRules: z.array(giftMediaRule).max(200).default([]),
       nameEffect: textEffect(WAVE_GRADIENT_EFFECT),
       valueEffect: textEffect(HOP_EFFECT),
-      sounds: soundSettings(true),
     }),
   }),
   z.object({
     type: z.literal('giftRain'),
     giftRain: z.object({
-      platforms: z.array(z.enum(PLATFORMS)).default([]),
-      minValue: platformThresholds,
-      includeGiftedSubs: z.boolean().default(true),
+      ...giftFeedFields(false),
       maxPerGift: z.number().int().min(1).max(200).default(25),
       maxOnScreen: z.number().int().min(1).max(500).default(120),
       spriteSize: z.number().int().min(8).max(1000).default(72),
       fallSeconds: z.number().min(0.5).max(60).default(5),
       direction: z.enum(GIFT_RAIN_DIRECTIONS).default('fall'),
-      mediaRules: z.array(giftMediaRule).max(200).default([]),
-      sounds: soundSettings(false),
     }),
   }),
   z.object({
@@ -584,7 +590,6 @@ export const overlaySchema = z
 export const tunnelSchema = z.object({
   enabled: z.boolean(),
   domain: z.string(),
-  basicAuth: z.string(),
 });
 
 /**

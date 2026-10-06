@@ -138,26 +138,3 @@ export interface ViewerProfile {
     held: string | null;
   }>;
 }
-
-/**
- * The public profile page for a viewer.
- *
- * YouTube needs the channel id with its original casing, which is why the
- * platform user id is taken as well as the handle: the handle is stored
- * lowercased, and YouTube channel ids are case-sensitive.
- */
-export function profileUrl(platform: Platform, handle: string, userId: string): string | null {
-  const clean = handle.trim().replace(/^@/, '');
-  switch (platform) {
-    case 'tiktok':
-      return clean ? `https://www.tiktok.com/@${encodeURIComponent(clean)}` : null;
-    case 'twitch':
-      return clean ? `https://www.twitch.tv/${encodeURIComponent(clean)}` : null;
-    case 'youtube': {
-      const id = /^UC[\w-]{22}$/.test(userId) ? userId : '';
-      return id ? `https://www.youtube.com/channel/${id}` : null;
-    }
-    default:
-      return null;
-  }
-}

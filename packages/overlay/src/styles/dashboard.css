@@ -827,10 +827,8 @@ select.input option { background: var(--bg-raised); color: var(--text); }
   border: 1px solid var(--border);
   background: var(--bg-input);
   font-size: 12.5px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
+  /* Block flow, not flex: a banner is a sentence, and in a flex container each
+     bold word and code chip becomes its own column. */
   line-height: 1.55;
   position: relative;
   overflow: hidden;
@@ -983,8 +981,7 @@ select.input option { background: var(--bg-raised); color: var(--text); }
 
 .rule-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 
-.rule-item,
-.source-card {
+.rule-item {
   width: 100%;
   appearance: none;
   font: inherit;
@@ -1004,29 +1001,24 @@ select.input option { background: var(--bg-raised); color: var(--text); }
 }
 
 .rule-item { padding: 11px 13px 11px 28px; }
-.source-card { padding: 13px 13px 13px 28px; }
 
-.rule-item:hover,
-.source-card:hover {
+.rule-item:hover {
   border-color: var(--border-bright);
   background: var(--bg-hover);
   transform: translateX(2px);
 }
 
 .rule-item .dot { position: absolute; left: 12px; top: 16px; }
-.source-card .dot { position: absolute; left: 12px; top: 18px; }
 
 /* Selected state: accent left edge plus a wash, so it stays obvious
  * even when several cards are hovered in sequence. */
-.rule-item-on,
-.source-card-on {
+.rule-item-on {
   border-color: var(--accent-line);
   background: linear-gradient(100deg, var(--accent-soft), rgba(37, 244, 238, 0.03));
   box-shadow: 0 0 20px -10px rgba(37, 244, 238, 0.8);
 }
 
-.rule-item-on::before,
-.source-card-on::before {
+.rule-item-on::before {
   content: '';
   position: absolute;
   left: 0;
@@ -1037,20 +1029,13 @@ select.input option { background: var(--bg-raised); color: var(--text); }
   box-shadow: 0 0 10px var(--accent);
 }
 
-.rule-item-on:hover,
-.source-card-on:hover { transform: translateX(2px); background: linear-gradient(100deg, var(--accent-soft), rgba(37, 244, 238, 0.03)); }
+.rule-item-on:hover { transform: translateX(2px); background: linear-gradient(100deg, var(--accent-soft), rgba(37, 244, 238, 0.03)); }
 
 .rule-name { font-weight: 650; }
-.rule-item .muted, .source-card .muted { font-size: 11px; }
+.rule-item .muted { font-size: 11px; }
 
 .rule-editor { min-width: 0; }
 .rule-form { display: flex; flex-direction: column; gap: 15px; }
-
-.source-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 11px;
-}
 
 /* --------------------------------------------------------------- *
  * Login gate
@@ -1998,7 +1983,6 @@ select.input option { background: var(--bg-raised); color: var(--text); }
 
 .chatlog-tab:hover { color: var(--text); background: var(--bg-hover); }
 .chatlog-tab-on { color: var(--text); border-color: var(--border-bright); background: var(--bg-raised); }
-.chatlog-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 
 .chatlog-scroll {
   flex: 1 1 auto;
@@ -2242,19 +2226,6 @@ select.input option { background: var(--bg-raised); color: var(--text); }
 
 .chatrow-actions button:hover { color: var(--text); border-color: var(--border-bright); }
 
-.chatlog-toast {
-  position: fixed;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-raised);
-  border: 1px solid var(--border-bright);
-  border-radius: 999px;
-  padding: 7px 15px;
-  font-size: 12.5px;
-  z-index: 50;
-}
-
 /* ---- Platform cards ---- */
 
 .platform-grid {
@@ -2283,8 +2254,29 @@ select.input option { background: var(--bg-raised); color: var(--text); }
   font-size: 14px;
 }
 .platform-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); }
-.platform-handle { margin: 0; font-size: 13px; }
 .platform-note { margin: 0; font-size: 11.5px; line-height: 1.45; }
+
+/* Room, retry count and the last error. Empty while all is well. */
+.platform-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.platform-detail:empty { display: none; }
+
+/* Pinned to the foot of the card so the switches line up across all three,
+   however much explanation sits above them. */
+.platform-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 
 .platform-input {
   background: var(--bg-input);
@@ -3020,8 +3012,6 @@ body.chat-popout-body::after {
  * Credentials
  * --------------------------------------------------------------- */
 
-.cred-intro { max-width: 72ch; margin: 0; }
-.cred-intro code { font-size: 12px; }
 
 .cred-head {
   display: flex;

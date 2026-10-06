@@ -11,6 +11,22 @@ export { GoogleLegacyProvider } from './googleLegacy.js';
 export { TikTokTtsProvider } from './tiktok.js';
 
 /**
+ * The credentials are not in the config, which every overlay is sent. They are
+ * read from the environment, where the secret store publishes them and where a
+ * plain `.env` puts them.
+ */
+const tiktokSettings = (config: TtsConfig) => ({
+  sessionId: env.ttSessionId ?? '',
+  apiBaseUrl: config.apiBaseUrl,
+});
+
+const googleSettings = (config: TtsConfig) => ({
+  apiKey: env.googleTtsApiKey ?? '',
+  defaultVoice: config.google.defaultVoice,
+  languageCode: config.google.languageCode,
+});
+
+/**
  * Holds one adapter per backend and keeps them in step with the config.
  *
  * `browser` has no adapter: it is synthesized in the overlay by the Web Speech
@@ -22,30 +38,21 @@ export class ProviderRegistry {
   private readonly googleLegacy: GoogleLegacyProvider;
 
   constructor(config: TtsConfig) {
-    this.tiktok = new TikTokTtsProvider({
-      sessionId: config.sessionId.trim() || env.ttSessionId || '',
-      apiBaseUrl: config.apiBaseUrl,
-    });
-    this.google = new GoogleTtsProvider({
-      apiKey: config.google.apiKey.trim() || env.googleTtsApiKey || '',
-      defaultVoice: config.google.defaultVoice,
-      languageCode: config.google.languageCode,
-    });
+    this.tiktok = new TikTokTtsProvider(tiktokSettings(config));
+    this.google = new GoogleTtsProvider(googleSettings(config));
     this.googleLegacy = new GoogleLegacyProvider({
       defaultVoice: config.googleLegacy.defaultVoice,
     });
   }
 
+  /**
+   * Re-reads the config and the credentials. Call it when either changes: the
+   * adapters keep what they were given, so a key saved after startup does not
+   * reach them until this runs.
+   */
   update(config: TtsConfig): void {
-    this.tiktok.setConfig({
-      sessionId: config.sessionId.trim() || env.ttSessionId || '',
-      apiBaseUrl: config.apiBaseUrl,
-    });
-    this.google.setConfig({
-      apiKey: config.google.apiKey.trim() || env.googleTtsApiKey || '',
-      defaultVoice: config.google.defaultVoice,
-      languageCode: config.google.languageCode,
-    });
+    this.tiktok.setConfig(tiktokSettings(config));
+    this.google.setConfig(googleSettings(config));
     this.googleLegacy.setConfig({ defaultVoice: config.googleLegacy.defaultVoice });
   }
 

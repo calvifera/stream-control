@@ -194,7 +194,6 @@ console.log('\nthe per-platform split');
       platform,
       user: { platform, userId, uniqueId: userId, nickname: userId },
       giftName: 'Rose',
-      diamondCount: diamonds,
       repeatCount: 1,
       totalDiamonds: diamonds,
       streakable: false,
@@ -202,7 +201,6 @@ console.log('\nthe per-platform split');
     }) as unknown as StreamEvent;
 
   const feed = (event: StreamEvent): void => {
-    session.markSeen(event.user);
     session.ingest(event);
   };
 
@@ -222,7 +220,6 @@ console.log('\nthe per-platform split');
   // Two of TikTok's three messages are the same person. A chatter count that
   // just counted messages would make a busy regular look like a crowd.
   check('repeat messages are one chatter', tiktok?.chatters, 2);
-  check('seen counts people, not events', tiktok?.seen, 2);
   check('diamonds are split', [tiktok?.diamonds, twitch?.diamonds], [500, 40]);
 
   // The split has to reconcile with the headline totals, or one of the two is

@@ -1,18 +1,9 @@
-import {
-  listKey,
-  PLATFORM_INFO,
-  profileUrl,
-  readViewerKey,
-  userKey,
-  viewerKey,
-} from '@streaming/shared';
+import { listKey, PLATFORM_INFO, readViewerKey, routeYouTubeTarget, userKey, viewerKey } from '@streaming/shared';
 import type { Server, Socket } from 'socket.io';
 import type {
   AppConfig,
   ChatEvent,
   GiftEvent,
-  StreamUser,
-  TrustConfig,
   ViewerProfile,
   ProfileUpdate,
   TestEventOutcome,
@@ -24,11 +15,13 @@ import type {
   TunnelState,
 } from '@streaming/shared';
 import { ConfigStore } from './config/store.js';
-import { FilterEngine, type FilterResult } from './pipeline/filters.js';
-import { TrustTracker, type TrustSubject } from './state/trust.js';
+import { FilterEngine } from './pipeline/filters.js';
+import { ChatScreen } from './pipeline/chatScreen.js';
+import { TrustTracker } from './state/trust.js';
+import { buildViewerProfile, viewerProfileUrl } from './state/viewerProfile.js';
 import { RuleEngine, type RuleRejection } from './pipeline/rules.js';
 import { SessionState } from './state/session.js';
-import { UserDirectory, normalize } from './state/directory.js';
+import { UserDirectory } from './state/directory.js';
 import { RetentionTracker } from './state/retention.js';
 import { ReviewFeed } from './state/review.js';
 import { AvatarStore } from './state/avatars.js';
@@ -46,6 +39,7 @@ import { AuthManager } from './auth/manager.js';
 import { TtsEngine } from './tts/engine.js';
 import { createLogger } from './logger.js';
 import { env } from './env.js';
+import { secrets } from './secrets.js';
 
 const log = createLogger('hub');
 
@@ -82,6 +76,7 @@ export class Hub {
   readonly slideshows = new SlideshowStore();
   readonly avatarPoller: AvatarPoller;
   readonly filters: FilterEngine;
+  private readonly chatScreen: ChatScreen;
   readonly rules = new RuleEngine();
   readonly tts: TtsEngine;
   readonly tiktok: TikTokManager;
@@ -108,7 +103,15 @@ export class Hub {
     const config = this.config.get();
     this.avatarPoller = new AvatarPoller(this.directory, this.avatars);
     this.filters = new FilterEngine(config.filters, config.users.severe);
-    this.tts = new TtsEngine(this.resolveTtsConfig(config));
+    this.chatScreen = new ChatScreen({
+      config: this.config,
+      filters: this.filters,
+      review: this.review,
+      trust: this.trust,
+      directory: this.directory,
+      strike: (event, reason) => this.strike(event, reason),
+    });
+    this.tts = new TtsEngine(config.tts);
     this.tiktok = new TikTokManager(config.connection);
     this.twitch = new TwitchManager(config.twitch);
     // A channel's own cheermotes, when app credentials exist. Its prefixes
@@ -161,6 +164,12 @@ export class Hub {
     });
 
     this.config.on('change', (next: AppConfig) => this.onConfigChange(next));
+    // The providers read their keys when configured, not when they synthesize,
+    // so a key saved on the Keys tab has to reconfigure them rather than wait
+    // for an unrelated setting to change.
+    secrets.on('change', () => {
+      this.tts.setConfig(this.config.get().tts);
+    });
     this.tiktok.on('event', (event: StreamEvent) => this.handleEvent(event));
     this.tiktok.on('state', () => this.broadcastConnections());
     this.tiktok.on('sessionStart', () => {
@@ -216,18 +225,9 @@ export class Hub {
     ];
   }
 
-  /**
-   * The dashboard field wins, but an env var means the session id never has to
-   * be typed into a UI that might be exposed through the tunnel.
-   */
-  private resolveTtsConfig(config: AppConfig): AppConfig['tts'] {
-    const sessionId = config.tts.sessionId.trim() || env.ttSessionId || '';
-    return { ...config.tts, sessionId };
-  }
-
   private onConfigChange(next: AppConfig): void {
     this.filters.setConfig(next.filters, next.users.severe);
-    this.tts.setConfig(this.resolveTtsConfig(next));
+    this.tts.setConfig(next.tts);
     this.tiktok.setConfig(next.connection);
     this.twitch.setConfig(next.twitch);
     this.twitchModeration.setConfig(next.twitch.moderation, next.twitch.channel);
@@ -301,12 +301,49 @@ export class Hub {
     }
   }
 
-  /** Returns true when a strike was recorded. */
-  private considerPenalty(event: ChatEvent, severity: string, evasion: boolean, reason: string): boolean {
-    if (severity !== 'severe') return false;
-    const auto = this.config.get().users.autoPenalty;
-    if (auto.onlyCountEvasion && !evasion) return false;
-    return this.strike(event, reason);
+  /*
+   * Connecting Twitch and YouTube.
+   *
+   * Their `enabled` setting means "the connection is wanted": connecting turns
+   * it on, disconnecting turns it off, and a dropped connection is retried
+   * only while it is on. Asking to connect *is* the intent to have it
+   * enabled, so these are the only places that change it, and everything that
+   * connects goes through them — the Connect buttons and "Connect on startup"
+   * alike. Gating startup on a stale `enabled` instead made that toggle do
+   * nothing on a first run and after any manual Disconnect.
+   */
+
+  connectTwitch(channel?: string): void {
+    const current = this.config.get().twitch;
+    this.config.update({ twitch: { ...current, channel: channel || current.channel, enabled: true } });
+    this.twitch.connect(channel || undefined);
+  }
+
+  disconnectTwitch(): void {
+    this.twitch.disconnect();
+    this.config.update({ twitch: { ...this.config.get().twitch, enabled: false } });
+  }
+
+  /**
+   * `target` may be a video id, a watch URL, a @handle or a channel URL, and is
+   * routed by shape. It used to be written straight into `videoId`, from a
+   * caller that sends whatever is in the Setup field; once that field accepted
+   * handles, pressing Connect stamped the handle into `videoId` as well, and
+   * the reader went looking for a video called "@calvifera". Routing here means
+   * the two fields cannot contradict each other no matter who calls this.
+   */
+  connectYouTube(target?: string): void {
+    const current = this.config.get().youtube;
+    const routed = target
+      ? routeYouTubeTarget(target)
+      : { videoId: current.videoId, handle: current.handle };
+    this.config.update({ youtube: { ...current, ...routed, enabled: true } });
+    this.youtube.connect();
+  }
+
+  disconnectYouTube(): void {
+    this.youtube.disconnect();
+    this.config.update({ youtube: { ...this.config.get().youtube, enabled: false } });
   }
 
   /**
@@ -360,159 +397,25 @@ export class Hub {
     return true;
   }
 
-  /** The facts about a viewer that trust scoring reads. */
-  private trustSubject(key: string, user: StreamUser | null): TrustSubject {
-    const users = this.config.get().users;
-    return {
-      key,
-      known: this.directory.get(key),
-      onTrustedList: users.trusted.some((entry) => listKey(entry) === key),
-      isHost: user?.isHost ?? false,
-      isModerator: user?.isModerator ?? false,
-      isSubscriber: user?.isSubscriber ?? false,
-      isFollower: user?.isFollower ?? false,
-      isVerified: user?.isVerified ?? false,
-      fansClubLevel: user?.fansClubLevel ?? 0,
-    };
-  }
-
-  /**
-   * Scores the speaker, decides whether trust holds this message back from
-   * speech, and strikes a deliberate retry of a severe term.
-   *
-   * Runs before the directory counts the message, so "new viewer" means the
-   * messages they had sent before this one.
-   */
-  private applyTrust(
-    event: ChatEvent,
-    result: FilterResult,
-    nearMiss: boolean,
-    allowStrike: boolean,
-  ): void {
-    const config = this.config.get().trust;
-    const key = userKey(event.user);
-    const subject = this.trustSubject(key, event.user);
-
-    const assessment = this.trust.observe(
-      subject,
-      {
-        text: event.text,
-        filtered: result.text === null,
-        severity: result.severity,
-        evasion: result.evasion,
-        nearMiss,
-      },
-      // Test events are counted too. This memory only lasts the session, and
-      // counting them is what lets the test panel show a retry being caught.
-      config,
-    );
-    const { score } = assessment;
-
-    let held: string | null = null;
-    if (config.enabled && result.text !== null && score.band !== 'trusted') {
-      if (score.strict && nearMiss) {
-        held = 'low trust: sounds like a severe term';
-      } else if (score.strict && assessment.signals.length > 0) {
-        held = `low trust: ${assessment.signals[0]}`;
-      } else if (config.holdNewViewers && this.isHeldAsNew(subject, config)) {
-        held = `new viewer: speech starts after ${config.holdMessages} messages or ${config.holdMinutes} minutes`;
-      }
-    }
-
-    event.trust = { score: score.score, band: score.band, held, signals: assessment.signals };
-    if (held) this.trust.markHeld(key);
-
-    if (allowStrike && config.enabled && config.strikeOnRetry && assessment.severeRetry && score.strict) {
-      this.strike(event, 'retried a severe term after it was blocked');
-    }
-  }
-
-  /**
-   * Whether a viewer is still inside the new-viewer hold.
-   *
-   * Held while both limits are unmet, so a limit of zero turns the hold off.
-   * Subscribers and anyone who has gifted skip it: they have already put
-   * something in.
-   */
-  private isHeldAsNew(subject: TrustSubject, config: TrustConfig): boolean {
-    if (subject.isSubscriber) return false;
-    const known = subject.known;
-    if ((known?.diamonds ?? 0) > 0 || (known?.gifts ?? 0) > 0) return false;
-    const messages = known?.messages ?? 0;
-    const minutes = (Date.now() - (known?.firstSeen ?? Date.now())) / 60_000;
-    return messages < config.holdMessages && minutes < config.holdMinutes;
-  }
-
-  /**
-   * Everything the chat panel shows when you click a viewer, or null for
-   * someone this server has no record of.
-   */
+  /** What the chat panel shows when you click a viewer. See `buildViewerProfile`. */
   viewerProfile(reference: string): ViewerProfile | null {
-    const { platform, handle } = readViewerKey(reference);
-    const key = viewerKey(platform, handle);
-    const known = this.directory.get(key);
-    const live = this.session.findByHandle(platform, handle);
+    return buildViewerProfile(reference, {
+      config: this.config.get(),
+      directory: this.directory,
+      session: this.session,
+      trust: this.trust,
+      avatars: this.avatars,
+      history: this.history,
+    });
+  }
 
-    const chats = this.history.filter(
-      (event): event is ChatEvent => event.type === 'chat' && userKey(event.user) === key,
-    );
-    const user = live?.user ?? chats[chats.length - 1]?.user ?? null;
-    if (!known && !user) return null;
-
-    const config = this.config.get();
-    const subject = this.trustSubject(key, user);
-    const session = this.trust.sessionFor(key);
-    const username = known?.username ?? handle;
-    const userId = user?.userId || known?.userId || '';
-
-    return {
-      key,
-      platform,
-      username,
-      displayName: user?.nickname || known?.displayName || handle,
-      avatarUrl: this.avatars.publicPath(username) ?? user?.avatarUrl ?? known?.avatarUrl ?? null,
-      profileUrl: profileUrl(platform, username, userId),
-      trusted: subject.onTrustedList,
-      muted: config.users.penaltyBox.some((entry) => listKey(entry.username) === key),
-      moderator: subject.isModerator,
-      subscriber: subject.isSubscriber,
-      follower: subject.isFollower,
-      verified: subject.isVerified,
-      followerCount: user?.followerCount ?? 0,
-      trust: this.trust.score(subject, config.trust),
-      session: {
-        messages: live?.comments ?? 0,
-        gifts: live?.gifts ?? 0,
-        diamonds: live?.diamonds ?? 0,
-        likes: live?.likes ?? 0,
-        shares: live?.shares ?? 0,
-        filtered: session.filtered,
-        held: session.held,
-        firstSeen: session.firstSeen,
-      },
-      lifetime: known
-        ? {
-            firstSeen: known.firstSeen,
-            lastSeen: known.lastSeen,
-            daysSeen: known.daysSeen ?? 1,
-            messages: known.messages,
-            gifts: known.gifts ?? 0,
-            diamonds: known.diamonds ?? 0,
-            follows: known.follows ?? 0,
-            strikes: known.strikes,
-          }
-        : null,
-      recent: chats
-        .slice(-5)
-        .reverse()
-        .map((event) => ({
-          ts: event.ts,
-          text: event.redacted ? '[removed by filter]' : event.text,
-          filtered: event.filtered,
-          severity: event.filterSeverity,
-          held: event.trust?.held ?? null,
-        })),
-    };
+  /** The viewer's public page on their platform. See `viewerProfileUrl`. */
+  viewerProfileUrl(reference: string): string | null {
+    return viewerProfileUrl(reference, {
+      directory: this.directory,
+      session: this.session,
+      history: this.history,
+    });
   }
 
   attach(io: TypedServer): void {
@@ -677,9 +580,9 @@ export class Hub {
    */
   private prepareGift(event: GiftEvent): void {
     const detail = event.detail;
-    if (detail.message) {
-      detail.displayMessage = this.filters.apply(detail.message, event.user).text;
-    }
+    // Set here for every gift, not only the ones with a message: this is what
+    // makes `displayMessage` safe to show. A normalizer leaves it null.
+    detail.displayMessage = detail.message ? this.filters.apply(detail.message, event.user).text : null;
 
     if (detail.kind === 'twitch-cheer') {
       const custom = this.twitchCheermotes.resolve(detail.prefix, event.totalDiamonds);
@@ -688,7 +591,6 @@ export class Hub {
           animationUrl: custom.animationUrl ?? detail.media.animationUrl,
           imageUrl: custom.imageUrl ?? detail.media.imageUrl,
         };
-        event.giftImageUrl = detail.media.imageUrl;
       }
     }
   }
@@ -707,46 +609,9 @@ export class Hub {
     let filterReason: string | null = null;
 
     if (event.type === 'chat') {
-      const result = this.filters.apply(event.text, event.user);
-      event.displayText = result.text;
-      event.filtered = result.filtered;
-      event.filterReason = result.reason;
-      event.redacted = result.redact;
-      event.filterSeverity = result.severity;
-      filtered = result.filtered;
-      filterReason = result.reason;
-      const struck = this.considerPenalty(
-        event,
-        result.severity,
-        result.evasion,
-        result.reason ?? 'severe term',
-      );
-
-      // Only for what got through — a message the filter already stopped
-      // needs no review. The review feed never changes the outcome; trust
-      // uses the same check to decide whether speech skips the message.
-      const current = this.config.get();
-      const filterConfig = current.filters;
-      const terms = [...current.users.severe.words, ...current.users.severe.phrases];
-      const nearMiss =
-        filterConfig.enabled &&
-        result.text !== null &&
-        terms.length > 0 &&
-        (filterConfig.reviewNearMatches || current.trust.enabled) &&
-        this.review.sounds(event.text, terms);
-
-      if (nearMiss && filterConfig.reviewNearMatches) {
-        for (const entry of this.review.observe(event.text, event.user.uniqueId, terms)) {
-          log.info(
-            `Near miss: "${entry.phrase}" sounds like "${entry.term}" ` +
-              `(@${event.user.uniqueId}) — review it in the Filters tab`,
-          );
-        }
-      }
-
-      // A message that already earned a strike for evasion doesn't earn a
-      // second one for being a retry.
-      this.applyTrust(event, result, nearMiss, !struck);
+      const screened = this.chatScreen.screen(event);
+      filtered = screened.filtered;
+      filterReason = screened.filterReason;
     }
 
     if (event.type === 'gift') this.prepareGift(event);
@@ -783,9 +648,6 @@ export class Hub {
       this.directory.record(event);
     }
 
-    if (event.type !== 'roomStats') {
-      this.session.markSeen(event.user ?? null);
-    }
     this.session.ingest(event);
 
     // Stamped after both totals have taken this event in, so the gift that
@@ -799,12 +661,7 @@ export class Hub {
     }
 
     const config = this.config.get();
-    // Trust holds speech only. The message still reaches chat and overlays.
-    const held = event.type === 'chat' ? (event.trust?.held ?? null) : null;
-    const { matches, rejections } =
-      held && config.tts.enabled
-        ? { matches: [], rejections: [{ ruleId: 'trust', ruleName: 'Trust score', reason: held }] }
-        : this.rules.evaluate(event, this.resolveTtsConfig(config), this.session, config.users);
+    const { matches, rejections } = this.rules.evaluate(event, config.tts, this.session, config.users);
 
     const outcome: TestEventOutcome = {
       eventId: event.id,

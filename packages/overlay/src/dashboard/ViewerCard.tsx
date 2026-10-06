@@ -9,6 +9,7 @@ import {
 import { api } from '../lib/api.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
 import { inPanelShell } from '../lib/panelWindow.js';
+import { formatNumber } from '../overlay/style.js';
 
 /**
  * What you see when you click someone in the chat log.
@@ -149,7 +150,7 @@ export function ViewerCard({ user, refreshKey, onClose }: Props): JSX.Element {
             {profile?.follower ? <span className="vcard-badge">Follows</span> : null}
             {profile?.verified ? <span className="vcard-badge">Verified</span> : null}
             {profile && profile.followerCount > 0 ? (
-              <span className="vcard-badge">{compact(profile.followerCount)} followers</span>
+              <span className="vcard-badge">{formatNumber(profile.followerCount)} followers</span>
             ) : null}
           </div>
         </div>
@@ -299,14 +300,11 @@ function TrustMeter({ profile }: { profile: ViewerProfile }): JSX.Element {
 function Stat({ label, value, warn = false }: { label: string; value: number; warn?: boolean }): JSX.Element {
   return (
     <div className={warn && value > 0 ? 'vcard-stat vcard-stat-warn' : 'vcard-stat'}>
-      <strong>{compact(value)}</strong>
+      <strong>{formatNumber(value)}</strong>
       <span>{label}</span>
     </div>
   );
 }
-
-const compact = (value: number): string =>
-  value >= 10_000 ? new Intl.NumberFormat(undefined, { notation: 'compact' }).format(value) : String(value);
 
 const clock = (ts: number): string =>
   new Date(ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });

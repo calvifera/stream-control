@@ -1,7 +1,6 @@
 import type { AppConfig } from '@streaming/shared';
 import { ChatLog } from './ChatLog.js';
 import { Panel } from './controls.js';
-import { PlatformsPanel } from './PlatformsPanel.js';
 import { ChatPanelSettings } from './ChatPanelSettings.js';
 import { HighlightsPanel } from './HighlightsPanel.js';
 
@@ -11,16 +10,13 @@ interface Props {
 }
 
 /**
- * Everything about live chat in one place: which services are connected, what
- * each one can do, and the merged log itself.
+ * Live chat: the merged log first, since that is what you open this tab to
+ * watch, then how the chat panel and notable viewers look. Connecting the
+ * services lives on Setup.
  */
 export function ChatTab({ config, patch }: Props): JSX.Element {
   return (
     <section className="panel-stack">
-      <PlatformsPanel config={config} patch={patch} />
-      <ChatPanelSettings config={config} patch={patch} />
-      <HighlightsPanel config={config} patch={patch} />
-
       <Panel
         title="Chat"
         description="Pop it out from the button in the header — it stays open across tabs and floats above other windows."
@@ -30,6 +26,8 @@ export function ChatTab({ config, patch }: Props): JSX.Element {
         </p>
         <ChatLog />
       </Panel>
+      <ChatPanelSettings config={config} patch={patch} />
+      <HighlightsPanel config={config} patch={patch} />
     </section>
   );
 }

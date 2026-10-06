@@ -19,6 +19,7 @@ import {
   youtubeUser,
   type YouTubeChatMessage,
 } from '../youtube/normalize.js';
+import { routeYouTubeTarget } from '@streaming/shared';
 
 let passed = 0;
 let failed = 0;
@@ -365,6 +366,24 @@ console.log('\nplain messages');
   check('nor the rest of it', spoken.includes('also before'), false);
   // The other half: priming must not swallow the live stream that follows.
   check('messages after the cursor still arrive', spoken.includes('said while listening'), true);
+}
+
+console.log('');
+console.log('what was typed in the YouTube field');
+{
+  // One box serves both a stream and a channel, and the dashboard and the
+  // server each route by it — so a string has to mean the same to both.
+  check('a watch link is a video', routeYouTubeTarget('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), {
+    videoId: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    handle: '',
+  });
+  check('a short link is a video', routeYouTubeTarget('https://youtu.be/dQw4w9WgXcQ').handle, '');
+  check('a /live/ link is a video', routeYouTubeTarget('https://www.youtube.com/live/dQw4w9WgXcQ').handle, '');
+  check('a bare video id is a video', routeYouTubeTarget('dQw4w9WgXcQ').videoId, 'dQw4w9WgXcQ');
+  check('a @handle is a channel', routeYouTubeTarget('@somebody'), { videoId: '', handle: '@somebody' });
+  check('a channel link is a channel', routeYouTubeTarget('https://www.youtube.com/@somebody').videoId, '');
+  check('surrounding spaces are dropped', routeYouTubeTarget('  @somebody  ').handle, '@somebody');
+  check('an empty box is neither', routeYouTubeTarget('   '), { videoId: '', handle: '' });
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

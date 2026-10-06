@@ -223,8 +223,6 @@ export function normalizeTwitchBits(
     user: twitchUser(message, broadcaster),
     giftId: `cheer-${tier}`,
     giftName: bits === 1 ? 'Bit' : 'Bits',
-    giftImageUrl: still,
-    diamondCount: bits,
     repeatCount: 1,
     repeatEnd: true,
     streakable: false,
@@ -238,7 +236,7 @@ export function normalizeTwitchBits(
       media: { imageUrl: still, animationUrl: globalCheermoteUrl(bits) },
       // The cheer words themselves are the payment, not the message.
       message: text || null,
-      displayMessage: text || null,
+      displayMessage: null,
       colors: {
         primary: CHEER_TIER_COLORS[tier],
         secondary: CHEER_TIER_COLORS[tier],
@@ -275,8 +273,6 @@ export function normalizeTwitchPowerUp(message: IrcMessage, broadcaster: string)
     user: twitchUser(message, broadcaster),
     giftId: effect,
     giftName: effect === 'gigantify' ? 'Gigantified emote' : 'Message effect',
-    giftImageUrl: emoteUrl,
-    diamondCount: bits,
     repeatCount: 1,
     repeatEnd: true,
     streakable: false,
@@ -294,7 +290,7 @@ export function normalizeTwitchPowerUp(message: IrcMessage, broadcaster: string)
       },
       media: { imageUrl: emoteUrl, animationUrl: emoteUrl },
       message: message.text || null,
-      displayMessage: message.text || null,
+      displayMessage: null,
       colors: null,
     },
   };

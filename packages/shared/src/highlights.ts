@@ -15,6 +15,7 @@
  * of the room.
  */
 
+import type { StreamEvent } from './events.js';
 import type { Platform } from './platforms.js';
 
 /**
@@ -140,6 +141,19 @@ export function tierFor(
   return best;
 }
 
+/** The tier a chat line's author earns, from what the event already carries. */
+export function tierForEvent(tiers: readonly HighlightTier[], event: StreamEvent): HighlightTier | null {
+  if (!event.user || tiers.length === 0) return null;
+  return tierFor(tiers, {
+    platform: event.user.platform,
+    isSubscriber: event.user.isSubscriber,
+    isModerator: event.user.isModerator,
+    isHost: event.user.isHost,
+    sessionGiven: event.giving?.session ?? 0,
+    lifetimeGiven: event.giving?.lifetime ?? 0,
+  });
+}
+
 /**
  * The CSS for a tier's gradient text.
  *
@@ -172,11 +186,3 @@ export function tierStyle(tier: HighlightTier): Record<string, string> {
   return style;
 }
 
-/** Fallback when a tier has been deleted but an old event still names it. */
-export function findTier(
-  tiers: readonly HighlightTier[],
-  id: string | null | undefined,
-): HighlightTier | null {
-  if (!id) return null;
-  return tiers.find((tier) => tier.id === id) ?? null;
-}

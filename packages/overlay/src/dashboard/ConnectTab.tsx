@@ -7,7 +7,9 @@ import {
 } from '@streaming/shared';
 import { api, type OverlayWithUrls, type ServerMeta } from '../lib/api.js';
 import { useLive } from '../lib/store.js';
-import { Button, CopyButton, Field, Panel, Row, StatusDot, TextInput, Toggle } from './controls.js';
+import { Button, CopyButton, Field, Panel, Row, TextInput, Toggle } from './controls.js';
+import { CredentialField, credentialField, useCredentials } from './CredentialsTab.js';
+import { PlatformsPanel } from './PlatformsPanel.js';
 import { formatNumber } from '../overlay/style.js';
 
 interface Props {
@@ -18,20 +20,15 @@ interface Props {
 
 export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
   const { snapshot, stats } = useLive();
-  // Driven straight from the config rather than local state: the handle is a
-  // stream setting, not a scratch value. "Connect on startup" reads it, so it
-  // has to be saved when you type it, not only when you press Connect.
-  const username = config.connection.username;
+  const { statusOf, reload: reloadCredentials } = useCredentials();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overlays, setOverlays] = useState<OverlayWithUrls[]>([]);
   const [hostCheck, setHostCheck] = useState<SourceHostCheck | null>(null);
   const [checking, setChecking] = useState(false);
 
-  const connection = snapshot?.connection;
   const connections = snapshot?.connections ?? {};
   const tunnel = snapshot?.tunnel;
-  const connected = connection?.status === 'connected';
 
   useEffect(() => {
     void api.overlays().then(setOverlays).catch(() => undefined);
@@ -52,19 +49,6 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
   // want to find out about now rather than mid-stream.
   useEffect(runHostCheck, [config.sources.host]);
 
-  const handleConnect = async (): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      if (connected) await api.disconnect();
-      else await api.connect(username.trim().replace(/^@/, ''));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const toggleTunnel = async (): Promise<void> => {
     setBusy(true);
     try {
@@ -79,49 +63,13 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
 
   return (
     <>
+      <PlatformsPanel config={config} patch={patch} />
+
       <Panel
-        title="TikTok connection"
-        description="Connect to any live room by @handle. You do not need to be the host to read a room, but gating on followers and subscribers is most useful on your own stream."
+        title="TikTok options"
+        description="Settings that only apply to TikTok. Which room to join is set above."
       >
         <Row>
-          <Field label="Username" hint="Without the @">
-            <TextInput
-              value={username}
-              onChange={(next) => patch({ connection: { username: next.trim() } })}
-              placeholder="yourhandle"
-            />
-          </Field>
-          <Field label=" ">
-            <Button variant={connected ? 'danger' : 'primary'} onClick={handleConnect} disabled={busy}>
-              {connected ? 'Disconnect' : 'Connect'}
-            </Button>
-          </Field>
-        </Row>
-
-        <div className="status-line">
-          <StatusDot status={connection?.status ?? 'idle'} />
-          <strong>{connection?.status ?? 'idle'}</strong>
-          {connection?.roomId ? <span className="muted">room {connection.roomId}</span> : null}
-          {connection?.reconnectAttempts ? (
-            <span className="muted">retry #{connection.reconnectAttempts}</span>
-          ) : null}
-          {connection?.lastError ? <span className="error-text">{connection.lastError}</span> : null}
-        </div>
-
-        {error ? <div className="banner banner-error">{error}</div> : null}
-
-        <Row>
-          <Toggle
-            label="Reconnect automatically"
-            hint="Also retries while the host is offline, so you can start this before going live"
-            checked={config.connection.autoReconnect}
-            onChange={(autoReconnect) => patch({ connection: { autoReconnect } })}
-          />
-          <Toggle
-            label="Connect on startup"
-            checked={config.connection.connectOnStartup}
-            onChange={(connectOnStartup) => patch({ connection: { connectOnStartup } })}
-          />
           <Toggle
             label="Fetch extended gift info"
             hint="Needed for diamond values and gift images"
@@ -132,9 +80,8 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
 
         {meta && !meta.env.hasSignApiKey ? (
           <div className="banner">
-            No <code>SIGN_API_KEY</code> set. The connector is using a shared, rate-limited signing
-            quota — fine to start with, but get a free key at eulerstream.com if connecting starts
-            failing.
+            No Euler Stream key set. The connector is using a shared, rate-limited signing quota —
+            fine to start with, but add a free key on the Keys tab if connecting starts failing.
           </div>
         ) : null}
       </Panel>
@@ -254,6 +201,7 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
             ) : null}
           </div>
         ) : null}
+        {error ? <div className="banner banner-error">{error}</div> : null}
         {tunnel?.error ? <div className="banner banner-error">{tunnel.error}</div> : null}
 
         {/* An agent that is up but pointed elsewhere looks like a working
@@ -266,8 +214,8 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
 
         {meta && !meta.env.hasNgrokToken ? (
           <div className="banner">
-            Set <code>NGROK_AUTHTOKEN</code> in <code>.env</code> before starting the tunnel. Free
-            tokens come from dashboard.ngrok.com.
+            Add your ngrok authtoken on the Keys tab before starting the tunnel. Free tokens come
+            from dashboard.ngrok.com.
           </div>
         ) : null}
 
@@ -279,21 +227,19 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
               placeholder="(random URL)"
             />
           </Field>
-          <Field
-            label="Basic auth"
-            hint={
-              tunnel?.external
-                ? 'Does NOT apply right now — this tunnel is your own agent. Restart it as `ngrok http 4700 --basic-auth "user:pass"`.'
-                : 'user:password — strongly recommended, this exposes the whole dashboard'
-            }
-          >
-            <TextInput
-              value={config.tunnel.basicAuth}
-              onChange={(basicAuth) => patch({ tunnel: { basicAuth } })}
-              placeholder="streamer:secret"
-            />
-          </Field>
         </Row>
+
+        <CredentialField
+          field={credentialField('TUNNEL_BASIC_AUTH')}
+          status={statusOf('TUNNEL_BASIC_AUTH')}
+          onSaved={reloadCredentials}
+        />
+        {tunnel?.external ? (
+          <div className="banner">
+            The tunnel login does not apply right now — this tunnel is your own agent. Restart it
+            as <code>ngrok http 4700 --basic-auth "user:pass"</code>.
+          </div>
+        ) : null}
         <Toggle
           label="Open the tunnel on startup"
           checked={config.tunnel.enabled}

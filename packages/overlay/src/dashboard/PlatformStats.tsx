@@ -1,3 +1,4 @@
+import { formatNumber } from '../overlay/style.js';
 import { formatElapsed, useElapsed } from '../lib/useElapsed.js';
 import {
   emptyPlatformStats,
@@ -32,23 +33,6 @@ interface Props {
   liveSince?: number | null;
 }
 
-/**
- * Compact enough to sit in a strip: 1.2K rather than 1,240.
- *
- * Guards against a non-number rather than trusting the type. The dashboard is
- * rebuilt and reloaded long before the server it talks to is restarted, so
- * "this field does not exist yet" is a normal state, not a broken one — and
- * `Math.round(undefined)` renders a confident `NaN` that looks like a real
- * measurement.
- */
-function short(value: number): string {
-  if (!Number.isFinite(value)) return '—';
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
-  if (value >= 10_000) return `${Math.round(value / 1000)}K`;
-  if (value >= 1_000) return `${(value / 1000).toFixed(1).replace(/\.0$/, '')}K`;
-  return String(Math.round(value));
-}
-
 export function PlatformStats({ platform, stats, connected, liveSince }: Props): JSX.Element {
   // Counts the broadcast, not the connection. Twitch IRC will happily sit in
   // an idle channel for hours, and a timer running through that says only
@@ -76,7 +60,7 @@ export function PlatformStats({ platform, stats, connected, liveSince }: Props):
    * misleading possible answer.
    */
   const viewers =
-    slice.viewers === null ? (connected ? 'not reported' : '—') : short(slice.viewers);
+    slice.viewers === null ? (connected ? 'not reported' : '—') : formatNumber(slice.viewers);
 
   return (
     <div className="pstats" style={{ borderLeftColor: info.color }}>
@@ -88,30 +72,22 @@ export function PlatformStats({ platform, stats, connected, liveSince }: Props):
           title="How long this platform has been broadcasting"
         />
       ) : null}
-      <Stat label="Peak" value={slice.peakViewers > 0 ? short(slice.peakViewers) : '—'} />
-      {/*
-       * Two different totals, kept apart on purpose.
-       *
-       * "Viewers" is the platform's own count of everyone who tuned in at all
-       * — the larger, more honest number, shown only where the platform
-       * actually reports one. "Active" is ours, and can only ever count
-       * people who did something observable, which most of an audience never
-       * does. Showing ours under a name that implies the first would
-       * understate a stream badly.
-       */}
+      <Stat label="Peak" value={slice.peakViewers > 0 ? formatNumber(slice.peakViewers) : '—'} />
+      {/* Only where the platform reports one. We cannot count this ourselves: we
+          only ever see people who do something, which most of an audience never
+          does, so a total of our own would understate the stream badly. */}
       {typeof slice.reportedTotal === 'number' ? (
         <Stat
-          label="Viewers"
-          value={short(slice.reportedTotal)}
+          label="Total viewers"
+          value={formatNumber(slice.reportedTotal)}
           title="Everyone who tuned in at any point, as the platform counts it"
         />
       ) : null}
-      <Stat label="Active" value={short(slice.seen)} title="People who chatted, gifted, liked or joined — not the whole audience" />
-      <Stat label="Chatters" value={short(slice.chatters)} title="People who sent at least one message" />
-      <Stat label="Messages" value={short(slice.messages)} />
-      {slice.diamonds > 0 ? <Stat label="Diamonds" value={short(slice.diamonds)} /> : null}
-      {slice.followers > 0 ? <Stat label="Follows" value={short(slice.followers)} /> : null}
-      {slice.subscribers > 0 ? <Stat label="Subs" value={short(slice.subscribers)} /> : null}
+      <Stat label="Chatters" value={formatNumber(slice.chatters)} title="People who sent at least one message" />
+      <Stat label="Messages" value={formatNumber(slice.messages)} />
+      {slice.diamonds > 0 ? <Stat label="Diamonds" value={formatNumber(slice.diamonds)} /> : null}
+      {slice.followers > 0 ? <Stat label="Follows" value={formatNumber(slice.followers)} /> : null}
+      {slice.subscribers > 0 ? <Stat label="Subs" value={formatNumber(slice.subscribers)} /> : null}
       {!connected ? <span className="pstats-note">not connected</span> : null}
     </div>
   );

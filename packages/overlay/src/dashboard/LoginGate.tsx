@@ -72,8 +72,8 @@ export function LoginGate({ children }: Props): JSX.Element {
         </button>
 
         <p className="muted login-hint">
-          Set in <code>DASHBOARD_PASSWORD</code> in your <code>.env</code>. Overlay browser sources
-          keep working without it.
+          This is the password set on the Keys tab, or <code>DASHBOARD_PASSWORD</code> in your{' '}
+          <code>.env</code>. Overlay browser sources keep working without it.
         </p>
       </form>
     </div>

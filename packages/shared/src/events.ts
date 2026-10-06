@@ -154,12 +154,17 @@ export interface ChatEvent extends StreamEventBase {
   /**
    * The message with its emotes as pictures, where the platform supplied any.
    *
-   * Absent when the message is plain text. Renderers use it only while the
-   * filter left the message untouched — a censored message is rebuilt from
-   * `displayText`, and splicing images back into censored text would put
-   * them in the wrong places.
+   * Absent when the message is plain text. These are positioned against
+   * `text`, the message as sent, so they go with `text` — which is what the
+   * host's own surfaces show for a message the filter flagged.
    */
   parts?: MessagePart[];
+  /**
+   * The same pictures re-fitted to `displayText`, for surfaces that show the
+   * cleaned message. Present only when the filter changed the text; absent
+   * means `parts` already fits.
+   */
+  displayParts?: MessagePart[];
 }
 
 export interface GiftEvent extends StreamEventBase {
@@ -167,8 +172,6 @@ export interface GiftEvent extends StreamEventBase {
   user: StreamUser;
   giftId: string;
   giftName: string;
-  giftImageUrl: string | null;
-  diamondCount: number;
   /** Number of gifts in this (possibly still-running) combo. */
   repeatCount: number;
   /** Combo has finished — this is the event you want to alert on. */
@@ -176,12 +179,18 @@ export interface GiftEvent extends StreamEventBase {
   /** True for streakable gifts. Non-streakable gifts fire once with repeatEnd. */
   streakable: boolean;
   /**
-   * diamondCount * repeatCount — in the platform's own unit despite the name:
-   * diamonds on TikTok, bits on Twitch, cents on YouTube. `detail.value` says
-   * which.
+   * What the whole gift was worth, `detail.value.amount * repeatCount`, in the
+   * platform's own unit despite the name: diamonds on TikTok, bits on Twitch,
+   * cents on YouTube. `detail.value.unit` says which.
+   *
+   * This is the one number kept outside `detail`, because thresholds,
+   * leaderboards and totals read it for every platform alike.
    */
   totalDiamonds: number;
-  /** Everything platform-specific about the gift. See `gifts/model.ts`. */
+  /**
+   * Everything else about the gift, per platform: what it was worth for one,
+   * its picture, the message that came with it. See `gifts/model.ts`.
+   */
   detail: GiftDetail;
 }
 

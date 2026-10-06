@@ -142,16 +142,3 @@ export const TTS_VOICES: TtsVoice[] = [
 export const DEFAULT_TTS_VOICE = 'en_us_002';
 
 export const TTS_VOICE_CODES: string[] = TTS_VOICES.map((v) => v.code);
-
-/** Just the English voices — the ones a US stream will normally reach for. */
-export const ENGLISH_VOICE_CODES: string[] = TTS_VOICES.filter((v) =>
-  ['English', 'English (UK & AU)', 'Character', 'Seasonal', 'Singing'].includes(v.group),
-).map((v) => v.code);
-
-export function isKnownVoice(code: string): boolean {
-  return TTS_VOICES.some((v) => v.code === code);
-}
-
-export function voiceLabel(code: string): string {
-  return TTS_VOICES.find((v) => v.code === code)?.name ?? code;
-}

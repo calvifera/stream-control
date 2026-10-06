@@ -15,10 +15,31 @@ import {
 } from './config.js';
 import type { HighlightTier } from './highlights.js';
 import { DEFAULT_TRUST } from './trust.js';
-import { HOP_EFFECT, NO_TEXT_EFFECT, WAVE_GRADIENT_EFFECT } from './textEffects.js';
+import { cloneTextEffect, HOP_EFFECT, WAVE_GRADIENT_EFFECT } from './textEffects.js';
 import { defaultSoundSettings } from './gifts/sounds.js';
+import { defaultGiftFeed } from './gifts/source.js';
+
+/**
+ * The TikTok TTS host tried first. Trailing slash is required — the route 404s
+ * without it. The server's fallback list starts from this same value.
+ */
+export const DEFAULT_TIKTOK_TTS_ENDPOINT =
+  'https://api16-normal-useast5.us.tiktokv.com/media/api/text/speech/invoke/';
 
 const style = (over: Partial<OverlayStyle> = {}): OverlayStyle => ({ ...DEFAULT_STYLE, ...over });
+
+/**
+ * What a new alerts source does with gifts: a waving name, and a sound for
+ * each price bracket.
+ *
+ * A config saved before these existed is read back with them off instead (see
+ * the schema), so an existing source keeps its look. Only a source made now
+ * starts with them on.
+ */
+const alertsGiftDefaults = () => ({
+  nameEffect: cloneTextEffect(WAVE_GRADIENT_EFFECT),
+  giftSounds: defaultSoundSettings(true),
+});
 
 export const DEFAULT_OVERLAYS: OverlaySource[] = [
   {
@@ -84,8 +105,7 @@ export const DEFAULT_OVERLAYS: OverlaySource[] = [
         },
         soundUrl: '',
         soundVolume: 0.7,
-        nameEffect: { ...NO_TEXT_EFFECT },
-        giftSounds: defaultSoundSettings(false),
+        ...alertsGiftDefaults(),
       },
     },
   },
@@ -238,8 +258,7 @@ export function defaultSettingsFor(type: OverlayType): OverlaySettings {
           },
           soundUrl: '',
           soundVolume: 0.7,
-          nameEffect: { ...WAVE_GRADIENT_EFFECT },
-          giftSounds: defaultSoundSettings(true),
+          ...alertsGiftDefaults(),
         },
       };
     case 'tts':
@@ -310,11 +329,7 @@ export function defaultSettingsFor(type: OverlayType): OverlaySettings {
       return {
         type: 'giftSpotlight',
         giftSpotlight: {
-          platforms: [],
-          // Roughly a dollar-ish nowhere and "anything at all" everywhere: a
-          // new source should show that it works on the first gift.
-          minValue: { tiktok: 1, twitch: 1, youtube: 0 },
-          includeGiftedSubs: true,
+          ...defaultGiftFeed(true),
           durationMs: 6000,
           scaleDuration: true,
           showAvatar: true,
@@ -325,26 +340,20 @@ export function defaultSettingsFor(type: OverlayType): OverlaySettings {
           soundUrl: '',
           soundVolume: 0.7,
           maxQueue: 20,
-          mediaRules: [],
-          nameEffect: { ...WAVE_GRADIENT_EFFECT },
-          valueEffect: { ...HOP_EFFECT, colors: [...HOP_EFFECT.colors] },
-          sounds: defaultSoundSettings(true),
+          nameEffect: cloneTextEffect(WAVE_GRADIENT_EFFECT),
+          valueEffect: cloneTextEffect(HOP_EFFECT),
         },
       };
     case 'giftRain':
       return {
         type: 'giftRain',
         giftRain: {
-          platforms: [],
-          minValue: { tiktok: 1, twitch: 1, youtube: 0 },
-          includeGiftedSubs: true,
+          ...defaultGiftFeed(false),
           maxPerGift: 25,
           maxOnScreen: 120,
           spriteSize: 72,
           fallSeconds: 5,
           direction: 'fall',
-          mediaRules: [],
-          sounds: defaultSoundSettings(false),
         },
       };
     case 'custom':
@@ -578,11 +587,8 @@ export function createDefaultConfig(username = ''): AppConfig {
     tts: {
       enabled: true,
       provider: 'tiktok',
-      sessionId: '',
-      // Trailing slash is required — the route 404s without it.
-      apiBaseUrl: 'https://api16-normal-useast5.us.tiktokv.com/media/api/text/speech/invoke/',
+      apiBaseUrl: DEFAULT_TIKTOK_TTS_ENDPOINT,
       google: {
-        apiKey: '',
         // A Neural2 voice: noticeably better than Standard and still well
         // inside the free tier at the volume a stream reads aloud.
         defaultVoice: 'en-US-Neural2-C',
@@ -617,7 +623,7 @@ export function createDefaultConfig(username = ''): AppConfig {
       // The API is free to ask for slower and often does.
       pollIntervalMs: 3000,
     },
-    tunnel: { enabled: false, domain: '', basicAuth: '' },
+    tunnel: { enabled: false, domain: '' },
     // Blank = use whatever address the dashboard was loaded from, which is
     // what most software wants. Set it only when yours is fussier.
     sources: { host: '' },

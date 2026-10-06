@@ -1,21 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   clearsMinimum,
   matchMediaRule,
   giftVisual,
+  type GiftFeedSettings,
   type GiftMediaRule,
   type GiftShowcaseEvent,
-  type Platform,
   type StreamEvent,
 } from '@streaming/shared';
 import { onStreamEvent } from '../../lib/store.js';
-
-/** What the gift sources have in common when deciding what to show. */
-export interface GiftFeedOptions {
-  platforms: Platform[];
-  minValue: Record<Platform, number>;
-  includeGiftedSubs: boolean;
-}
 
 /**
  * Whether a gift source shows this event.
@@ -26,13 +19,11 @@ export interface GiftFeedOptions {
  */
 export function acceptsShowcase(
   event: StreamEvent,
-  options: GiftFeedOptions,
+  options: GiftFeedSettings,
 ): event is GiftShowcaseEvent {
   if (options.platforms.length > 0 && !options.platforms.includes(event.platform)) return false;
 
   if (event.type === 'gift') {
-    // An event from an older server has no detail and nothing to draw.
-    if (!event.detail) return false;
     if (!event.repeatEnd) return false;
     return clearsMinimum(event.detail, event.totalDiamonds, options.minValue);
   }
@@ -44,18 +35,28 @@ export function acceptsShowcase(
   return false;
 }
 
+/**
+ * Calls `onGift` for every event this source should show.
+ *
+ * Subscribes once. The settings and the callback are read from a ref at the
+ * moment an event arrives, so a settings change applies to the next gift
+ * without a resubscribe, and a callback that closes over this render's state
+ * is never a stale one.
+ */
 export function useGiftFeed(
-  options: GiftFeedOptions,
+  settings: GiftFeedSettings,
   onGift: (event: GiftShowcaseEvent) => void,
-  deps: unknown[],
 ): void {
+  const latest = useRef({ settings, onGift });
+  latest.current = { settings, onGift };
+
   useEffect(
     () =>
       onStreamEvent((event) => {
-        if (acceptsShowcase(event, options)) onGift(event);
+        const { settings, onGift } = latest.current;
+        if (acceptsShowcase(event, settings)) onGift(event);
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    deps,
+    [],
   );
 }
 

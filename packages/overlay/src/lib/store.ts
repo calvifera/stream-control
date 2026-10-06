@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { SOCKET_PATH } from '@streaming/shared';
 import {
   DEMO_LEADERBOARD,
   DEMO_STATS,
@@ -35,6 +36,26 @@ export interface LiveState {
 
 const EVENT_BUFFER = 200;
 const LOG_BUFFER = 300;
+
+let warnedAboutOldServer = false;
+
+/**
+ * Whether this page can draw an event the server sent.
+ *
+ * A gift from a server older than this page has no `detail`, and every surface
+ * that draws a gift reads it. The page is rebuilt and reloaded long before the
+ * server is restarted, so that happens. This is the one place that says so:
+ * the event is dropped here, rather than each surface guarding for a field its
+ * type promises, or one throwing in a render and taking the whole page down.
+ */
+function drawable(event: StreamEvent): boolean {
+  if (event.type !== 'gift' || event.detail) return true;
+  if (!warnedAboutOldServer) {
+    warnedAboutOldServer = true;
+    console.warn('The server is older than this page: restart it to see gifts.');
+  }
+  return false;
+}
 
 let state: LiveState = {
   socketConnected: false,
@@ -74,7 +95,7 @@ let identity: Parameters<ClientToServerEvents['hello']>[0] = { role: 'dashboard'
 function ensureSocket(): TypedSocket {
   if (socket) return socket;
 
-  socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
+  socket = io({ path: SOCKET_PATH, transports: ['websocket', 'polling'] });
 
   socket.on('connect', () => {
     setState({ socketConnected: true });
@@ -108,7 +129,7 @@ function ensureSocket(): TypedSocket {
     setState({ snapshot: state.snapshot ? { ...state.snapshot, tunnel } : null }),
   );
 
-  socket.on('history', (events) => setState({ events: events.slice(-EVENT_BUFFER) }));
+  socket.on('history', (events) => setState({ events: events.filter(drawable).slice(-EVENT_BUFFER) }));
 
   /*
    * A profile that resolved after its event was sent. Rebuilds the affected
@@ -146,6 +167,7 @@ function ensureSocket(): TypedSocket {
   });
 
   socket.on('event', (event) => {
+    if (!drawable(event)) return;
     setState({ events: [...state.events, event].slice(-EVENT_BUFFER) });
     for (const listener of eventListeners) listener(event);
   });

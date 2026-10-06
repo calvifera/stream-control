@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TtsQueueItem } from '@streaming/shared';
 import { onTtsPlay, onTtsStop, reportTtsDone, reportTtsError } from './store.js';
-import { needsPitchShift, playWithPitch, type PitchedPlayback } from '../overlay/pitch.js';
+import { audioContext, needsPitchShift, playWithPitch, type PitchedPlayback } from '../overlay/pitch.js';
 import { createLoudnessChain, type LoudnessOptions } from '../overlay/loudness.js';
 
 export interface TtsPlayerState {
@@ -185,10 +185,8 @@ export function useTtsPlayer(loudness: LoudnessOptions = { enabled: true, gainDb
     const audio = audioRef.current;
     if (audio) void audio.play().catch(() => undefined);
     // Web Audio has its own gate; resume it in the same gesture.
-    void import('../overlay/pitch.js').then(({ audioContext }) => {
-      const context = audioContext();
-      if (context.state === 'suspended') void context.resume();
-    });
+    const context = audioContext();
+    if (context.state === 'suspended') void context.resume();
     setBlocked(false);
   };
 

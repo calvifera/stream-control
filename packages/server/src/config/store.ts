@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { createDefaultConfig, type AppConfig } from '@streaming/shared';
 import { CONFIG_PATH, ensureDirs } from '../env.js';
 import { createLogger, describeError } from '../logger.js';
+import { secrets, type SecretKey } from '../secrets.js';
 import { appConfigSchema } from './schema.js';
 
 const log = createLogger('config');
@@ -29,6 +30,42 @@ function mergeDeep<T>(base: T, patch: unknown): T {
     out[key] = isPlainObject(value) && isPlainObject(current) ? mergeDeep(current, value) : value;
   }
   return out as T;
+}
+
+/**
+ * Credentials an older build kept in the config, and the secret each one is
+ * stored as now. The TTS tab used to write the TikTok session id and the Google
+ * API key, and the Setup tab the tunnel login, straight into the config.
+ */
+const LEGACY_SECRETS: Array<{ path: string[]; key: SecretKey }> = [
+  { path: ['tts', 'sessionId'], key: 'TIKTOK_SESSION_ID' },
+  { path: ['tts', 'google', 'apiKey'], key: 'GOOGLE_TTS_API_KEY' },
+  { path: ['tunnel', 'basicAuth'], key: 'TUNNEL_BASIC_AUTH' },
+];
+
+/**
+ * Moves any credential found in a config into the secret store, and says
+ * whether it found one.
+ *
+ * The config is broadcast to every connected client — overlay browser sources
+ * and, through a tunnel, anyone who can load one — so a credential in it is a
+ * credential published. The fields no longer exist in a config, and the schema
+ * drops them on its own; this exists so that dropping them does not also lose
+ * a value somebody typed. It runs on every path that takes a config in: an old
+ * file at startup, and a patch or a backup restored from a client that has not
+ * been updated.
+ */
+function moveLegacySecrets(input: unknown): boolean {
+  let moved = false;
+  for (const { path, key } of LEGACY_SECRETS) {
+    const value = path.reduce<unknown>((node, step) => (isPlainObject(node) ? node[step] : undefined), input);
+    if (typeof value === 'string' && value.trim()) {
+      secrets.set(key, value.trim());
+      moved = true;
+    }
+  }
+  if (moved) log.info('Moved a credential out of the config and into the secret store');
+  return moved;
 }
 
 export class ConfigStore extends EventEmitter {
@@ -57,9 +94,12 @@ export class ConfigStore extends EventEmitter {
     try {
       const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as unknown;
       const merged = mergeDeep(defaults, raw);
-      const parsed = appConfigSchema.parse(merged);
+      const parsed = appConfigSchema.parse(merged) as AppConfig;
+      // The file on disk still holds the value until it is rewritten, and
+      // nothing else would rewrite it until some unrelated setting changed.
+      if (moveLegacySecrets(merged)) this.persistNow(parsed);
       log.info(`Loaded config (${parsed.overlays.length} overlays, ${parsed.tts.rules.length} TTS rules)`);
-      return parsed as AppConfig;
+      return parsed;
     } catch (error) {
       const backup = `${CONFIG_PATH}.broken-${Date.now()}.json`;
       log.error(`Config at ${CONFIG_PATH} is invalid, falling back to defaults`, error);
@@ -80,6 +120,7 @@ export class ConfigStore extends EventEmitter {
   update(patch: unknown): AppConfig {
     const merged = mergeDeep(this.current, patch);
     const parsed = appConfigSchema.parse(merged) as AppConfig;
+    moveLegacySecrets(merged);
 
     const duplicates = findDuplicateOverlayIds(parsed);
     if (duplicates.length > 0) {
@@ -95,6 +136,7 @@ export class ConfigStore extends EventEmitter {
   /** Replaces the config wholesale, e.g. when the user hits "reset". */
   replace(config: unknown): AppConfig {
     const parsed = appConfigSchema.parse(config) as AppConfig;
+    moveLegacySecrets(config);
     this.current = parsed;
     this.emit('change', parsed);
     this.schedulePersist();
@@ -104,10 +146,11 @@ export class ConfigStore extends EventEmitter {
   /**
    * Back to defaults — but never without a copy first.
    *
-   * A reset throws away credentials that can't be regenerated from anything
-   * on disk (the TikTok session cookie, the Google API key), and it is
-   * reachable from both the dashboard and the API. The backup is what makes
-   * an accidental reset annoying rather than destructive.
+   * A reset throws away every hand-tuned setting — rules, filters, overlay
+   * styling — and it is reachable from both the dashboard and the API. The
+   * backup is what makes an accidental reset annoying rather than destructive.
+   * (Credentials are not in it: they live in the secret store, which a reset
+   * leaves alone.)
    */
   reset(): AppConfig {
     this.backup('reset');

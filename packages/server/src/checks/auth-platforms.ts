@@ -118,7 +118,8 @@ console.log('\ncapability tiers');
   check('an app alone does not unlock moderation', capabilitiesFor('twitch', 'app', true).moderate, false);
   check('signing in unlocks moderation', capabilitiesFor('twitch', 'user', true).moderate, true);
 
-  check('youtube can do nothing while signed out', capabilitiesFor('youtube', 'app', true).readChat, false);
+  check('youtube reads chat with nothing configured', capabilitiesFor('youtube', 'anonymous', false).readChat, true);
+  check('but moderating still needs the account', capabilitiesFor('youtube', 'app', true).moderate, false);
   check('and reads chat once signed in', capabilitiesFor('youtube', 'user', true).readChat, true);
 
   check('tiktok never needs credentials', capabilitiesFor('tiktok', 'anonymous', false).readChat, true);

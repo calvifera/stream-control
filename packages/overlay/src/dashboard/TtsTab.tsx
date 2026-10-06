@@ -15,6 +15,7 @@ import {
 } from '@streaming/shared';
 import { api, type ServerMeta } from '../lib/api.js';
 import { useVoices } from '../lib/useVoices.js';
+import { CredentialField, credentialField, useCredentials } from './CredentialsTab.js';
 import { useLive } from '../lib/store.js';
 import { usePersistentState } from '../lib/usePersistentState.js';
 import {
@@ -36,6 +37,8 @@ interface Props {
   config: AppConfig;
   patch: (patch: Record<string, unknown>) => void;
   meta: ServerMeta | null;
+  /** Called after a key is saved, so the server-reported "is it set" is re-read. */
+  onCredentialsChanged: () => void;
 }
 
 const PLATFORM_OPTIONS = PLATFORMS.map((id) => ({ value: id, label: PLATFORM_INFO[id].label }));
@@ -44,8 +47,17 @@ const EVENT_OPTIONS = STREAM_EVENT_TYPES.filter(
   (type) => !['roomStats', 'streamEnd', 'system', 'emote'].includes(type),
 ).map((type) => ({ value: type, label: STREAM_EVENT_LABELS[type] }));
 
-export function TtsTab({ config, patch, meta }: Props): JSX.Element {
+export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JSX.Element {
   const { tts: ttsState } = useLive();
+  const { statusOf, reload: reloadCredentials } = useCredentials();
+  // Bumped when a key is saved, so the voice list — which a Google key is what
+  // makes fetchable in the first place — is asked for again.
+  const [credentialVersion, setCredentialVersion] = useState(0);
+  const credentialsSaved = (): void => {
+    reloadCredentials();
+    setCredentialVersion((version) => version + 1);
+    onCredentialsChanged();
+  };
   const tts = config.tts;
   const [selectedId, setSelectedId] = usePersistentState<string | null>(
     'tts.selectedRule',
@@ -58,7 +70,7 @@ export function TtsTab({ config, patch, meta }: Props): JSX.Element {
 
   // Voice lists differ per backend, so every dropdown here follows the
   // currently selected provider rather than a hardcoded catalogue.
-  const { options: voiceOptions, loading: voicesLoading } = useVoices(tts.provider);
+  const { options: voiceOptions, loading: voicesLoading } = useVoices(tts.provider, credentialVersion);
   const providerStatus = meta?.providers.find((p) => p.id === tts.provider);
 
   const voiceOptionsWithRandom = [
@@ -174,22 +186,12 @@ export function TtsTab({ config, patch, meta }: Props): JSX.Element {
 
         {tts.provider === 'google' ? (
           <>
+            <CredentialField
+              field={credentialField('GOOGLE_TTS_API_KEY')}
+              status={statusOf('GOOGLE_TTS_API_KEY')}
+              onSaved={credentialsSaved}
+            />
             <Row>
-              <Field
-                label="Google Cloud API key"
-                hint={
-                  meta?.env.hasGoogleTtsKey
-                    ? 'Already set from the GOOGLE_TTS_API_KEY env var — leave blank to keep using it'
-                    : 'A Google Cloud key with the Text-to-Speech API enabled. Restrict it to that API.'
-                }
-              >
-                <TextInput
-                  type="password"
-                  value={tts.google.apiKey}
-                  onChange={(apiKey) => setTts({ google: { ...tts.google, apiKey } })}
-                  placeholder={meta?.env.hasGoogleTtsKey ? '(using env var)' : 'AIza…'}
-                />
-              </Field>
               <Field label="Default voice" hint="Used when a rule doesn't name one">
                 <Select
                   value={tts.google.defaultVoice}
@@ -236,22 +238,13 @@ export function TtsTab({ config, patch, meta }: Props): JSX.Element {
         ) : null}
 
         {tts.provider === 'tiktok' ? (
-          <Row>
-            <Field
-              label="TikTok session id"
-              hint={
-                meta?.env.hasTikTokSession
-                  ? 'Already set from the TIKTOK_SESSION_ID env var — leave blank to keep using it'
-                  : 'The sessionid cookie from tiktok.com. Treat it like a password.'
-              }
-            >
-              <TextInput
-                type="password"
-                value={tts.sessionId}
-                onChange={(sessionId) => setTts({ sessionId })}
-                placeholder={meta?.env.hasTikTokSession ? '(using env var)' : 'paste sessionid cookie'}
-              />
-            </Field>
+          <>
+            <CredentialField
+              field={credentialField('TIKTOK_SESSION_ID')}
+              status={statusOf('TIKTOK_SESSION_ID')}
+              onSaved={credentialsSaved}
+            />
+            <Row>
             <Field label="Endpoint" hint="Change only if your region blocks the default">
               <Select
                 value={tts.apiBaseUrl}
@@ -262,7 +255,8 @@ export function TtsTab({ config, patch, meta }: Props): JSX.Element {
                 }))}
               />
             </Field>
-          </Row>
+            </Row>
+          </>
         ) : null}
 
         <Row>

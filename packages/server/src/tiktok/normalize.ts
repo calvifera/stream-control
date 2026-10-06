@@ -15,6 +15,7 @@ import type {
 } from 'tiktok-live-connector';
 import {
   anonymousUser,
+  expandBeanCodes,
   formatUnit,
   insertEmotes,
   type MessagePart,
@@ -140,6 +141,21 @@ const baseEvent = (): { id: string; ts: number; platform: 'tiktok' } => ({
   platform: 'tiktok',
 });
 
+/**
+ * Ids of stickers the message carried that have no usable image address.
+ *
+ * Such a sticker cannot be drawn, and nothing else says so: the message still
+ * arrives, minus a picture, and looks like the sender typed nothing there. Kept
+ * as a function of its own so the manager can report it.
+ */
+export function stickersWithoutImage(msg: WebcastChatMessage | WebcastEmoteChatMessage): string[] {
+  const list =
+    'emoteList' in msg
+      ? (msg.emoteList ?? []).map((emote) => emote)
+      : (msg.emotes ?? []).map((entry) => entry.emote);
+  return list.filter((emote) => !imageUrl(emote?.image)).map((emote) => emote?.emoteId ?? '?');
+}
+
 export function normalizeChat(msg: WebcastChatMessage, host: string): ChatEvent {
   return {
     ...baseEvent(),
@@ -155,7 +171,9 @@ export function normalizeChat(msg: WebcastChatMessage, host: string): ChatEvent 
     emotes: (msg.emotes ?? [])
       .map((e) => imageUrl(e.emote?.image))
       .filter((url): url is string => Boolean(url)),
-    parts: chatParts(msg.content ?? '', msg.emotes),
+    // Bean codes like [sagethink] arrive as plain text, so they are turned into
+    // pictures after the fan-club emotes have been placed.
+    parts: expandBeanCodes(chatParts(msg.content ?? '', msg.emotes), msg.content ?? ''),
   };
 }
 
@@ -173,8 +191,6 @@ export function normalizeGift(msg: WebcastGiftMessage, host: string): GiftEvent 
     user: normalizeUser(msg.user, host),
     giftId: msg.giftId ?? msg.gift?.id ?? '0',
     giftName: msg.gift?.name ?? 'Gift',
-    giftImageUrl: still,
-    diamondCount: diamonds,
     repeatCount,
     repeatEnd: streakable ? toInt(msg.repeatEnd, 0) === 1 : true,
     streakable,

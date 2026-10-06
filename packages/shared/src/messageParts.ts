@@ -117,10 +117,40 @@ export function replaceRanges(text: string, ranges: EmoteRange[]): MessagePart[]
   return compact(parts);
 }
 
+/**
+ * Runs each stretch of text between emotes through `clean`, keeping the
+ * emotes where they were.
+ *
+ * Parts are positioned against the *original* text, so once the filter has
+ * changed that text — folded a curly quote, stripped a link, censored a word —
+ * the positions no longer line up with the cleaned whole. Cleaning the
+ * stretches one at a time sidesteps the problem: no position is ever
+ * recomputed, because none is needed.
+ *
+ * `clean` returns null to drop a stretch. The single space the sender typed
+ * next to an emote is kept, since a cleaner that trims would otherwise run
+ * the words into the picture.
+ */
+export function mapTextParts(
+  parts: readonly MessagePart[],
+  clean: (text: string) => string | null,
+): MessagePart[] {
+  const last = parts.length - 1;
+  const out: MessagePart[] = [];
+  parts.forEach((part, index) => {
+    if (part.type !== 'text') {
+      out.push(part);
+      return;
+    }
+    const cleaned = (clean(part.text) ?? '').trim();
+    if (!cleaned) return;
+    const lead = index > 0 && /^\s/.test(part.text) ? ' ' : '';
+    const trail = index < last && /\s$/.test(part.text) ? ' ' : '';
+    out.push({ type: 'text', text: `${lead}${cleaned}${trail}` });
+  });
+  return compact(out);
+}
+
 /** True when the parts contain at least one picture — otherwise text is enough. */
 export const hasEmotes = (parts: readonly MessagePart[] | undefined): boolean =>
   Boolean(parts?.some((part) => part.type === 'emote'));
-
-/** The parts as plain text, with emotes as their names. */
-export const partsToText = (parts: readonly MessagePart[]): string =>
-  parts.map((part) => (part.type === 'text' ? part.text : part.name)).join('');

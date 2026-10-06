@@ -34,7 +34,7 @@ export class TikTokTtsProvider implements TtsProviderAdapter {
   }
 
   configurationHint(): string {
-    return 'Add your TikTok sessionid cookie (TIKTOK_SESSION_ID, or paste one on the TTS tab).';
+    return 'Add your TikTok sessionid cookie (on the TTS tab or the Keys tab).';
   }
 
   async synthesize(request: SynthesisRequest): Promise<SynthesisResult> {

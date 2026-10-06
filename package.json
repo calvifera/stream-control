@@ -19,7 +19,7 @@
     "panel": "npm run dev -w @streaming/desktop",
     "panel:build": "npm run build -w @streaming/desktop",
     "typecheck": "npm run typecheck -w @streaming/shared && npm run typecheck -w @streaming/server && npm run typecheck -w @streaming/overlay",
-    "test": "npm run check:filters -w @streaming/server",
+    "test": "node scripts/check.mjs",
     "test:live": "npm run check:api -w @streaming/server && npm run check:penalty -w @streaming/server && npm run check:listeners -w @streaming/server"
   },
   "devDependencies": {

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AppConfig } from '@streaming/shared';
+import { PLATFORMS, PLATFORM_INFO, type AppConfig, type ConnectionState, type Platform } from '@streaming/shared';
 import { api, type ServerMeta } from '../lib/api.js';
 import { identify, useLive } from '../lib/store.js';
+import { PlatformLogo } from '../lib/PlatformLogo.js';
 import { usePersistentState } from '../lib/usePersistentState.js';
 import { useTtsPlayer } from '../lib/useTtsPlayer.js';
 import { ArchiveTab } from './ArchiveTab.js';
@@ -39,12 +40,20 @@ export function Dashboard(): JSX.Element {
   // never pulls audio out of the stream once a live overlay is running.
   useEffect(() => {
     identify({ role: 'dashboard', listener: true, fallback: true });
-    void api.meta().then(setMeta).catch(() => undefined);
     void api
       .authStatus()
       .then(({ required }) => setAuthRequired(required))
       .catch(() => undefined);
   }, []);
+
+  // Asked for again whenever the tab changes: which keys are set is what several
+  // screens warn about, and a key pasted on Keys should stop the warning on
+  // Setup the moment you go back, not at the next reload.
+  const refreshMeta = useCallback(() => {
+    void api.meta().then(setMeta).catch(() => undefined);
+  }, []);
+
+  useEffect(refreshMeta, [refreshMeta, tab]);
 
   /**
    * Sends a partial config to the server, which deep-merges it and broadcasts
@@ -66,7 +75,10 @@ export function Dashboard(): JSX.Element {
     );
   }
 
-  const status = snapshot?.connection.status ?? 'idle';
+  // Only platforms that are doing something get a chip; three "idle" chips
+  // for services you are not using is noise.
+  const connections = snapshot?.connections ?? {};
+  const activePlatforms = PLATFORMS.filter((platform) => (connections[platform]?.status ?? 'idle') !== 'idle');
   // Anything speaking counts too, not just what is waiting behind it.
   const queued = (tts?.queue.length ?? 0) + (tts?.speaking ? 1 : 0);
   // Audio lands here only when no real TTS source is open.
@@ -86,12 +98,24 @@ export function Dashboard(): JSX.Element {
         </div>
 
         <div className="header-status">
-          <span className="header-chip">
-            <StatusDot status={status} />
-            {status === 'connected' && snapshot?.connection.username
-              ? `@${snapshot.connection.username}`
-              : status}
-          </span>
+          {activePlatforms.length === 0 ? (
+            <span className="header-chip">
+              <StatusDot status="idle" />
+              not connected
+            </span>
+          ) : (
+            activePlatforms.map((platform) => (
+              <span
+                key={platform}
+                className="header-chip"
+                title={`${PLATFORM_INFO[platform].label}: ${connections[platform]?.status}`}
+              >
+                <PlatformLogo platform={platform} size={13} />
+                <StatusDot status={connections[platform]?.status ?? 'idle'} />
+                {chipLabel(platform, connections[platform])}
+              </span>
+            ))
+          )}
           <span className="header-chip">
             <StatusDot status={socketConnected ? 'connected' : 'error'} />
             {socketConnected ? 'server online' : 'server offline'}
@@ -188,7 +212,7 @@ export function Dashboard(): JSX.Element {
         {tab === 'Keys' ? <CredentialsTab origin={window.location.origin} /> : null}
         {tab === 'Chat' ? <ChatTab config={config} patch={patch} /> : null}
         {tab === 'Sources' ? <GalleryTab config={config} patch={patch} /> : null}
-        {tab === 'TTS' ? <TtsTab config={config} patch={patch} meta={meta} /> : null}
+        {tab === 'TTS' ? <TtsTab config={config} patch={patch} meta={meta} onCredentialsChanged={refreshMeta} /> : null}
         {tab === 'Filters' ? <FiltersTab config={config} patch={patch} /> : null}
         {tab === 'People' ? <PeopleTab config={config} patch={patch} /> : null}
         {tab === 'Archive' ? <ArchiveTab config={config} patch={patch} /> : null}
@@ -196,6 +220,15 @@ export function Dashboard(): JSX.Element {
       </main>
     </div>
   );
+}
+
+/** The name when there is one worth showing, otherwise the state. */
+function chipLabel(platform: Platform, state: ConnectionState | undefined): string {
+  if (state?.status !== 'connected') return state?.status ?? 'idle';
+  // YouTube's "name" is a video id or a stream title, which says nothing here.
+  if (platform === 'tiktok' && state.username) return `@${state.username}`;
+  if (platform === 'twitch' && state.username) return state.username;
+  return 'connected';
 }
 
 function audioHint(overlayListeners: number, monitoring: boolean): string {

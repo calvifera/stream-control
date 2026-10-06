@@ -165,8 +165,8 @@ function nextStepFor(platform: Platform, level: AuthLevel, appConfigured: boolea
 
   if (!appConfigured) {
     return platform === 'twitch'
-      ? 'Register an app at dev.twitch.tv/console/apps, then put TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in .env — that alone unlocks avatars.'
-      : 'Optional. Chat reads without any of this — credentials from Google Cloud Console (YouTube Data API v3) in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET add moderation, and the official API as a fallback source.';
+      ? 'Register an app at dev.twitch.tv/console/apps, then add its client id and secret on the Keys tab — that alone unlocks avatars.'
+      : 'Optional. Chat reads without any of this — a client id and secret from Google Cloud Console (YouTube Data API v3), added on the Keys tab, enable moderation and the official API as a fallback source.';
   }
   if (level !== 'user') {
     return platform === 'twitch'

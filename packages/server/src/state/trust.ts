@@ -1,4 +1,12 @@
-import type { TrustBand, TrustConfig, TrustFactor, TrustScore } from '@streaming/shared';
+import {
+  listKey,
+  type StreamUser,
+  type TrustBand,
+  type TrustConfig,
+  type TrustFactor,
+  type TrustScore,
+  type UsersConfig,
+} from '@streaming/shared';
 import { editDistance, phoneticKey } from '../text/phonetic.js';
 import { findMixedScriptWords, stripInvisible } from '../text/unicode.js';
 import type { KnownUser } from './directory.js';
@@ -10,9 +18,9 @@ import type { KnownUser } from './directory.js';
  * come from the directory, and behaviour this stream comes from the memory
  * kept here, which resets with the session.
  *
- * Nothing in this module blocks a message. It reports a score and the
- * suspicious signals in one message, and the hub decides what to do with
- * them.
+ * Nothing in this module blocks a message. It reports a score, the suspicious
+ * signals in one message, and whether speech should skip it. What to do about
+ * a retry — a strike — is left to the caller.
  */
 
 /** What the tracker needs to know about the speaker right now. */
@@ -46,6 +54,11 @@ export interface TrustAssessment {
   score: TrustScore;
   /** Suspicious things about this message's spelling. Empty when clean. */
   signals: string[];
+  /**
+   * Why speech skips this message, or null when it does not. The message
+   * still shows in chat; only text-to-speech is held.
+   */
+  held: string | null;
   /**
    * True when this message looks like another go at something the filter
    * blocked moments ago.
@@ -136,6 +149,66 @@ export function soundsSimilar(a: string, b: string): boolean {
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
+/**
+ * Why speech should skip this message, or null when it should not.
+ *
+ * Only a viewer in strict mode is held for how a message looks or sounds.
+ * Anyone who has not yet earned a place is held by the new-viewer rule, which
+ * is off unless the host switched it on.
+ */
+function holdReason(
+  subject: TrustSubject,
+  score: TrustScore,
+  signals: readonly string[],
+  message: TrustObservation,
+  config: TrustConfig,
+  now: number,
+): string | null {
+  if (!config.enabled || score.band === 'trusted') return null;
+  if (score.strict && message.nearMiss) return 'low trust: sounds like a severe term';
+  if (score.strict && signals[0]) return `low trust: ${signals[0]}`;
+  if (config.holdNewViewers && isNewViewer(subject, config, now)) {
+    return `new viewer: speech starts after ${config.holdMessages} messages or ${config.holdMinutes} minutes`;
+  }
+  return null;
+}
+
+/**
+ * Whether a viewer is still inside the new-viewer hold.
+ *
+ * Held while both limits are unmet, so a limit of zero turns the hold off.
+ * Subscribers and anyone who has gifted skip it: they have already put
+ * something in.
+ */
+function isNewViewer(subject: TrustSubject, config: TrustConfig, now: number): boolean {
+  if (subject.isSubscriber) return false;
+  const known = subject.known;
+  if ((known?.diamonds ?? 0) > 0 || (known?.gifts ?? 0) > 0) return false;
+  const messages = known?.messages ?? 0;
+  const minutes = (now - (known?.firstSeen ?? now)) / 60_000;
+  return messages < config.holdMessages && minutes < config.holdMinutes;
+}
+
+/** The facts about a viewer that trust scoring reads. */
+export function trustSubject(
+  key: string,
+  user: StreamUser | null,
+  known: KnownUser | undefined,
+  users: UsersConfig,
+): TrustSubject {
+  return {
+    key,
+    known,
+    onTrustedList: users.trusted.some((entry) => listKey(entry) === key),
+    isHost: user?.isHost ?? false,
+    isModerator: user?.isModerator ?? false,
+    isSubscriber: user?.isSubscriber ?? false,
+    isFollower: user?.isFollower ?? false,
+    isVerified: user?.isVerified ?? false,
+    fansClubLevel: user?.fansClubLevel ?? 0,
+  };
+}
+
 export class TrustTracker {
   private memory = new Map<string, SessionMemory>();
 
@@ -206,18 +279,12 @@ export class TrustTracker {
       memory.lastBlock = { ts: now, key: message.text, severe: message.severity === 'severe' };
     }
 
-    return {
-      score: this.score(subject, config),
-      signals,
-      retry,
-      severeRetry: retry && Boolean(block?.severe),
-    };
-  }
+    const score = this.score(subject, config);
+    // A message the filter already dropped has no speech left to hold back.
+    const held = message.filtered ? null : holdReason(subject, score, signals, message, config, now);
+    if (held) memory.held += 1;
 
-  /** Counts a message that trust held back from speech. */
-  markHeld(key: string): void {
-    const memory = this.memory.get(key);
-    if (memory) memory.held += 1;
+    return { score, signals, held, retry, severeRetry: retry && Boolean(block?.severe) };
   }
 
   /** This stream's counts for one viewer, for the profile card. */
