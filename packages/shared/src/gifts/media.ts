@@ -19,7 +19,7 @@ import { subscriptionWeight } from './describe.js';
 /** Gift kinds, plus gifted subscriptions, which the gift sources also show. */
 export type GiftMediaKind = GiftKind | 'gifted-subs';
 
-export const GIFT_MEDIA_KINDS: readonly GiftMediaKind[] = [
+export const GIFT_MEDIA_KINDS = [
   'tiktok-gift',
   'twitch-cheer',
   'twitch-power-up',
@@ -27,7 +27,7 @@ export const GIFT_MEDIA_KINDS: readonly GiftMediaKind[] = [
   'youtube-super-sticker',
   'youtube-jewels',
   'gifted-subs',
-];
+] as const satisfies readonly GiftMediaKind[];
 
 export interface GiftMediaRule {
   id: string;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   describeGift,
+  describeShare,
   describeSubscribe,
   buildTemplateVars,
   renderHtmlTemplate,
@@ -177,7 +178,7 @@ function tickerText(event: StreamEvent): string | null {
     case 'follow':
       return `${name} followed`;
     case 'share':
-      return `${name} shared`;
+      return `${name} ${describeShare(event)}`;
     case 'subscribe':
       return event.giftBombMember ? null : `${name} ${describeSubscribe(event)}`;
     case 'gift':

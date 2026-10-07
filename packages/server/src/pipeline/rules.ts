@@ -109,8 +109,6 @@ function clamp(text: string, max: number): string {
   return (lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice).trimEnd();
 }
 
-const normalizeHandle = (value: string): string => value.trim().toLowerCase().replace(/^@/, '');
-
 export class RuleEngine {
   private cooldowns = new CooldownTable();
 
@@ -145,6 +143,13 @@ export class RuleEngine {
         matches,
         rejections: [{ ruleId: 'penalty-box', ruleName: 'Penalty box', reason: 'muted from TTS' }],
       };
+    }
+
+    // Trust holds speech only: the message still reaches chat and overlays.
+    // The verdict was stamped on the event by the chat screen.
+    const held = event.type === 'chat' ? event.trust?.held : null;
+    if (held) {
+      return { matches, rejections: [{ ruleId: 'trust', ruleName: 'Trust score', reason: held }] };
     }
 
     const trusted = Boolean(handle) && users.trusted.some((u) => listKey(u) === handle);

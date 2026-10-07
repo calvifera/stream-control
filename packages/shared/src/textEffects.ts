@@ -70,5 +70,14 @@ export const HOP_EFFECT: TextEffect = {
   speed: 2.4,
 };
 
-export const isTextEffectActive = (effect: TextEffect | undefined): boolean =>
+/**
+ * A copy that shares nothing with the preset, `colors` included, so a config
+ * can be edited without changing what the next new source starts from.
+ */
+export const cloneTextEffect = (effect: TextEffect): TextEffect => ({
+  ...effect,
+  colors: [...effect.colors],
+});
+
+export const isTextEffectActive =(effect: TextEffect | undefined): boolean =>
   Boolean(effect && (effect.motion !== 'none' || effect.fill !== 'solid'));

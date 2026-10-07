@@ -113,8 +113,8 @@ console.log('\nevent routing');
   );
   check('a cheer becomes a gift, not chat', cheer?.type, 'gift');
   check(
-    'bits land in diamondCount so minDiamonds gates work',
-    cheer?.type === 'gift' ? cheer.diamondCount : null,
+    'bits land in totalDiamonds so minDiamonds gates work',
+    cheer?.type === 'gift' ? cheer.totalDiamonds : null,
     500,
   );
   check(

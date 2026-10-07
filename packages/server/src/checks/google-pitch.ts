@@ -6,9 +6,8 @@
  * if a tier silently ignores it, per-user pitch would do nothing at all, since
  * the browser would skip it too.
  */
-import fs from 'node:fs';
-import { CONFIG_PATH } from '../env.js';
 import { GoogleTtsProvider } from '../tts/providers/google.js';
+import { googleTtsApiKey } from './credentials.js';
 
 const TIERS = [
   'en-US-Standard-C',
@@ -21,19 +20,8 @@ const TIERS = [
   'en-US-Chirp3-HD-Aoede',
 ];
 
-function apiKey(): string {
-  try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as {
-      tts?: { google?: { apiKey?: string } };
-    };
-    return process.env.GOOGLE_TTS_API_KEY?.trim() || config.tts?.google?.apiKey?.trim() || '';
-  } catch {
-    return process.env.GOOGLE_TTS_API_KEY?.trim() ?? '';
-  }
-}
-
 async function main(): Promise<void> {
-  const key = apiKey();
+  const key = googleTtsApiKey();
   if (!key) {
     console.error('No Google API key found.');
     process.exitCode = 1;

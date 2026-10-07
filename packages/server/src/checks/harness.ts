@@ -66,14 +66,10 @@ export async function withConfigSnapshot<T>(body: () => Promise<T>): Promise<T> 
 /** Warns when a check is about to mutate a server holding real credentials. */
 export async function warnIfLiveCredentials(): Promise<void> {
   try {
-    const config = await call<{
-      tts?: { sessionId?: string; google?: { apiKey?: string } };
-    }>('/config');
-
-    const hasSecrets = Boolean(
-      config.tts?.sessionId?.trim() || config.tts?.google?.apiKey?.trim(),
-    );
-    if (!hasSecrets) return;
+    // Credentials are not in the config; the status says which are set, never
+    // their values.
+    const { credentials } = await call<{ credentials: Array<{ configured: boolean }> }>('/credentials');
+    if (!credentials.some((credential) => credential.configured)) return;
 
     console.log(
       `NOTE: ${BASE} holds real credentials. They are snapshotted and restored,\n` +

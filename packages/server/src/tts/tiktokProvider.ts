@@ -1,3 +1,4 @@
+import { DEFAULT_TIKTOK_TTS_ENDPOINT } from '@streaming/shared';
 import { createLogger, describeError } from '../logger.js';
 
 const log = createLogger('tts:tiktok');
@@ -23,7 +24,7 @@ const log = createLogger('tts:tiktok');
  *   npx tsx packages/server/src/checks/probe-endpoints.ts
  */
 export const TIKTOK_TTS_ENDPOINTS = [
-  'https://api16-normal-useast5.us.tiktokv.com/media/api/text/speech/invoke/',
+  DEFAULT_TIKTOK_TTS_ENDPOINT,
   'https://api16-normal-c-useast1a.tiktokv.com/media/api/text/speech/invoke/',
   'https://api16-normal-c-useast2a.tiktokv.com/media/api/text/speech/invoke/',
   'https://api19-normal-c-useast1a.tiktokv.com/media/api/text/speech/invoke/',

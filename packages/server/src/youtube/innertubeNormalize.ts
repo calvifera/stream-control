@@ -260,7 +260,6 @@ const paidBase = (renderer: BaseRenderer, name: string, cents: number) => ({
   user: authorOf(renderer),
   giftId: name.toLowerCase().replace(/\s+/g, '-'),
   giftName: name,
-  diamondCount: cents,
   repeatCount: 1,
   repeatEnd: true,
   streakable: false,
@@ -288,7 +287,6 @@ const superChatFrom = (renderer: BaseRenderer): GiftEvent => {
   const message = runsToText(renderer.message?.runs).trim() || null;
   return {
     ...paidBase(renderer, 'Super Chat', cents),
-    giftImageUrl: null,
     detail: {
       kind: 'youtube-super-chat',
       platform: 'youtube',
@@ -296,7 +294,7 @@ const superChatFrom = (renderer: BaseRenderer): GiftEvent => {
       value: amountOf(renderer, cents),
       media: { imageUrl: null, animationUrl: null },
       message,
-      displayMessage: message,
+      displayMessage: null,
       colors: {
         primary: argbToCss(renderer.headerBackgroundColor) ?? band.colors.primary,
         secondary: body ?? band.colors.secondary,
@@ -318,7 +316,6 @@ const superStickerFrom = (renderer: BaseRenderer): GiftEvent => {
   const band = bandForCents(cents);
   return {
     ...paidBase(renderer, 'Super Sticker', cents),
-    giftImageUrl: image,
     detail: {
       kind: 'youtube-super-sticker',
       platform: 'youtube',
@@ -429,8 +426,6 @@ function jewelsFrom(vm: GiftMessageViewModel): GiftEvent {
     },
     giftId: name.toLowerCase().replace(/\s+/g, '-'),
     giftName: name,
-    giftImageUrl: image,
-    diamondCount: jewels,
     repeatCount: 1,
     repeatEnd: true,
     streakable: false,

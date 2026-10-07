@@ -1,12 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { randomUUID } from 'node:crypto';
 import type {
   ConnectionState,
   StreamEvent,
-  SystemEvent,
   YouTubeConnectionConfig,
 } from '@streaming/shared';
 import { createLogger, describeError } from '../logger.js';
+import { systemEvent } from '../systemEvent.js';
 import type { AuthManager } from '../auth/manager.js';
 import { youtubeEventFrom, type YouTubeChatMessage } from './normalize.js';
 import { findLiveChat, pollChat, type ChatSession } from './innertube.js';
@@ -38,22 +37,6 @@ const MAX_POLL_MS = 30_000;
  * the same thing, digging the hole it is trying to climb out of.
  */
 class QuotaExhaustedError extends Error {}
-
-const systemEvent = (level: SystemEvent['level'], text: string): SystemEvent => ({
-  id: randomUUID(),
-  ts: Date.now(),
-  platform: 'youtube',
-  type: 'system',
-  user: null,
-  level,
-  text,
-});
-
-export interface YouTubeManagerEvents {
-  event: (event: StreamEvent) => void;
-  state: (state: ConnectionState) => void;
-  sessionStart: () => void;
-}
 
 /**
  * Reads a YouTube live chat.
@@ -176,7 +159,7 @@ export class YouTubeManager extends EventEmitter {
           'The Data API source needs a Google sign-in. Switch the source to "No sign-in needed" on the Setup tab, or sign in.',
         connectedAt: null,
       });
-      this.push(systemEvent('error', 'YouTube: not signed in'));
+      this.push(systemEvent('youtube', 'error', 'YouTube: not signed in'));
       return;
     }
 
@@ -209,7 +192,7 @@ export class YouTubeManager extends EventEmitter {
         lastError: null,
       });
       this.emit('sessionStart');
-      this.push(systemEvent('info', `Connected to YouTube live chat — ${found.title}`));
+      this.push(systemEvent('youtube', 'info', `Connected to YouTube live chat — ${found.title}`));
       log.info(`Connected to YouTube live chat (${found.liveChatId})`);
 
       this.schedule(0);
@@ -259,7 +242,7 @@ export class YouTubeManager extends EventEmitter {
         lastError: null,
       });
       this.emit('sessionStart');
-      this.push(systemEvent('info', `Connected to YouTube live chat — ${found.title}`));
+      this.push(systemEvent('youtube', 'info', `Connected to YouTube live chat — ${found.title}`));
       log.info(`Reading YouTube chat from the watch page (${found.videoId})`);
 
       this.schedule(0);
@@ -420,7 +403,7 @@ export class YouTubeManager extends EventEmitter {
       }
 
       if (data.offlineAt) {
-        this.push(systemEvent('info', 'YouTube: the stream has gone offline'));
+        this.push(systemEvent('youtube', 'info', 'YouTube: the stream has gone offline'));
         log.info('YouTube stream went offline');
         this.stopPolling();
         this.patch({ status: 'idle', connectedAt: null });
@@ -470,7 +453,7 @@ export class YouTubeManager extends EventEmitter {
       }
 
       if (!batch.continuation) {
-        this.push(systemEvent('info', 'YouTube: the stream has gone offline'));
+        this.push(systemEvent('youtube', 'info', 'YouTube: the stream has gone offline'));
         log.info('YouTube chat ended');
         this.stopPolling();
         this.patch({ status: 'idle', connectedAt: null });
@@ -496,7 +479,7 @@ export class YouTubeManager extends EventEmitter {
   private fail(reason: string, retry = true): void {
     log.warn(`YouTube: ${reason}`);
     this.patch({ status: 'error', lastError: reason, connectedAt: null });
-    this.push(systemEvent('error', `YouTube: ${reason}`));
+    this.push(systemEvent('youtube', 'error', `YouTube: ${reason}`));
     this.stopPolling();
     if (retry) this.scheduleReconnect();
     else this.clearReconnect();

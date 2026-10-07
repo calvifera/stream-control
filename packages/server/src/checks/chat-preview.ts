@@ -18,7 +18,6 @@ import {
   nameColor,
   PLATFORM_INFO,
   tierStyle,
-  type HighlightTier,
   type Platform,
 } from '@streaming/shared';
 

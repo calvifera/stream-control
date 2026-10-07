@@ -190,7 +190,10 @@ const GROUPS: Group[] = [
       href: 'https://dashboard.ngrok.com/get-started/your-authtoken',
       label: 'ngrok authtoken',
     },
-    steps: () => ['Make a free account and copy the authtoken.'],
+    steps: () => [
+      'Make a free account and copy the authtoken.',
+      'Choose a login as user:password. The tunnel exposes the whole dashboard, so set one.',
+    ],
     fields: [
       {
         key: 'NGROK_AUTHTOKEN',
@@ -199,11 +202,36 @@ const GROUPS: Group[] = [
         sentTo: 'ngrok.com',
         when: 'only while a tunnel is running',
       },
+      {
+        key: 'TUNNEL_BASIC_AUTH',
+        label: 'Tunnel login',
+        placeholder: 'streamer:secret',
+        sentTo: 'ngrok.com, which asks visitors for it before forwarding anything',
+        when: 'only while a tunnel is running. Without one, anyone with the URL can open the dashboard',
+      },
     ],
   },
 ];
 
-export function CredentialsTab({ origin }: Props): JSX.Element {
+/** The definition of one credential, so another screen can offer the same input. */
+export function credentialField(key: string): Field {
+  const field = GROUPS.flatMap((group) => group.fields).find((entry) => entry.key === key);
+  if (!field) throw new Error(`No credential field named ${key}`);
+  return field;
+}
+
+/**
+ * Where every credential stands, and a way to ask again after changing one.
+ *
+ * Shared so that a key pasted on the TTS tab and the same key on this one are
+ * the same thing — one store, one status — rather than two inputs that happen
+ * to be labelled alike.
+ */
+export function useCredentials(): {
+  statusOf: (key: string) => CredentialStatus | undefined;
+  reload: () => void;
+  error: string | null;
+} {
   const [status, setStatus] = useState<CredentialStatus[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,6 +246,12 @@ export function CredentialsTab({ origin }: Props): JSX.Element {
 
   const statusOf = (key: string): CredentialStatus | undefined =>
     status.find((entry) => entry.key === key);
+
+  return { statusOf, reload, error };
+}
+
+export function CredentialsTab({ origin }: Props): JSX.Element {
+  const { statusOf, reload, error } = useCredentials();
 
   return (
     <section className="panel-stack">
@@ -319,7 +353,7 @@ function CredentialGroup({
   );
 }
 
-function CredentialField({
+export function CredentialField({
   field,
   status,
   onSaved,

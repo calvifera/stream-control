@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   PLATFORM_INFO,
+  resolveGiftSound,
   subscriptionWeight,
   type GiftRainOverlaySettings,
   type GiftShowcaseEvent,
 } from '@streaming/shared';
 import { GiftMedia } from './GiftMedia.js';
-import { bracketSound, playSound } from '../../lib/giftSounds.js';
+import { playSound } from '../../lib/giftSounds.js';
 import { resolveMedia, useGiftFeed } from './feed.js';
 import '../../styles/gifts.css';
 
@@ -59,11 +60,8 @@ export function GiftRainWidget({ settings }: { settings: GiftRainOverlaySettings
     settings,
     (event) => {
       const media = resolveMedia(event, settings.mediaRules);
-      if (settings.sounds.enabled) {
-        const bracket = bracketSound(event, settings.sounds);
-        if (media.soundUrl) playSound(media.soundUrl, settings.sounds.volume);
-        else if (bracket) playSound(bracket.sound, bracket.volume);
-      }
+      const sound = resolveGiftSound(event, media.soundUrl, settings);
+      if (sound) playSound(sound.sound, sound.volume);
       const count = spriteCount(event, settings.maxPerGift);
       const fallMs = settings.fallSeconds * 1000;
       const now = Date.now();
@@ -83,7 +81,6 @@ export function GiftRainWidget({ settings }: { settings: GiftRainOverlaySettings
       });
       setSprites((current) => [...current, ...added].slice(-settings.maxOnScreen));
     },
-    [settings],
   );
 
   useEffect(() => {

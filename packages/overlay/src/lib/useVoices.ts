@@ -18,7 +18,7 @@ export interface VoiceOptions {
  * verified static catalogue. The browser backend has no server-side list at
  * all — its voices belong to whatever machine renders the overlay.
  */
-export function useVoices(provider: string): VoiceOptions {
+export function useVoices(provider: string, reloadKey = 0): VoiceOptions {
   const [voices, setVoices] = useState<ProviderVoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +57,7 @@ export function useVoices(provider: string): VoiceOptions {
     return () => {
       cancelled = true;
     };
-  }, [provider]);
+  }, [provider, reloadKey]);
 
   return {
     voices,

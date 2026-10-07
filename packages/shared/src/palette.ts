@@ -19,7 +19,7 @@
  * edge-of-band TikTok name is never mistaken for an edge-of-band Twitch one.
  */
 
-import { PLATFORM_INFO, normalizeHandle, type Platform } from './platforms.js';
+import { normalizeHandle, type Platform } from './platforms.js';
 
 /**
  * Hue centre for each platform, in degrees, taken from the brand colour in
@@ -187,6 +187,3 @@ export function bandOf(hue: number): Platform | null {
   }
   return null;
 }
-
-/** The brand colour, for anything that wants the platform rather than a person. */
-export const platformColor = (platform: Platform): string => PLATFORM_INFO[platform].color;

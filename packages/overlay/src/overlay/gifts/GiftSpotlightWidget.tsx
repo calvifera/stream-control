@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import type { GiftShowcaseEvent, GiftSpotlightOverlaySettings } from '@streaming/shared';
+import {
+  resolveGiftSound,
+  type GiftShowcaseEvent,
+  type GiftSpotlightOverlaySettings,
+  type ResolvedGiftSound,
+} from '@streaming/shared';
 import { ANIMATION_CLASS } from '../style.js';
 import { resolveMedia, useGiftFeed } from './feed.js';
 import { GiftCard } from './renderers.js';
-import { bracketSound, playSound } from '../../lib/giftSounds.js';
+import { playSound } from '../../lib/giftSounds.js';
 import '../../styles/gifts.css';
 
 interface Card {
   event: GiftShowcaseEvent;
   mediaUrl: string | null;
-  sound: { sound: string; volume: number } | null;
+  sound: ResolvedGiftSound | null;
   durationMs: number;
 }
 
@@ -26,20 +31,6 @@ function durationFor(event: GiftShowcaseEvent, settings: GiftSpotlightOverlaySet
     event.type === 'gift' ? event.totalDiamonds : (event.giftCount ?? 1) * 100;
   const factor = 1 + Math.min(1, Math.log10(Math.max(1, amount)) / 4);
   return Math.round(settings.durationMs * factor);
-}
-
-/**
- * Which sound a card plays: a media rule's own first, then the price
- * bracket's, then the fallback sound when brackets are off.
- */
-function soundFor(
-  ruleSound: string | null,
-  event: GiftShowcaseEvent,
-  settings: GiftSpotlightOverlaySettings,
-): { sound: string; volume: number } | null {
-  if (ruleSound) return { sound: ruleSound, volume: settings.sounds.enabled ? settings.sounds.volume : settings.soundVolume };
-  if (settings.sounds.enabled) return bracketSound(event, settings.sounds);
-  return settings.soundUrl ? { sound: settings.soundUrl, volume: settings.soundVolume } : null;
 }
 
 /**
@@ -86,7 +77,7 @@ export function GiftSpotlightWidget({ settings }: { settings: GiftSpotlightOverl
       queue.current.push({
         event,
         mediaUrl: media.url,
-        sound: soundFor(media.soundUrl, event, settings),
+        sound: resolveGiftSound(event, media.soundUrl, settings),
         durationMs: durationFor(event, settings),
       });
       if (settings.maxQueue > 0 && queue.current.length > settings.maxQueue) {
@@ -94,7 +85,6 @@ export function GiftSpotlightWidget({ settings }: { settings: GiftSpotlightOverl
       }
       if (!showing.current) showNext();
     },
-    [settings],
   );
 
   return (

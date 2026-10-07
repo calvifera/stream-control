@@ -6,14 +6,23 @@
  * gift sources show. All offline: fixtures only, no server.
  */
 import {
+  describeShare,
+  expandBeanCodes,
+  BEAN_EMOJI_CODES,
+  mapTextParts,
   approxCents,
   argbToCss,
   bracketFor,
+  bracketSound,
   createOverlay,
+  DEFAULT_OVERLAYS,
+  defaultSettingsFor,
   defaultSoundSettings,
+  PLATFORMS,
   bandForCents,
   cheerTier,
   clearsMinimum,
+  describeEvent,
   describeGift,
   describeSubscribe,
   findCheers,
@@ -21,12 +30,16 @@ import {
   insertEmotes,
   matchMediaRule,
   replaceRanges,
+  resolveGiftSound,
   stripCheers,
   subscriptionWeight,
   type GiftEvent,
   type GiftMediaRule,
+  type OverlaySettings,
   type SubscribeEvent,
 } from '@streaming/shared';
+
+type AlertsSettings = Extract<OverlaySettings, { type: 'alerts' }>;
 import { normalizeChat, normalizeEmote } from '../tiktok/normalize.js';
 import { parseIrc, twitchEventFrom } from '../twitch/normalize.js';
 import { innertubeEventFrom } from '../youtube/innertubeNormalize.js';
@@ -154,6 +167,7 @@ console.log('\nTwitch cheers');
   check('cheer is a gift', cheer.type, 'gift');
   check('cheer kind', cheer.detail.kind, 'twitch-cheer');
   check('cheer keeps its message, minus the cheer', cheer.detail.message, 'hype!');
+  check('and offers nothing to show until the filter has seen it', cheer.detail.displayMessage, null);
   check('cheer animation is the tier GIF', cheer.detail.media.animationUrl, globalCheermoteUrl(250));
   check('cheer describes in bits', describeGift(cheer), 'cheered 250 bits');
 }
@@ -172,6 +186,7 @@ console.log('\nTwitch Power-ups');
     '@msg-id=animated-message;animation-id=rainbow-eclipse;display-name=Bob;user-id=1 :bob!bob@bob.tmi.twitch.tv PRIVMSG #streamer :look at me',
   ) as GiftEvent;
   check('message effect records its animation', effect.detail.kind === 'twitch-power-up' && effect.detail.animationId, 'rainbow-eclipse');
+  check('a Power-up message is not shown until filtered', [effect.detail.message, effect.detail.displayMessage], ['look at me', null]);
 
   const plain = twitch('@emotes=25:0-4;display-name=Bob;user-id=1 :bob!bob@bob.tmi.twitch.tv PRIVMSG #streamer :LUL x');
   check('ordinary chat gets emote parts', plain?.type === 'chat' && plain.parts?.[0]?.type, 'emote');
@@ -232,6 +247,7 @@ console.log('\nYouTube watch page');
     },
   }) as GiftEvent;
   check('Super Chat message kept', paid.detail.message, 'thanks for the stream');
+  check('and not shown until filtered', paid.detail.displayMessage, null);
   check('band read from the colour, not the yen amount', paid.detail.kind === 'youtube-super-chat' && paid.detail.tier, 3);
   check('amount label is what the viewer saw', paid.detail.value.label, '¥500');
 
@@ -323,6 +339,7 @@ console.log('\nYouTube Data API');
     authorDetails: { channelId: 'UCx', displayName: 'V' },
   }) as GiftEvent;
   check('Data API Super Chat comment kept', sc.detail.message, 'gg');
+  check('and not shown until filtered', sc.detail.displayMessage, null);
   check('Data API tier used', sc.detail.kind === 'youtube-super-chat' && sc.detail.tier, 5);
 
   const gifting = youtubeEventFrom({
@@ -359,7 +376,7 @@ console.log('\nmedia rules');
  * A source saved before effects and sounds existed, read back through the
  * schema — which is exactly what happens to a real config file on upgrade.
  */
-function settingsDefaults(type: 'giftSpotlight' | 'alerts'): Record<string, any> | undefined {
+function settingsDefaults(type: 'giftSpotlight' | 'giftRain' | 'alerts'):Record<string, any> | undefined {
   const overlay = createOverlay(type, `old-${type.toLowerCase()}`) as unknown as { settings: Record<string, Record<string, unknown>> };
   const inner = overlay.settings[type] as Record<string, unknown>;
   for (const key of ['nameEffect', 'valueEffect', 'sounds', 'giftSounds']) delete inner[key];
@@ -392,6 +409,19 @@ console.log('\nprice brackets');
     '@msg-id=gigantified-emote-message;emotes=25:0-4;user-id=1 :bob!bob@x PRIVMSG #streamer :hello',
   ) as GiftEvent;
   check('an unpriced Power-up still earns a sound', at(approxCents(giant)), 'builtin:coin');
+
+  // Which sound a source plays, in the order rule, price bracket, single sound.
+  const on = { ...defaultSoundSettings(true), volume: 0.5 };
+  const off = defaultSoundSettings(false);
+  const hundred = bits(100);
+  check('price sounds on: the bracket plays at bracket volume x master', resolveGiftSound(hundred, null, { sounds: on }), { sound: 'builtin:coin', volume: 0.5 * 0.8 });
+  check('a rule sound beats the bracket', resolveGiftSound(hundred, '/media/galaxy.mp3', { sounds: on })?.sound, '/media/galaxy.mp3');
+  check('and plays at the price volume while those are on', resolveGiftSound(hundred, '/media/galaxy.mp3', { sounds: on, soundVolume: 0.2 })?.volume, 0.5);
+  check('price sounds off, none set: silence', resolveGiftSound(hundred, null, { sounds: off }), null);
+  check('price sounds off: the single sound at its own volume', resolveGiftSound(hundred, null, { sounds: off, soundUrl: '/media/ding.mp3', soundVolume: 0.3 }), { sound: '/media/ding.mp3', volume: 0.3 });
+  check('price sounds off: a rule sound still plays', resolveGiftSound(hundred, '/media/galaxy.mp3', { sounds: off, soundVolume: 0.3 }), { sound: '/media/galaxy.mp3', volume: 0.3 });
+  check('with no volume of its own it uses the sounds volume', resolveGiftSound(hundred, '/media/galaxy.mp3', { sounds: { ...off, volume: 0.9 } })?.volume, 0.9);
+  check('bracketSound is silent with settings missing', bracketSound(hundred, undefined), null);
 }
 
 console.log('\nconfig defaults');
@@ -402,6 +432,129 @@ console.log('\nconfig defaults');
   const alerts = settingsDefaults('alerts');
   check('existing alerts keep their look', alerts?.nameEffect?.motion, 'none');
   check('existing alerts keep their single sound', alerts?.giftSounds?.enabled, false);
+
+  // Both gift sources read their feed fields back from the schema the same way.
+  const rain = settingsDefaults('giftRain');
+  check('old rain config gains a minimum for every platform', Object.keys(rain?.minValue ?? {}).sort(), [...PLATFORMS].sort());
+  check('rain keeps its sounds off', rain?.sounds?.enabled, false);
+  check('spotlight and rain share the minimums', rain?.minValue, spotlight?.minValue);
+
+  // A default that is one shared object would let editing one parsed config
+  // change what the next one starts from.
+  spotlight?.nameEffect?.colors?.push('#000000');
+  if (spotlight?.minValue) spotlight.minValue.tiktok = 999;
+  const again = settingsDefaults('giftSpotlight');
+  check('parsed defaults do not share their colours', again?.nameEffect?.colors?.length, 3);
+  check('or their minimums', again?.minValue?.tiktok, 1);
+
+  const seeded = DEFAULT_OVERLAYS.find((o) => o.type === 'alerts')?.settings as AlertsSettings | undefined;
+  const created = defaultSettingsFor('alerts') as AlertsSettings;
+  check('a seeded alerts source starts like a new one: name', seeded?.alerts.nameEffect, created.alerts.nameEffect);
+  check('and its gift sounds', seeded?.alerts.giftSounds, created.alerts.giftSounds);
+}
+
+console.log('\nTikTok mascot stickers sent as text');
+{
+  const url = (name: string): string =>
+    `https://p16-tiktok-livestudio-asset-sg.ibyteimg.com/tos-alisg-i-x0wz2yqgvw-sg/${name}.webp`;
+
+  check('a bare code becomes a picture', expandBeanCodes(undefined, '[sagethink]'), [
+    { type: 'emote', name: '[sagethink]', url: url('sagethink') },
+  ]);
+  check('text around it is kept', expandBeanCodes(undefined, 'hmm [sagethink] ok'), [
+    { type: 'text', text: 'hmm ' },
+    { type: 'emote', name: '[sagethink]', url: url('sagethink') },
+    { type: 'text', text: ' ok' },
+  ]);
+  check(
+    'every code in a run is replaced',
+    expandBeanCodes(undefined, '[wow][wow]')?.filter((p) => p.type === 'emote').length,
+    2,
+  );
+  check('a code we do not know stays text', expandBeanCodes(undefined, 'see [note] below'), undefined);
+  check('the match is exact, not case-insensitive', expandBeanCodes(undefined, '[Wow]'), undefined);
+  check('a plain message stays plain', expandBeanCodes(undefined, 'hello there'), undefined);
+  check('and an empty one', expandBeanCodes(undefined, ''), undefined);
+
+  // A fan-club emote is already placed; the code beside it must not move it.
+  const placed = insertEmotes('look [wow]', [{ index: 5, name: '[emote]', url: 'fan' }]);
+  check('fan-club emotes keep their place', expandBeanCodes(placed, 'look [wow]'), [
+    { type: 'text', text: 'look ' },
+    { type: 'emote', name: '[emote]', url: 'fan' },
+    { type: 'emote', name: '[wow]', url: url('wow') },
+  ]);
+  check('the list matches what TikTok LIVE Studio ships', BEAN_EMOJI_CODES.length, 24);
+
+  // Through the real normalizer, the way a webcast message arrives.
+  const viaNormalizer = normalizeChat({ user: { nickname: 'A' }, content: 'ha [sagethink]' } as never, 'host');
+  check('a TikTok chat message gets the picture', viaNormalizer.parts, [
+    { type: 'text', text: 'ha ' },
+    { type: 'emote', name: '[sagethink]', url: url('sagethink') },
+  ]);
+  check('while its text stays as sent, for the filter and speech', viaNormalizer.text, 'ha [sagethink]');
+}
+
+console.log('\nstickers survive the filter changing the text');
+{
+  // Positions were measured against the text as sent. A cleaner that changes
+  // its length — "…" becomes "..." — must not cost the message its pictures.
+  const sticker = { type: 'emote', name: '[emote]', url: 'u' } as const;
+  const dots = (text: string): string | null => text.replace('…', '...');
+
+  check(
+    'a changed stretch keeps the sticker beside it',
+    mapTextParts([{ type: 'text', text: 'wait… ' }, sticker, { type: 'text', text: ' ok' }], dots),
+    [{ type: 'text', text: 'wait... ' }, sticker, { type: 'text', text: ' ok' }],
+  );
+  check(
+    'a stretch the filter drops leaves the sticker standing',
+    mapTextParts([{ type: 'text', text: 'badword' }, sticker], () => null),
+    [sticker],
+  );
+  check('an emote-only message is untouched', mapTextParts([sticker], dots), [sticker]);
+  check(
+    'the space beside a sticker is kept, so words do not run into it',
+    mapTextParts([{ type: 'text', text: 'hi ' }, sticker, { type: 'text', text: ' there' }], (t) => t),
+    [{ type: 'text', text: 'hi ' }, sticker, { type: 'text', text: ' there' }],
+  );
+  check(
+    'but no stray space appears where there was none',
+    mapTextParts([{ type: 'text', text: 'hi' }, sticker], (t) => t),
+    [{ type: 'text', text: 'hi' }, sticker],
+  );
+}
+
+console.log('\nwhat a share says');
+{
+  // The same field is a raid's size on Twitch and a share tally on TikTok.
+  // Only the first is a count of people who arrived.
+  const share = (platform: string, shareCount: number) => ({ platform, shareCount }) as never;
+  check('a TikTok share does not claim viewers', describeShare(share('tiktok', 12)), 'shared the stream');
+  check('and neither does a single one', describeShare(share('tiktok', 1)), 'shared the stream');
+  check('a Twitch raid does', describeShare(share('twitch', 40)), 'raided with 40 viewers');
+  check('a one-person raid does not pluralise', describeShare(share('twitch', 1)), 'raided the channel');
+}
+
+console.log('\nwhat an event says');
+{
+  // One wording for the chat log, the event log and the chat overlay.
+  const ev = (fields: Record<string, unknown>) => fields as never;
+  check('a follow', describeEvent(ev({ type: 'follow' })), 'followed');
+  check('a join', describeEvent(ev({ type: 'join' })), 'joined');
+  check('likes say how many', describeEvent(ev({ type: 'like', likeCount: 7 })), 'sent 7 likes');
+  check('a treasure box says its size', describeEvent(ev({ type: 'envelope', coins: 500 })), 'dropped a 500-coin treasure box');
+  check('a question carries its text', describeEvent(ev({ type: 'question', text: 'why?' })), 'asked: why?');
+  check('an emote', describeEvent(ev({ type: 'emote' })), 'sent an emote');
+  check('the viewer count', describeEvent(ev({ type: 'roomStats', viewerCount: 120 })), '120 viewers');
+  check('a system line is its own text', describeEvent(ev({ type: 'system', text: 'Connected' })), 'Connected');
+  check('a share goes through the platform wording', describeEvent(ev({ type: 'share', platform: 'twitch', shareCount: 40 })), 'raided with 40 viewers');
+  check('chat is left to each surface', describeEvent(ev({ type: 'chat', text: 'hi' })), null);
+  const cheered = twitch(
+    '@bits=250;display-name=Bob;user-id=1 :bob!bob@bob.tmi.twitch.tv PRIVMSG #streamer :Cheer250 hype!',
+  ) as GiftEvent;
+  check('a gift says nothing of its message until the filter has seen it', describeEvent(cheered), 'cheered 250 bits');
+  cheered.detail.displayMessage = cheered.detail.message;
+  check('and carries it after', describeEvent(cheered), 'cheered 250 bits: hype!');
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

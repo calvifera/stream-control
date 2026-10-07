@@ -4,3 +4,4 @@ export * from './media.js';
 export * from './sounds.js';
 export * from './twitch.js';
 export * from './youtube.js';
+export * from './source.js';

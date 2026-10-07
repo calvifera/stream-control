@@ -182,7 +182,6 @@ export class YouTubeModeration {
       });
 
       if (!response.ok) {
-        const body = await response.text().catch(() => '');
         // 403 here almost always means the account is not a moderator on the
         // broadcast rather than that the token is wrong, and saying so saves
         // an hour of re-checking credentials that were never the problem.

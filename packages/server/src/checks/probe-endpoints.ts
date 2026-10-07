@@ -5,9 +5,7 @@
  * TikTok retires these hosts regularly, so when synthesis starts failing this
  * tells you which host/path pairs still answer. Never prints the session id.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import { CONFIG_PATH } from '../env.js';
+import { tiktokSessionId } from './credentials.js';
 
 const HOSTS = [
   'api16-normal-c-useast1a.tiktokv.com',
@@ -24,19 +22,6 @@ const PATHS = ['/media/api/text/speech/invoke'];
 
 const USER_AGENT =
   'com.zhiliaoapp.musically/2022600030 (Linux; U; Android 7.1.2; es_ES; SM-G988N; Build/NRD90M; tt-ok/3.12.13.1)';
-
-function readSessionId(): string {
-  const fromEnv = process.env.TIKTOK_SESSION_ID?.trim();
-  if (fromEnv) return fromEnv;
-  try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as {
-      tts?: { sessionId?: string };
-    };
-    return config.tts?.sessionId?.trim() ?? '';
-  } catch {
-    return '';
-  }
-}
 
 async function probe(host: string, route: string, sessionId: string): Promise<string> {
   const url = new URL(`https://${host}${route}`);
@@ -88,11 +73,11 @@ async function probe(host: string, route: string, sessionId: string): Promise<st
 }
 
 async function main(): Promise<void> {
-  const sessionId = readSessionId();
+  const sessionId = tiktokSessionId();
   console.log(
     sessionId
       ? `Using a session id of ${sessionId.length} characters (from ${
-          process.env.TIKTOK_SESSION_ID ? 'the environment' : path.basename(CONFIG_PATH)
+          'the environment or the Keys tab'
         })\n`
       : 'WARNING: no session id found — every endpoint will reject the request\n',
   );

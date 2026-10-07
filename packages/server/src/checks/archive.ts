@@ -96,8 +96,6 @@ const gift = (uniqueId: string, diamonds: number, count = 1): StreamEvent =>
     user: user(uniqueId),
     giftId: 1,
     giftName: 'Rose',
-    giftImageUrl: null,
-    diamondCount: diamonds,
     repeatCount: count,
     totalDiamonds: diamonds * count,
     streakable: false,

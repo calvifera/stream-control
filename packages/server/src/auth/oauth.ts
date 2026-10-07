@@ -68,8 +68,8 @@ export function beginAuth(provider: OAuthProvider): { url: string } | { error: s
   if (!provider.clientId || !provider.clientSecret) {
     return {
       error:
-        `${provider.label} needs a client id and secret in .env before you can sign in. ` +
-        'Register an application with the provider, then add them and restart.',
+        `${provider.label} needs a client id and secret before you can sign in. ` +
+        'Register an application with the provider, then add them on the Keys tab.',
     };
   }
 

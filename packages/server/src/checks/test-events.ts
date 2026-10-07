@@ -133,7 +133,7 @@ console.log('\nidentity is stable across a burst');
 console.log('\nthe details that get spoofed');
 {
   const gift = createTestEvent(spec({ type: 'gift', diamonds: 500, repeatCount: 3 }));
-  check('diamond value is honoured', gift.type === 'gift' && gift.diamondCount, 500);
+  check('diamond value is honoured', gift.type === 'gift' && gift.detail.value.amount, 500);
   check('repeat count is honoured', gift.type === 'gift' && gift.repeatCount, 3);
   check('and the total is the product', gift.type === 'gift' && gift.totalDiamonds, 1500);
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  bracketSound,
   buildTemplateVars,
   giftVisual,
   type GiftShowcaseEvent,
@@ -10,7 +11,7 @@ import {
 import { onStreamEvent } from '../../lib/store.js';
 import { ANIMATION_CLASS } from '../style.js';
 import { AnimatedText } from '../../lib/AnimatedText.js';
-import { bracketSound, playSound } from '../../lib/giftSounds.js';
+import { playSound } from '../../lib/giftSounds.js';
 
 interface Props {
   settings: AlertsOverlaySettings;
@@ -131,7 +132,7 @@ function toAlert(event: StreamEvent, settings: AlertsOverlaySettings): Alert | n
     // Wait for the streak to finish, then apply the diamond threshold.
     if (!event.repeatEnd) return null;
     // A Power-up's price is not reported; unknown is not the same as free.
-    if (event.detail?.value.known !== false && event.totalDiamonds < settings.minDiamonds) return null;
+    if (event.detail.value.known && event.totalDiamonds < settings.minDiamonds) return null;
   }
 
   const template = settings.templates[event.type];
@@ -156,6 +157,6 @@ function toAlert(event: StreamEvent, settings: AlertsOverlaySettings): Alert | n
     sound: showcase ? bracketSound(showcase, settings.giftSounds) : null,
     avatarUrl: event.user?.avatarUrl ?? null,
     // The moving version when there is one: a cheermote GIF, an animated sticker.
-    imageUrl: event.type === 'gift' ? ((event.detail && giftVisual(event.detail.media)) ?? event.giftImageUrl) : null,
+    imageUrl: event.type === 'gift' ? giftVisual(event.detail.media) : null,
   };
 }

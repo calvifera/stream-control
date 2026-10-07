@@ -8,6 +8,7 @@ import {
   type TikTokLiveConstructorConnectionOptions,
 } from 'tiktok-live-connector';
 import type { ConnectionConfig, ConnectionState, StreamEvent, SystemEvent } from '@streaming/shared';
+import { systemEvent } from '../systemEvent.js';
 import { createLogger, describeError } from '../logger.js';
 import { env } from '../env.js';
 import {
@@ -22,26 +23,10 @@ import {
   normalizeRoomStats,
   normalizeShare,
   normalizeSubscribe,
+  stickersWithoutImage,
 } from './normalize.js';
 
 const log = createLogger('tiktok');
-
-const systemEvent = (level: SystemEvent['level'], text: string): SystemEvent => ({
-  id: randomUUID(),
-  ts: Date.now(),
-  platform: 'tiktok',
-  type: 'system',
-  user: null,
-  level,
-  text,
-});
-
-export interface TikTokManagerEvents {
-  event: (event: StreamEvent) => void;
-  state: (state: ConnectionState) => void;
-  /** Fired when a fresh room is joined, so session aggregates can reset. */
-  sessionStart: () => void;
-}
 
 /**
  * Owns the lifecycle of the webcast connection: connect, normalize, reconnect.
@@ -72,7 +57,15 @@ export class TikTokManager extends EventEmitter {
 
   constructor(private config: ConnectionConfig) {
     super();
-    if (env.signApiKey) SignConfig.apiKey = env.signApiKey;
+    this.applySigningKey();
+  }
+
+  /**
+   * Read again on every connect rather than once here: a key pasted on the Keys
+   * tab after startup has to be the one the next connection signs with.
+   */
+  private applySigningKey(): void {
+    SignConfig.apiKey = env.signApiKey;
   }
 
   setConfig(config: ConnectionConfig): void {
@@ -93,7 +86,7 @@ export class TikTokManager extends EventEmitter {
   }
 
   private notify(level: SystemEvent['level'], text: string): void {
-    this.push(systemEvent(level, text));
+    this.push(systemEvent('tiktok', level, text));
   }
 
   get isConnected(): boolean {
@@ -105,6 +98,7 @@ export class TikTokManager extends EventEmitter {
     if (!handle) throw new Error('Set a TikTok username before connecting');
 
     await this.disconnect({ silent: true });
+    this.applySigningKey();
     this.manuallyDisconnected = false;
     this.seenJoins.clear();
 
@@ -166,8 +160,28 @@ export class TikTokManager extends EventEmitter {
     }
   }
 
+  private lastStickerWarning = 0;
+
+  /**
+   * Says so, once a minute at most, when a sticker arrives that cannot be drawn.
+   * Rate-limited because a busy fan club can send dozens a minute and one line
+   * per sticker would bury everything else in the log.
+   */
+  private reportMissingStickers(msg: Parameters<typeof stickersWithoutImage>[0]): void {
+    const missing = stickersWithoutImage(msg);
+    if (missing.length === 0 || Date.now() - this.lastStickerWarning < 60_000) return;
+    this.lastStickerWarning = Date.now();
+    log.warn(
+      `TikTok sent ${missing.length} sticker(s) with no image address (id ${missing.slice(0, 3).join(', ')}), ` +
+        'so they cannot be shown',
+    );
+  }
+
   private registerHandlers(connection: TikTokLiveConnection, host: string): void {
-    connection.on(WebcastEvent.CHAT, (msg) => this.push(normalizeChat(msg, host)));
+    connection.on(WebcastEvent.CHAT, (msg) => {
+      this.reportMissingStickers(msg);
+      this.push(normalizeChat(msg, host));
+    });
     connection.on(WebcastEvent.GIFT, (msg) => this.push(normalizeGift(msg, host)));
     connection.on(WebcastEvent.FOLLOW, (msg) => this.push(normalizeFollow(msg, host)));
     connection.on(WebcastEvent.SHARE, (msg) => this.push(normalizeShare(msg, host)));
@@ -175,7 +189,10 @@ export class TikTokManager extends EventEmitter {
     connection.on(WebcastEvent.SUB_NOTIFY, (msg) => this.push(normalizeSubscribe(msg, host)));
     connection.on(WebcastEvent.ENVELOPE, (msg) => this.push(normalizeEnvelope(msg, host)));
     connection.on(WebcastEvent.QUESTION_NEW, (msg) => this.push(normalizeQuestion(msg, host)));
-    connection.on(WebcastEvent.EMOTE, (msg) => this.push(normalizeEmote(msg, host)));
+    connection.on(WebcastEvent.EMOTE, (msg) => {
+      this.reportMissingStickers(msg);
+      this.push(normalizeEmote(msg, host));
+    });
     connection.on(WebcastEvent.ROOM_USER, (msg) => this.push(normalizeRoomStats(msg, host)));
 
     connection.on(WebcastEvent.MEMBER, (msg) => {

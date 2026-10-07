@@ -1,11 +1,4 @@
-import {
-  approxCents,
-  bracketFor,
-  builtinSoundId,
-  type BuiltinSoundId,
-  type GiftShowcaseEvent,
-  type GiftSoundSettings,
-} from '@streaming/shared';
+import { builtinSoundId, type BuiltinSoundId } from '@streaming/shared';
 
 /**
  * The built-in gift sounds, synthesized with Web Audio.
@@ -246,20 +239,4 @@ export function playSound(sound: string, volume: number): void {
   VOICES[id](context, level, context.currentTime + 0.02);
   // Detach once every voice has finished, so nodes do not pile up over a stream.
   window.setTimeout(() => level.disconnect(), 5000);
-}
-
-/**
- * The sound a gift earns by its price bracket, or null for none.
- *
- * Returned rather than played so a caller can let a media rule's own sound
- * win, and play at the moment its card actually appears.
- */
-export function bracketSound(
-  event: GiftShowcaseEvent,
-  settings: GiftSoundSettings | undefined,
-): { sound: string; volume: number } | null {
-  if (!settings?.enabled) return null;
-  const bracket = bracketFor(approxCents(event), settings.brackets);
-  if (!bracket?.sound) return null;
-  return { sound: bracket.sound, volume: settings.volume * bracket.volume };
 }

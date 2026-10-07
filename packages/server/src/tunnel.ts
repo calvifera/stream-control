@@ -16,7 +16,7 @@ interface NgrokListener {
  * another machine — a phone, a second PC running your encoder, or a co-host.
  *
  * The tunnel is off by default: it exposes the dashboard (which holds your
- * session id) to anyone with the URL, so `tunnel.basicAuth` should be set
+ * session id) to anyone with the URL, so a tunnel login should be set
  * whenever it is on.
  */
 /** The local API every ngrok agent serves while it is running. */
@@ -146,15 +146,16 @@ export class TunnelController {
 
     if (!env.ngrokAuthToken) {
       const message =
-        'No NGROK_AUTHTOKEN set. Create a free token at dashboard.ngrok.com and put it in .env';
+        'No ngrok authtoken set. Create a free token at dashboard.ngrok.com and add it on the Keys tab';
       log.warn(message);
       return this.publish({ enabled: false, url: null, error: message });
     }
 
-    if (!config.basicAuth) {
+    const basicAuth = env.tunnelBasicAuth;
+    if (!basicAuth) {
       log.warn(
         'Tunnel starting without basic auth — anyone with the URL can reach your dashboard. ' +
-          'Set tunnel.basicAuth to "user:password" to lock it down.',
+          'Set a tunnel login ("user:password") on the Keys tab to lock it down.',
       );
     }
 
@@ -168,7 +169,7 @@ export class TunnelController {
         authtoken: env.ngrokAuthToken,
       };
       if (config.domain.trim()) options.domain = config.domain.trim();
-      if (config.basicAuth.trim()) options.basic_auth = [config.basicAuth.trim()];
+      if (basicAuth) options.basic_auth = [basicAuth];
 
       const listener = (await ngrok.forward(options as never)) as unknown as NgrokListener;
       this.listener = listener;

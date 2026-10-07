@@ -1,13 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  describeGiftWithMessage,
-  describeSubscribe,
+  describeEvent,
   messageDisplay,
   listKey,
   PLATFORM_INFO,
   PLATFORMS,
   viewerKey,
-  tierFor,
+  tierForEvent,
   tierStyle,
   type ChatTrust,
   type HighlightTier,
@@ -17,7 +16,7 @@ import {
 } from '@streaming/shared';
 import { api } from '../lib/api.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
-import { MessageParts, renderableParts } from '../lib/MessageParts.js';
+import { MessageParts, originalParts, renderableParts } from '../lib/MessageParts.js';
 import { PlatformStats } from './PlatformStats.js';
 import { useLiveSelect } from '../lib/store.js';
 import { ViewerCard } from './ViewerCard.js';
@@ -384,7 +383,7 @@ export const ChatLog = memo(function ChatLog({ dense = false }: Props): JSX.Elem
               <ChatRow
                 key={event.id}
                 event={event}
-                tier={highlightOf(event, tiers)}
+                tier={tierForEvent(tiers, event)}
                 showPlatform={tab === 'all'}
                 fresh={isFresh(event.id)}
                 trusted={key !== '' && trustedKeys.has(key)}
@@ -414,25 +413,6 @@ function LivePlatformStats(props: {
 }): JSX.Element {
   const stats = useLiveSelect((s) => s.stats);
   return <PlatformStats {...props} stats={stats} />;
-}
-
-/**
- * The highlight tier this message's author qualifies for, if any.
- *
- * The giving totals arrive stamped on the event by the server. One that never
- * got them — an older event still in the replay buffer — reads as zero, which
- * is the right answer: not notable, rather than an exception.
- */
-function highlightOf(event: StreamEvent, tiers: readonly HighlightTier[]): HighlightTier | null {
-  if (!event.user || tiers.length === 0) return null;
-  return tierFor(tiers, {
-    platform: event.user.platform,
-    isSubscriber: event.user.isSubscriber,
-    isModerator: event.user.isModerator,
-    isHost: event.user.isHost,
-    sessionGiven: event.giving?.session ?? 0,
-    lifetimeGiven: event.giving?.lifetime ?? 0,
-  });
 }
 
 /**
@@ -763,6 +743,7 @@ function MessageText({ event, trusted }: { event: StreamEvent; trusted: boolean 
   }
 
   const severe = display.tier === 'red';
+  const sentParts = originalParts(event);
   return (
     <div
       className={`chatrow-text ${severe ? 'chatrow-text-severe' : 'chatrow-text-flagged'}`}
@@ -771,7 +752,8 @@ function MessageText({ event, trusted }: { event: StreamEvent; trusted: boolean 
       <span className="chatrow-flag" aria-label={severe ? 'severe filter hit' : 'caught by the filter'}>
         ●
       </span>
-      {display.text}
+      {/* The message as sent, so the stickers that were in it go with it. */}
+      {sentParts ? <MessageParts parts={sentParts} className="chatrow-emote" /> : display.text}
       {display.notRead ? <span className="chatrow-notread">not read</span> : null}
     </div>
   );
@@ -779,22 +761,7 @@ function MessageText({ event, trusted }: { event: StreamEvent; trusted: boolean 
 
 /** One line of text for any event type the log shows. */
 function describe(event: StreamEvent): string {
-  switch (event.type) {
-    case 'chat':
-      // `displayText` is the filtered form; null means the filter dropped it.
-      return event.displayText ?? '[removed by filter]';
-    case 'gift':
-      return describeGiftWithMessage(event);
-    case 'follow':
-      return 'followed';
-    case 'subscribe':
-      return describeSubscribe(event);
-    case 'share':
-      // Twitch raids arrive as shares; the count is the raider count.
-      return event.shareCount > 1 ? `brought ${event.shareCount} viewers` : 'shared the stream';
-    case 'system':
-      return event.text;
-    default:
-      return event.type;
-  }
+  // `displayText` is the filtered form; null means the filter dropped it.
+  if (event.type === 'chat') return event.displayText ?? '[removed by filter]';
+  return describeEvent(event) ?? event.type;
 }

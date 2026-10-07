@@ -6,6 +6,8 @@
     "moduleResolution": "Bundler",
     "types": ["node"],
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "esModuleInterop": true,

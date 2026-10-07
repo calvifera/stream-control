@@ -2,21 +2,11 @@
  * Verifies real TTS synthesis through the production code path.
  *   npm run check:synth -w @streaming/server
  *
- * Needs a valid session id in .env or data/config.json. Writes nothing to
- * disk and never prints the session id.
+ * Needs a real TikTok session id, from .env or saved on the Keys tab, and calls
+ * TikTok's TTS service. Writes nothing to disk and never prints the session id.
  */
-import fs from 'node:fs';
-import { CONFIG_PATH } from '../env.js';
 import { chunkText, synthesizeWithTikTok, TIKTOK_TTS_ENDPOINTS } from '../tts/tiktokProvider.js';
-
-function sessionId(): string {
-  try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as { tts?: { sessionId?: string } };
-    return process.env.TIKTOK_SESSION_ID?.trim() || config.tts?.sessionId?.trim() || '';
-  } catch {
-    return process.env.TIKTOK_SESSION_ID?.trim() ?? '';
-  }
-}
+import { tiktokSessionId } from './credentials.js';
 
 let passed = 0;
 let failed = 0;
@@ -38,7 +28,7 @@ function looksLikeMp3(buffer: Buffer): boolean {
 }
 
 async function main(): Promise<void> {
-  const session = sessionId();
+  const session = tiktokSessionId();
   if (!session) {
     console.error('No session id found — set TIKTOK_SESSION_ID or paste one in the dashboard.');
     process.exitCode = 1;

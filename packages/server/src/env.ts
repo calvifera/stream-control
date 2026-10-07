@@ -70,6 +70,14 @@ export const env = {
     return process.env.NGROK_AUTHTOKEN?.trim() || undefined;
   },
   /**
+   * `user:password` that ngrok asks for before it forwards anything to the
+   * tunnel. A credential, so it is kept with the others rather than in the
+   * config that every overlay receives.
+   */
+  get tunnelBasicAuth(): string | undefined {
+    return process.env.TUNNEL_BASIC_AUTH?.trim() || undefined;
+  },
+  /**
    * OAuth application credentials, registered once by hand.
    *
    * These identify the *application*, not you. They live in .env rather

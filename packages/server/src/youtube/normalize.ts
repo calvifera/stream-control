@@ -78,7 +78,7 @@ interface YouTubeAmount {
 /**
  * Money, converted to the integer unit the rest of the system counts in.
  *
- * Every gift path in this codebase funnels into `diamondCount` — gates,
+ * Every gift path in this codebase funnels into `totalDiamonds` — gates,
  * highlight thresholds, the leaderboard, lifetime totals. TikTok supplies
  * diamonds and Twitch supplies bits; YouTube supplies actual currency, so it
  * has to become *some* integer or none of those features work on it.
@@ -218,8 +218,6 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         giftName: details?.amountDisplayString
           ? `Super Chat ${details.amountDisplayString}`
           : 'Super Chat',
-        giftImageUrl: null,
-        diamondCount: cents,
         repeatCount: 1,
         repeatEnd: true,
         streakable: false,
@@ -231,7 +229,7 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
           value: { amount: cents, unit: 'cents', known: true, label: amountLabel(details, cents) },
           media: { imageUrl: null, animationUrl: null },
           message: comment,
-          displayMessage: comment,
+          displayMessage: null,
           colors: band.colors,
         },
       } satisfies GiftEvent;
@@ -248,8 +246,6 @@ export function youtubeEventFrom(message: YouTubeChatMessage): StreamEvent | nul
         user,
         giftId: details?.superStickerMetadata?.stickerId ?? 'super-sticker',
         giftName: alt ? `Super Sticker: ${alt}` : 'Super Sticker',
-        giftImageUrl: null,
-        diamondCount: cents,
         repeatCount: 1,
         repeatEnd: true,
         streakable: false,

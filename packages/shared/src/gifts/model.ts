@@ -3,13 +3,13 @@ import type { Platform } from '../platforms.js';
 /**
  * What a gift actually was, per platform.
  *
- * `GiftEvent` has always flattened every kind of paid support into one shape
- * — a name, an image and a `diamondCount` — so that thresholds, leaderboards
- * and totals work everywhere. That flattening stays; it is what lets a
- * leaderboard exist at all. But it threw away everything that makes each
- * platform's gift *look* like itself: a Twitch cheer's tier and animated
- * cheermote, a Super Chat's colour band and the message the viewer paid to
- * pin, a gift bomb's size.
+ * `GiftEvent` flattens every kind of paid support into one shape — a name, a
+ * combo count and a `totalDiamonds` — so that thresholds, leaderboards and
+ * totals work everywhere. That flattening stays; it is what lets a
+ * leaderboard exist at all. But on its own it throws away everything that
+ * makes each platform's gift *look* like itself: a Twitch cheer's tier and
+ * animated cheermote, a Super Chat's colour band and the message the viewer
+ * paid to pin, a gift bomb's size.
  *
  * `GiftDetail` keeps it. Each platform owns one or more `kind`s, built by that
  * platform's normalizer and drawn by that platform's renderer, so a change to
@@ -64,8 +64,12 @@ interface DetailBase {
   /** What the viewer typed with it, exactly as received. */
   message: string | null;
   /**
-   * `message` after the filter chain. Set by the hub before anything renders
-   * it; null when the filter dropped it. Overlays read only this.
+   * `message` after the filter chain. Overlays and speech read only this.
+   *
+   * Always null as a normalizer builds it, and set by the hub's filter before
+   * anything renders it. So an event that never passed the filter shows no
+   * message, rather than the unfiltered one. Also null when the filter dropped
+   * the message.
    */
   displayMessage: string | null;
   colors: GiftColors | null;

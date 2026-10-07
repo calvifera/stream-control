@@ -112,6 +112,59 @@ export function bracketFor(
   return best;
 }
 
+/** A sound to play and how loudly, once every setting has been applied. */
+export interface ResolvedGiftSound {
+  sound: string;
+  volume: number;
+}
+
+/**
+ * The sound a gift earns by its price bracket, or null for none.
+ *
+ * Returned rather than played so a caller can let a media rule's own sound
+ * win, and play at the moment its card actually appears.
+ */
+export function bracketSound(
+  event: GiftShowcaseEvent,
+  settings: GiftSoundSettings | undefined,
+): ResolvedGiftSound | null {
+  if (!settings?.enabled) return null;
+  const bracket = bracketFor(approxCents(event), settings.brackets);
+  if (!bracket?.sound) return null;
+  return { sound: bracket.sound, volume: settings.volume * bracket.volume };
+}
+
+/** The sound settings a gift source carries, whichever source it is. */
+export interface GiftSoundSource {
+  /** Sounds by price. */
+  sounds: GiftSoundSettings;
+  /** One sound for every gift, used while price sounds are off. */
+  soundUrl?: string;
+  /** Volume for `soundUrl` and for a rule's sound while price sounds are off. */
+  soundVolume?: number;
+}
+
+/**
+ * Which sound a gift plays, for every source that plays one per gift.
+ *
+ * In order: the sound of the media rule that matched, then the price
+ * bracket's, then the source's single sound. A rule's sound is a choice made
+ * for that gift, so it plays whether or not sounds by price are on; it takes
+ * the price volume when they are, so the Volume slider still means something,
+ * and the source's own volume when they are not.
+ */
+export function resolveGiftSound(
+  event: GiftShowcaseEvent,
+  ruleSound: string | null,
+  source: GiftSoundSource,
+): ResolvedGiftSound | null {
+  const { sounds } = source;
+  const ownVolume = source.soundVolume ?? sounds.volume;
+  if (ruleSound) return { sound: ruleSound, volume: sounds.enabled ? sounds.volume : ownVolume };
+  if (sounds.enabled) return bracketSound(event, sounds);
+  return source.soundUrl ? { sound: source.soundUrl, volume: ownVolume } : null;
+}
+
 export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }

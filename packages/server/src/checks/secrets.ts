@@ -190,6 +190,98 @@ console.log('\nonly known keys are accepted');
   check('nor an empty string', parseSecretKey(''), null);
 }
 
+console.log('\nchanges are announced');
+{
+  // The TTS providers and the TikTok signing key copy a value when they are
+  // built, so they only see a key saved later if they are told.
+  const store = withEnv({});
+  const seen: string[] = [];
+  store.on('change', (key: string) => seen.push(key));
+  store.set('SIGN_API_KEY', 'abc');
+  store.set('GOOGLE_TTS_API_KEY', 'def');
+  store.clear('SIGN_API_KEY');
+  store.clear('SIGN_API_KEY');
+  check('a save and a clear each announce the key', seen, ['SIGN_API_KEY', 'GOOGLE_TTS_API_KEY', 'SIGN_API_KEY']);
+  check('clearing what was never stored is silent', seen.length, 3);
+  restore(store);
+}
+
+console.log('\ncredentials never stay in the config');
+{
+  // config.json is broadcast to every overlay. An older build let the TTS tab
+  // write these straight into it, so a config arriving with them — from an old
+  // file, an un-updated dashboard, a restored backup — has to have them moved
+  // out rather than passed along. The fields are gone from the config now, so
+  // "moved out" means absent, not blank.
+  const { ConfigStore } = await import('../config/store.js');
+  const { secrets } = await import('../secrets.js');
+  const CONFIG = path.join(SANDBOX, 'config.json');
+  const hasLegacyField = (config: { tts: object; tunnel: object }): boolean =>
+    'sessionId' in config.tts ||
+    'apiKey' in (config.tts as { google: object }).google ||
+    'basicAuth' in config.tunnel;
+
+  // At startup, from a file an older build wrote.
+  const first = new ConfigStore();
+  fs.writeFileSync(
+    CONFIG,
+    JSON.stringify({
+      ...first.get(),
+      tts: { ...first.get().tts, sessionId: 'sess-file', google: { ...first.get().tts.google, apiKey: 'AIza-file' } },
+      tunnel: { ...first.get().tunnel, basicAuth: 'old:login' },
+    }),
+  );
+  const loaded = new ConfigStore();
+  check('an old file gives up its credentials at startup', [secrets.get('TIKTOK_SESSION_ID'), secrets.get('GOOGLE_TTS_API_KEY'), secrets.get('TUNNEL_BASIC_AUTH')], ['sess-file', 'AIza-file', 'old:login']);
+  check('the loaded config does not carry them', hasLegacyField(loaded.get()), false);
+  check('and the file is rewritten without them', /sess-file|AIza-file|old:login/.test(fs.readFileSync(CONFIG, 'utf8')), false);
+
+  // From a patch sent by a dashboard that has not been updated.
+  const store = new ConfigStore();
+  const after = store.update({ tts: { sessionId: 'sess-123', google: { apiKey: 'AIza-456' } } });
+  check('a session id in a patch is not kept in the config', hasLegacyField(after), false);
+  check('the session id is in the secret store', secrets.get('TIKTOK_SESSION_ID'), 'sess-123');
+  check('and so is the key', secrets.get('GOOGLE_TTS_API_KEY'), 'AIza-456');
+
+  store.flush();
+  const onDisk = fs.readFileSync(CONFIG, 'utf8');
+  check('neither value reached config.json', /sess-123|AIza-456/.test(onDisk), false);
+
+  // From a backup restored whole.
+  const restored = store.replace({ ...after, tts: { ...after.tts, sessionId: 'sess-789' } });
+  check('a restored config is moved out too', hasLegacyField(restored), false);
+  check('and the newer value wins', secrets.get('TIKTOK_SESSION_ID'), 'sess-789');
+
+  check('untouched settings survive', restored.tts.provider, after.tts.provider);
+
+  // A patch the schema rejects must not leave a credential behind.
+  let rejected = false;
+  try {
+    store.update({ tts: { sessionId: 'sess-rejected', provider: 'not-a-provider' } });
+  } catch {
+    rejected = true;
+  }
+  check('a rejected patch is rejected', rejected, true);
+  check('and stores nothing', secrets.get('TIKTOK_SESSION_ID'), 'sess-789');
+
+  // The tunnel login is the same kind of thing: it used to sit in the config
+  // as `tunnel.basicAuth`, which every overlay is sent.
+  const tunnel = store.update({ tunnel: { domain: 'my-stream.ngrok.app', basicAuth: 'streamer:hunter2' } });
+  check('a tunnel login in a patch is not kept in the config', hasLegacyField(tunnel), false);
+  check('and is in the secret store', secrets.get('TUNNEL_BASIC_AUTH'), 'streamer:hunter2');
+  check('the rest of the tunnel settings survive', tunnel.tunnel.domain, 'my-stream.ngrok.app');
+  store.flush();
+  check(
+    'it never reached config.json',
+    fs.readFileSync(path.join(SANDBOX, 'config.json'), 'utf8').includes('hunter2'),
+    false,
+  );
+
+  secrets.clear('TIKTOK_SESSION_ID');
+  secrets.clear('GOOGLE_TTS_API_KEY');
+  secrets.clear('TUNNEL_BASIC_AUTH');
+}
+
 /*
  * Proof the sandbox redirect actually took effect.
  *

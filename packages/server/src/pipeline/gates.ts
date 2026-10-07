@@ -10,8 +10,6 @@ export interface GateResult {
 
 const ALLOWED: GateResult = { allowed: true, reason: null };
 
-const normalizeHandle = (value: string): string => value.trim().toLowerCase().replace(/^@/, '');
-
 /**
  * Decides whether a user clears a rule's requirements.
  *

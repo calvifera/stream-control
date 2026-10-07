@@ -19,3 +19,4 @@ export * from './voices.js';
 export * from './wordlist.js';
 export * from './trust.js';
 export * from './textEffects.js';
+export * from './tiktokEmoji.js';

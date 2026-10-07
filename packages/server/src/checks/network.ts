@@ -62,6 +62,13 @@ const ALLOWED: Record<string, string> = {
   'api16-normal-useast5.us.tiktokv.com': 'TikTok text-to-speech',
   'api19-normal-c-useast1a.tiktokv.com': 'TikTok text-to-speech',
   'api22-normal-c-useast2a.tiktokv.com': 'TikTok text-to-speech',
+
+  // Image CDNs. They carry no credential: the overlay's browser fetches public
+  // artwork from them, the way the platform's own site would.
+  'static-cdn.jtvnw.net': 'Twitch emote images',
+  'd3aqoihi2n8ty8.cloudfront.net': 'Twitch cheermote images',
+  'p16-tiktok-livestudio-asset-sg.ibyteimg.com': 'TikTok mascot sticker images ([sagethink] and friends)',
+  'lh3.googleusercontent.com': 'YouTube sticker and avatar images',
 };
 
 /**
@@ -81,11 +88,26 @@ const THIRD_PARTY_NOTES: Record<string, string> = {
   'connect.ngrok-agent.com': 'The tunnel, only while one is running',
 };
 
-/** Hostnames that only ever appear in test fixtures. */
-const FIXTURE_HOSTS = new Set(['example.com', 'spam.example', 'yt3.example', 'x', 'localhost']);
+/**
+ * Hostnames the source names without ever contacting.
+ *
+ * The first group is made-up names in examples. The second is links a viewer
+ * clicks (profile pages) and credit lines in comments — written into the page
+ * or a comment, never requested by this application.
+ */
+const FIXTURE_HOSTS = new Set([
+  'example.com',
+  'spam.example',
+  'yt3.example',
+  'x',
+  'localhost',
+  'www.twitch.tv',
+  'simpleicons.org',
+]);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(here, '..');
+const SHARED_SRC = path.resolve(here, '..', '..', '..', 'shared', 'src');
 
 function sourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -97,10 +119,17 @@ function sourceFiles(dir: string): string[] {
 
 console.log('\nOutbound destinations\n');
 
-const files = sourceFiles(SRC);
+/*
+ * `shared/` is scanned too: it holds the URLs the overlay loads images from.
+ * The `checks/` directory is not — its made-up hostnames are not destinations,
+ * and matching them would fail this check on its own test data.
+ */
+const files = [...sourceFiles(SRC), ...sourceFiles(SHARED_SRC)];
+const fixtureDir = `${path.sep}checks${path.sep}`;
 const found = new Map<string, string[]>();
 
 for (const file of files) {
+  if (file.includes(fixtureDir)) continue;
   const body = fs.readFileSync(file, 'utf8');
   for (const match of body.matchAll(/(?:https|wss):\/\/([a-zA-Z0-9._-]+)/g)) {
     const host = match[1];

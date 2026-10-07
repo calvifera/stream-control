@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PROFILE_HOSTS } from '@streaming/shared';
 import { createLogger } from './logger.js';
 
 const log = createLogger('panel');
@@ -80,7 +81,7 @@ export function openExternal(url: string): boolean {
   } catch {
     return false;
   }
-  const allowed = ['www.tiktok.com', 'www.twitch.tv', 'www.youtube.com'];
+  const allowed: string[] = Object.values(PROFILE_HOSTS);
   if (parsed.protocol !== 'https:' || !allowed.includes(parsed.hostname)) return false;
 
   const [command, args] =

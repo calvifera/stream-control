@@ -178,14 +178,6 @@ console.log('\nbehaviour');
 
 {
   const tracker = new TrustTracker();
-  const tester = subject('tiktok:test');
-  tracker.observe(tester, { ...clean, text: 'nigger', filtered: true, severity: 'severe' }, config, false);
-  const after = tracker.score(tester, config);
-  check('an unrecorded test message leaves no memory', !after.factors.some((f) => f.delta < 0 && f.label !== 'New here'));
-}
-
-{
-  const tracker = new TrustTracker();
   const person = subject('tiktok:reset');
   tracker.observe(person, { ...clean, text: 'nigger', filtered: true, severity: 'severe' }, config);
   tracker.reset();

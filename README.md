@@ -63,8 +63,9 @@ npm run build && npm start
 Then everything — dashboard and overlays — is served from
 <http://localhost:4700>.
 
-Enter your TikTok @handle on the **Connect** tab and hit Connect. You do not
-need credentials to read a room, and you do not have to be the host.
+Enter a TikTok @handle, a Twitch channel or a YouTube @handle on the **Setup**
+tab and hit Connect. You can connect any or all of them, and they feed one chat.
+None of them needs credentials to read a room, and you do not have to be the host.
 
 ## Adding overlays to your streaming software
 
@@ -77,7 +78,7 @@ http://localhost:4700/overlay/<id>
 Add it as a **browser source** at the width and height shown next to it. Every
 major streaming application has one, though the name varies — some call it a
 webpage or web source.
-Copy buttons for each URL are on the Connect tab.
+Copy buttons for each URL are on the Setup tab.
 
 Built-in source types:
 
@@ -105,6 +106,26 @@ normal setup. Each has its own fonts, colours, animation and custom CSS.
 stream. The
 > dashboard says which of the two is currently happening, and warns you when
 > sound is only reaching your desktop.
+
+## The desktop chat panel
+
+For reading chat while you play, there is a transparent, always-on-top window
+that shows the same merged chat. A browser tab can't be transparent or stay above
+a borderless-fullscreen game, which is the whole reason this is a small native
+app (Tauri) rather than another page.
+
+```bash
+npm run panel
+```
+
+That runs it in development and needs the [Rust toolchain](https://rustup.rs)
+installed. `npm run panel:build` produces an installer, and once a build exists
+the **Open chat panel** button in the dashboard header launches it for you.
+Opacity, text size and always-on-top are on the **Chat** tab and apply live.
+
+It loads `http://localhost:4700/panel/chat`, so the server has to be running on
+the default port. An exclusive-fullscreen game takes the whole display and will
+still cover it; run the game borderless-windowed.
 
 ## Text filtering
 
@@ -316,13 +337,14 @@ There's also a **Test voices** button on the People tab for a quick in-app check
 
 ## Public URLs (ngrok)
 
-Put an `NGROK_AUTHTOKEN` in `.env`, then start the tunnel from the Connect tab.
+Add your ngrok authtoken on the **Keys** tab (or as `NGROK_AUTHTOKEN` in `.env`), then
+start the tunnel from the **Setup** tab.
 Overlay URLs become reachable from another machine — useful when your encoder
 runs
 somewhere other than this server.
 
-**Set `tunnel.basicAuth` to `user:password` when you do.** The tunnel exposes
-the dashboard, and the dashboard can hold your TikTok session id.
+**Set a tunnel login (`user:password`) on the Keys tab when you do.** The tunnel
+exposes the whole dashboard.
 
 ## Configuration and data
 
@@ -382,8 +404,20 @@ of the download and will be left where it is.
 npm test
 ```
 
-Covers the filter engine: transliteration, homoglyph folding, mixed-script
-detection, severity, evasion classification and censoring behaviour.
+Typechecks all three packages, then runs every check that needs no server and no
+network: the filter engine (transliteration, homoglyph folding, mixed-script
+detection, severity, censoring), the rule gates, trust scoring, the YouTube and
+Twitch parsers, gifts, the credentials store and more. Each one lives in
+`packages/server/src/checks/`, and can be run alone with
+`npm run check:<name> -w @streaming/server`.
+
+`check:network` is the one to know about: it fails if the source can reach a host
+the Keys screen does not declare, so a new integration cannot quietly break the
+promise made there.
+
+A new `check:*` script has to be listed in `scripts/check.mjs` — as offline, or as
+live if it needs a server or a platform — or the run fails, so one can't be added
+and then never run.
 
 With the server running:
 
@@ -423,6 +457,8 @@ packages/
   shared/    types, config schema, defaults, template rendering, voice catalogue
   server/    connection, normalization, filters, rules, TTS queue, REST + socket
   overlay/   React overlays and the dashboard (one Vite app, two route trees)
+  desktop/   Tauri shell for the always-on-top chat panel (`npm run panel`)
+scripts/     update.mjs (`npm run update`), check.mjs (`npm test`)
 ```
 
 The server's `hub.ts` is the single place events flow through:

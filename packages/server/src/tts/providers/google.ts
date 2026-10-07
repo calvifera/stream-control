@@ -69,7 +69,7 @@ export class GoogleTtsProvider implements TtsProviderAdapter {
   }
 
   configurationHint(): string {
-    return 'Add a Google Cloud API key with the Text-to-Speech API enabled (GOOGLE_TTS_API_KEY, or paste one on the TTS tab).';
+    return 'Add a Google Cloud API key with the Text-to-Speech API enabled (on the TTS tab or the Keys tab).';
   }
 
   private key(): string {
