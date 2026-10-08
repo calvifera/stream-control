@@ -66,6 +66,11 @@ export class TikTokManager extends EventEmitter {
    */
   private applySigningKey(): void {
     SignConfig.apiKey = env.signApiKey;
+    // A different key may be on a plan that allows what the last one did not.
+    if (env.signApiKey !== this.signingKeySeen) {
+      this.signingKeySeen = env.signApiKey;
+      this.giftListRefused = false;
+    }
   }
 
   setConfig(config: ConnectionConfig): void {
@@ -110,10 +115,70 @@ export class TikTokManager extends EventEmitter {
     });
     log.info(`Connecting to @${handle}`);
 
-    const options: TikTokLiveConstructorConnectionOptions = {
+    /*
+     * The gift list is an extra, and it is the one request that needs a paid
+     * Euler Stream plan: without one the connector refuses it, and a refused
+     * extra aborts the whole connection — so a free key meant no chat at all.
+     * Try it once; if it is refused, connect without it and remember, rather
+     * than failing every attempt (and every reconnect) on something optional.
+     */
+    let extended = this.config.enableExtendedGiftInfo && !this.giftListRefused;
+
+    for (;;) {
+      const connection = new TikTokLiveConnection(handle, this.optionsFor(extended));
+      this.connection = connection;
+      this.registerHandlers(connection, handle);
+
+      try {
+        const result = await connection.connect();
+        this.emit('sessionStart');
+        this.patchState({
+          status: 'connected',
+          roomId: result.roomId ?? null,
+          connectedAt: Date.now(),
+          // A TikTok LIVE room only exists while it is live, so connecting is
+          // itself the proof — there is nothing separate to ask.
+          liveSince: Date.now(),
+          reconnectAttempts: 0,
+          lastError: null,
+          hostNickname: readRoomOwner(result.roomInfo)?.nickname ?? null,
+          hostAvatarUrl: readRoomOwner(result.roomInfo)?.avatar ?? null,
+        });
+        log.info(`Connected to @${handle} (room ${result.roomId})`);
+        this.notify('info', `Connected to @${handle}`);
+        return;
+      } catch (error) {
+        const message = describeError(error);
+
+        if (extended && /business plan/i.test(message)) {
+          extended = false;
+          this.giftListRefused = true;
+          log.warn('Euler Stream refused the extended gift list (it needs a Business plan); connecting without it');
+          this.notify(
+            'warn',
+            'Extended gift info needs an Euler Stream Business plan, so it is off. Chat and gifts still work.',
+          );
+          continue;
+        }
+
+        log.error(`Could not connect to @${handle}`, error);
+        this.patchState({ status: 'error', lastError: message });
+        this.notify('error', `Could not connect to @${handle}: ${message}`);
+        this.scheduleReconnect();
+        throw error instanceof Error ? error : new Error(message);
+      }
+    }
+  }
+
+  /** Whether Euler Stream has refused the gift list for the key now in use. */
+  private giftListRefused = false;
+  private signingKeySeen: string | undefined;
+
+  private optionsFor(extendedGiftInfo: boolean): TikTokLiveConstructorConnectionOptions {
+    return {
       processInitialData: true,
       fetchRoomInfoOnConnect: true,
-      enableExtendedGiftInfo: this.config.enableExtendedGiftInfo,
+      enableExtendedGiftInfo: extendedGiftInfo,
       ...(env.signApiKey ? { signApiKey: env.signApiKey } : {}),
       // An authenticated session unlocks a couple of restricted rooms but is
       // strictly optional; without it we connect as an anonymous viewer.
@@ -128,36 +193,6 @@ export class TikTokManager extends EventEmitter {
           }
         : {}),
     };
-
-    const connection = new TikTokLiveConnection(handle, options);
-    this.connection = connection;
-    this.registerHandlers(connection, handle);
-
-    try {
-      const result = await connection.connect();
-      this.emit('sessionStart');
-      this.patchState({
-        status: 'connected',
-        roomId: result.roomId ?? null,
-        connectedAt: Date.now(),
-        // A TikTok LIVE room only exists while it is live, so connecting is
-        // itself the proof — there is nothing separate to ask.
-        liveSince: Date.now(),
-        reconnectAttempts: 0,
-        lastError: null,
-        hostNickname: readRoomOwner(result.roomInfo)?.nickname ?? null,
-        hostAvatarUrl: readRoomOwner(result.roomInfo)?.avatar ?? null,
-      });
-      log.info(`Connected to @${handle} (room ${result.roomId})`);
-      this.notify('info', `Connected to @${handle}`);
-    } catch (error) {
-      const message = describeError(error);
-      log.error(`Could not connect to @${handle}`, error);
-      this.patchState({ status: 'error', lastError: message });
-      this.notify('error', `Could not connect to @${handle}: ${message}`);
-      this.scheduleReconnect();
-      throw error instanceof Error ? error : new Error(message);
-    }
   }
 
   private lastStickerWarning = 0;
