@@ -34,7 +34,7 @@ const MARK: Record<StationState, string> = {
 
 const WORD: Record<StationState, string> = {
   ready: 'Ready',
-  attention: 'Check',
+  attention: 'Needs a look',
   idle: 'Not set',
   error: 'Problem',
 };
@@ -107,7 +107,7 @@ export function useStations(config: AppConfig, meta: ServerMeta | null): Station
     detail: !config.tts.enabled
       ? 'Speech is off'
       : provider && !provider.configured
-        ? 'Needs a key'
+        ? 'Needs an API key'
         : providerLabel(config.tts.provider),
     go: { tab: 'TTS', area: 'speech', sub: 'engine' },
     action: provider && !provider.configured ? 'Fix' : 'Change',
@@ -121,12 +121,12 @@ export function useStations(config: AppConfig, meta: ServerMeta | null): Station
     state: sources === 0 ? 'idle' : listeners === 0 ? 'attention' : 'ready',
     detail:
       sources === 0
-        ? 'No sources'
+        ? 'No overlays on'
         : listeners === 0
-          ? `${sources} ${sources === 1 ? 'source' : 'sources'}, no audio source open`
-          : `${sources} ${sources === 1 ? 'source' : 'sources'}, audio source open`,
+          ? `${sources} on, but TTS audio isn't open anywhere`
+          : `${sources} on, TTS audio is open`,
     go: { tab: 'Setup', area: 'setup', sub: 'sources' },
-    action: 'Get URLs',
+    action: 'Copy URLs',
   };
 
   return [platforms, filterStation, rules, voice, overlays];

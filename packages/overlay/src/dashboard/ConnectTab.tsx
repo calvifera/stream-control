@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  OVERLAY_TYPE_LABELS,
   PLATFORMS,
   viewerSourceNote,
   type AppConfig,
@@ -73,7 +74,7 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
   return (
     <Page
       title="Go live"
-      lead="Chat from every platform runs through the same five stops. Fix the first one that is not ready, then copy your overlay URLs into your streaming software."
+      lead="Every chat message passes through the same five steps. Fix the first one that isn't ready, then add your overlay URLs to your streaming software."
     >
       <SignalPath stations={stations} onGo={go} />
 
@@ -94,12 +95,12 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
       {sub === 'sources' ? (
         <Panel
           title="Browser source URLs"
-          description="Add each one to your streaming software as a browser source at the size shown. When it runs on this machine, no tunnel is needed."
+          description="Add each URL to your streaming software as a browser source, at the size shown. If that software runs on this computer, you don't need a tunnel."
         >
           {(tts?.overlayListeners ?? 0) === 0 ? (
             <div className="banner banner-warn">
-              No TTS audio source is open yet. Add the <strong>TTS audio</strong> source below to
-              your streaming software, or your viewers will not hear speech.
+              The <strong>TTS audio</strong> overlay isn't open anywhere yet, so your stream won't
+              capture speech. Add its URL below to your streaming software as a browser source.
             </div>
           ) : null}
 
@@ -120,7 +121,7 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
                     <td>
                       <strong>{overlay.name}</strong>
                       <div className="muted">
-                        {overlay.type}
+                        {OVERLAY_TYPE_LABELS[overlay.type]}
                         {overlay.enabled ? '' : ' (off)'}
                       </div>
                     </td>
@@ -143,11 +144,11 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
           <h3>Hostname for copied links</h3>
           <Row>
             <Field
-              label="Source hostname"
+              label="Hostname"
               hint={
                 config.sources.host
-                  ? `Copied links use http://${config.sources.host}:… instead of this page's address.`
-                  : 'Leave blank for most software. Set it if yours rejects the URL — some refuse localhost and bare IP addresses alike, and want a hostname.'
+                  ? `Copied links start with http://${config.sources.host}:… instead of this page's address.`
+                  : "Leave this blank unless your streaming software rejects the URLs. Some programs won't accept localhost or an IP address and need a hostname instead."
               }
             >
               <TextInput
@@ -160,7 +161,7 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
               <div className="button-row">
                 <Button
                   onClick={() => patch({ sources: { host: 'stream.localhost.direct' } })}
-                  title="A public DNS name that resolves to 127.0.0.1, so the link stays on this machine"
+                  title="A hostname that always points to this computer (127.0.0.1), so the links never leave it"
                   disabled={config.sources.host === 'stream.localhost.direct'}
                 >
                   Use stream.localhost.direct
@@ -180,8 +181,8 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
 
       {sub === 'remote' ? (
         <Panel
-          title="Public tunnel (ngrok)"
-          description="Exposes this server on a public URL so streaming software on another machine, or a co-host, can load the overlays."
+          title="Remote access (ngrok tunnel)"
+          description="Gives this server a public URL, so streaming software on another computer, or a co-host, can load your overlays."
           actions={
             <Button variant={tunnel?.url ? 'danger' : 'primary'} onClick={toggleTunnel} disabled={busy}>
               {tunnel?.url ? 'Stop tunnel' : 'Start tunnel'}
@@ -194,8 +195,8 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
               {tunnel.external ? (
                 <span className="muted">
                   {' '}
-                  — from the ngrok agent already running on this machine. Stopping here only
-                  detaches; your agent keeps running.
+                  — from an ngrok agent that was already running on this computer. Stop here only
+                  disconnects it; the agent keeps running.
                 </span>
               ) : null}
             </div>
@@ -207,7 +208,7 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
               tunnel right until nothing loads, so name it explicitly. */}
           {tunnel?.mismatch ? (
             <div className="banner banner-warn">
-              That agent is forwarding: <code>{tunnel.mismatch}</code>
+              That ngrok agent is sending traffic somewhere else: <code>{tunnel.mismatch}</code>
             </div>
           ) : null}
 
@@ -235,8 +236,8 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
           />
           {tunnel?.external ? (
             <div className="banner">
-              The tunnel login does not apply right now — this tunnel is your own agent. Restart it
-              as <code>ngrok http 4700 --basic-auth "user:pass"</code>.
+              The tunnel login isn't applied, because this tunnel runs on your own ngrok agent.
+              Restart that agent with <code>ngrok http 4700 --basic-auth "user:pass"</code>.
             </div>
           ) : null}
           <Toggle

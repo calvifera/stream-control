@@ -3,6 +3,7 @@ import {
   DEFAULT_FILTERS,
   DEFAULT_STYLE,
   DEFAULT_USERS,
+  OVERLAY_TYPE_LABELS,
   type AppConfig,
   type ChatPanelConfig,
   type OverlaySettings,
@@ -387,7 +388,7 @@ export function createOverlay(type: OverlayType, id: string, name?: string): Ove
 
   return {
     id,
-    name: name?.trim() || `${type.charAt(0).toUpperCase()}${type.slice(1)} source`,
+    name: name?.trim() || OVERLAY_TYPE_LABELS[type],
     type,
     group: '',
     enabled: true,

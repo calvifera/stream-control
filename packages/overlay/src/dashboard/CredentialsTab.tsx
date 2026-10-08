@@ -69,7 +69,7 @@ const GROUPS: Group[] = [
       'The session ID is your own tiktok.com login cookie — treat it exactly like your password. It is only needed for the TikTok TTS voices; without it speech falls back to your browser’s built-in voices, and chat is unaffected either way.',
     link: { href: 'https://www.eulerstream.com', label: 'Euler Stream (free key)' },
     steps: () => [
-      'Sign-key: make a free Euler Stream account and copy the API key. Without one you share a public, rate-limited quota — fine for testing, shaky on a busy stream.',
+      'Euler Stream key: make a free Euler Stream account and copy the API key. Without one you share a public quota with a rate limit. That is fine for testing but unreliable on a busy stream.',
       'Session ID: log in to tiktok.com, open DevTools (F12) → Application → Cookies → https://tiktok.com, and copy the value of "sessionid".',
     ],
     fields: [
@@ -94,9 +94,9 @@ const GROUPS: Group[] = [
     title: 'YouTube',
     unlocks:
       'Moderating YouTube chat from here, and the official Data API as a fallback source. Reading chat needs none of it.',
-    required: 'required',
+    required: 'optional',
     caveat:
-      'Leave the consent screen in "Testing" and Google revokes your sign-in every 7 days. Publish it to "In Production" — step 6 — and it lasts indefinitely. Nobody else needs to use your app for this; you are publishing it to yourself.',
+      'If you leave the consent screen in "Testing", Google signs you out every 7 days. Publish it to "In production" (the last step) and the sign-in lasts. Nobody else uses your app, so this only publishes it for yourself.',
     link: { href: 'https://console.cloud.google.com/', label: 'Google Cloud Console' },
     steps: (origin) => [
       'Create a project — the name is only for you.',
@@ -184,10 +184,10 @@ const GROUPS: Group[] = [
   },
   {
     id: 'ngrok',
-    title: 'Public tunnel',
-    unlocks: 'Overlay URLs reachable from another machine.',
+    title: 'Remote access (ngrok)',
+    unlocks: 'Overlay URLs that another computer can reach.',
     required: 'optional',
-    caveat: 'Only needed if your capture software runs on a different computer to this one.',
+    caveat: 'Only needed if your streaming software runs on a different computer from this one.',
     link: {
       href: 'https://dashboard.ngrok.com/get-started/your-authtoken',
       label: 'ngrok authtoken',
@@ -541,14 +541,14 @@ function AccessPanel({
   return (
     <Panel
       title="Access to this dashboard"
-      description="Everything here runs on this machine. This is about who else can open it."
+      description="Everything here runs on this computer. This controls who else can open the dashboard."
     >
       {net ? (
         <div className={exposed && !passworded ? 'banner banner-warn' : 'banner'}>
           {exposed ? (
             <>
-              <strong>Anyone on your network can open this dashboard.</strong> It is bound to{' '}
-              <code>{net.host}</code>, which means every device on the same Wi-Fi or LAN can reach{' '}
+              <strong>Anyone on your network can open this dashboard.</strong> It listens on{' '}
+              <code>{net.host}</code>, so every device on the same Wi-Fi or local network can reach{' '}
               <code>
                 {'http://<this machine>:'}
                 {net.port}
@@ -560,8 +560,8 @@ function AccessPanel({
             </>
           ) : (
             <>
-              <strong>Only this machine can open this dashboard.</strong> It is bound to{' '}
-              <code>{net.host}</code>, so nothing on your network can reach it at all. A password
+              <strong>Only this computer can open this dashboard.</strong> It listens on{' '}
+              <code>{net.host}</code>, so no other device on your network can reach it. A password
               adds little on top of that.
             </>
           )}
@@ -573,8 +573,8 @@ function AccessPanel({
           key: 'DASHBOARD_PASSWORD',
           label: 'Dashboard password',
           placeholder: passworded ? 'enter a new password to replace it' : 'leave empty for none',
-          sentTo: 'nowhere. It never leaves this machine',
-          when: 'compared locally when someone logs in. It is the one credential here that is not sent to any service',
+          sentTo: 'Nowhere. It never leaves this computer',
+          when: 'Never sent. It is only checked on this computer when someone signs in, and it is the one credential here that no outside service receives',
         }}
         status={statusOf('DASHBOARD_PASSWORD')}
         onSaved={onSaved}
@@ -595,18 +595,18 @@ function AccessPanel({
           </p>
         </div>
         <div>
-          <h4>The network binding</h4>
+          <h4>The network setting</h4>
           <p>
-            Controls who can <em>reach</em> the page at all: a stronger guarantee, and not
-            something a password can give you. Set <code>HOST=127.0.0.1</code> in your{' '}
-            <code>.env</code> and restart to close it to everything but this computer.
+            Controls who can <em>reach</em> the page at all. This is a stronger protection than a
+            password. To allow only this computer, set <code>HOST=127.0.0.1</code> in your{' '}
+            <code>.env</code> file and restart.
           </p>
         </div>
         <div>
-          <h4>Overlays either way</h4>
+          <h4>Overlays stay open</h4>
           <p>
-            Overlay URLs stay reachable with or without a password, because streaming software has
-            no way to log in. A password protects control, never the event stream.
+            Overlay URLs work with or without a password, because streaming software can't sign
+            in. A password protects the controls, not the overlays.
           </p>
         </div>
       </div>

@@ -52,27 +52,27 @@ interface PlatformWiring {
 const WIRING: Record<Platform, PlatformWiring> = {
   tiktok: {
     section: 'connection',
-    reconnectHint: 'Also retries while the host is offline, so you can start this before going live',
+    reconnectHint: 'Keeps trying while the stream is offline, so you can start this before you go live',
     handle: (config) => config.connection.username,
     setHandle: (config, username) => ({ connection: { ...config.connection, username } }),
     connect: (handle) => api.connect(handle),
     disconnect: () => api.disconnect(),
     placeholder: 'your TikTok @handle',
-    note: 'No sign-in exists for TikTok — the live connection is read-only by nature.',
+    note: 'TikTok has no sign-in here. This connection only reads chat and events.',
   },
   twitch: {
     section: 'twitch',
-    reconnectHint: 'Rejoin the channel if the connection drops',
+    reconnectHint: 'Rejoins the channel if the connection drops',
     handle: (config) => config.twitch.channel,
     setHandle: (config, channel) => ({ twitch: { ...config.twitch, channel } }),
     connect: (handle) => api.twitchConnect(handle),
     disconnect: () => api.twitchDisconnect(),
     placeholder: 'channel name',
-    note: 'Chat reads without any sign-in. Registering an app adds avatars; signing in adds moderation.',
+    note: 'You can read chat without signing in. Registering an app adds avatars, and signing in adds moderation.',
   },
   youtube: {
     section: 'youtube',
-    reconnectHint: 'Keep looking for your broadcast if the connection drops or it has not started yet',
+    reconnectHint: "Keeps looking for your broadcast if the connection drops or the stream hasn't started yet",
     // Optional for the same reason as the stats slice: between rebuilding the
     // dashboard and restarting the server, this section does not exist yet.
     // Reading straight through it would throw and take the whole tab down,
@@ -293,8 +293,8 @@ function PlatformCard({
               />
               {meta && !meta.env.hasSignApiKey ? (
                 <p className="muted platform-note">
-                  No Euler Stream key is set, so the connector shares a rate-limited signing quota.
-                  Fine to start; add a free key on the Keys tab if connecting starts failing.
+                  No Euler Stream key is set, so TikTok connections share a limited public quota.
+                  That's fine to start. If connecting begins to fail, add a free key on the Keys tab.
                 </p>
               ) : null}
             </>
@@ -349,37 +349,37 @@ function YouTubeSource({
           type="button"
           className={source === 'innertube' ? 'chip chip-on' : 'chip'}
           onClick={() => set('innertube')}
-          title="Reads the page a viewer reads. No account, no quota, any public stream."
+          title="Reads chat from the public watch page. Needs no account and uses no quota, and works on any public stream."
         >
-          No sign-in needed
+          Watch page (no sign-in)
         </button>
         <button
           type="button"
           className={source === 'api' ? 'chip chip-on' : 'chip'}
           onClick={() => set('api')}
-          title="Google's official Data API. Needs an OAuth app and a signed-in account, and spends a daily quota."
+          title="Google's official Data API. Needs a Google Cloud OAuth app and a signed-in account, and uses a daily quota."
         >
-          Google Data API
+          Google Data API (sign-in)
         </button>
       </div>
 
       <p className="muted platform-note">
         {source === 'innertube' ? (
           <>
-            Reads chat the way the watch page does — no account, no quota, and it works on any
-            public stream.{' '}
+            Reads chat from the public watch page. No account or quota is needed, and it works on
+            any public stream.{' '}
             {target
               ? null
               : signedIn
-                ? 'Using the channel from your signed-in account.'
-                : 'Put your @handle above so it knows whose stream to find.'}{' '}
-            Not a documented API, so it can change without warning; switch to the Data API if it
-            ever stops.
+                ? 'Uses the channel from your signed-in account.'
+                : 'Enter your @handle above so it can find your stream.'}{' '}
+            YouTube doesn&apos;t document this method, so it can break without warning. If it
+            stops working, switch to the Google Data API.
           </>
         ) : (
           <>
-            Google&apos;s supported API. Needs the sign-in below and spends a daily quota — around
-            1,200 calls an hour, against a default allowance of 10,000 units.
+            Google&apos;s official API. It needs the sign-in below and uses a daily quota: about
+            1,200 calls an hour, out of a default allowance of 10,000 units a day.
           </>
         )}
       </p>
