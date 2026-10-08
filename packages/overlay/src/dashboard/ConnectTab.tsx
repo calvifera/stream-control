@@ -99,8 +99,9 @@ export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
         >
           {(tts?.overlayListeners ?? 0) === 0 ? (
             <div className="banner banner-warn">
-              The <strong>TTS audio</strong> overlay isn't open anywhere yet, so your stream won't
-              capture speech. Add its URL below to your streaming software as a browser source.
+              The <strong>TTS audio</strong> overlay isn't open anywhere yet, so speech only plays in
+              this dashboard tab. Add its URL below to your streaming software as a browser source to
+              send speech to the stream directly.
             </div>
           ) : null}
 
