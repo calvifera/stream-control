@@ -13,12 +13,9 @@ import {
   type StreamEventType,
 } from '@streaming/shared';
 import {
-  Button,
   ChipSelect,
-  CopyButton,
   Field,
   NumberInput,
-  Panel,
   Row,
   Select,
   Slider,
@@ -37,157 +34,176 @@ const EVENT_OPTIONS = STREAM_EVENT_TYPES.filter(
   (type) => !['roomStats', 'system'].includes(type),
 ).map((type) => ({ value: type, label: STREAM_EVENT_LABELS[type] }));
 
-export function SourceEditor({
+/**
+ * Where a source sits and how big it is: the settings you need to place it in
+ * streaming software. Rendered inside whichever panel the caller provides.
+ */
+export function SourceLayoutFields({
+  overlay,
+  existingGroups,
+  onChange,
+}: {
+  overlay: OverlaySource;
+  existingGroups: string[];
+  onChange: (next: Partial<OverlaySource>) => void;
+}): JSX.Element {
+  return (
+    <>
+      <Row>
+        <Field label="Name" hint="Also becomes the URL slug when first created">
+          <TextInput value={overlay.name} onChange={(name) => onChange({ name })} />
+        </Field>
+        <Field label="Width (px)">
+          <NumberInput value={overlay.width} onChange={(width) => onChange({ width })} min={16} max={7680} />
+        </Field>
+        <Field label="Height (px)">
+          <NumberInput value={overlay.height} onChange={(height) => onChange({ height })} min={16} max={4320} />
+        </Field>
+      </Row>
+
+      <Row>
+        <Field label="Horizontal align">
+          <Select
+            value={overlay.align}
+            onChange={(align) => onChange({ align })}
+            options={[
+              { value: 'start', label: 'Left' },
+              { value: 'center', label: 'Center' },
+              { value: 'end', label: 'Right' },
+            ]}
+          />
+        </Field>
+        <Field label="Vertical align">
+          <Select
+            value={overlay.justify}
+            onChange={(justify) => onChange({ justify })}
+            options={[
+              { value: 'start', label: 'Top' },
+              { value: 'center', label: 'Middle' },
+              { value: 'end', label: 'Bottom' },
+            ]}
+          />
+        </Field>
+      </Row>
+
+      <Toggle label="Enabled" checked={overlay.enabled} onChange={(enabled) => onChange({ enabled })} />
+
+      <h3>Organisation</h3>
+      <Row>
+        <Field
+          label="Group"
+          hint={
+            existingGroups.length > 0
+              ? `Existing: ${existingGroups.join(', ')}. Groups are only for sorting a long list.`
+              : 'e.g. Main scene, Starting soon, Just chatting. Groups are only for sorting a long list.'
+          }
+        >
+          <TextInput
+            value={overlay.group}
+            onChange={(group) => onChange({ group })}
+            placeholder="Ungrouped"
+          />
+        </Field>
+        {existingGroups.length > 0 ? (
+          <Field label="Or pick one">
+            <Select
+              value={overlay.group}
+              onChange={(group) => onChange({ group })}
+              options={[
+                { value: '', label: 'Ungrouped' },
+                ...existingGroups.map((g) => ({ value: g, label: g })),
+              ]}
+            />
+          </Field>
+        ) : null}
+      </Row>
+    </>
+  );
+}
+
+/** Type, colour, spacing and the custom CSS escape hatch. */
+export function SourceLookFields({
   overlay,
   onChange,
-  onDelete,
-  onReset,
 }: {
   overlay: OverlaySource;
   onChange: (next: Partial<OverlaySource>) => void;
-  onDelete: () => void;
-  onReset: () => void;
 }): JSX.Element {
-  const url = `${window.location.origin}/overlay/${overlay.id}`;
   const style = overlay.style;
   const setStyle = (next: Partial<OverlaySource['style']>): void =>
     onChange({ style: { ...style, ...next } });
 
   return (
     <>
-      <Panel
-        title={overlay.name}
-        description={`${overlay.type} source · add at ${overlay.width}×${overlay.height}`}
-        actions={
-          <div className="button-row">
-            <CopyButton text={url} label="Copy URL" />
-            <a className="btn btn-ghost" href={url} target="_blank" rel="noreferrer">
-              Preview
-            </a>
-            <Button onClick={onReset}>Reset settings</Button>
-            <Button variant="danger" onClick={onDelete}>
-              Delete
-            </Button>
-          </div>
-        }
-      >
-        <Row>
-          <Field label="Name">
-            <TextInput value={overlay.name} onChange={(name) => onChange({ name })} />
-          </Field>
-          <Field label="Width">
-            <NumberInput value={overlay.width} onChange={(width) => onChange({ width })} min={16} max={7680} />
-          </Field>
-          <Field label="Height">
-            <NumberInput value={overlay.height} onChange={(height) => onChange({ height })} min={16} max={4320} />
-          </Field>
-          <Field label=" ">
-            <Toggle label="Enabled" checked={overlay.enabled} onChange={(enabled) => onChange({ enabled })} />
-          </Field>
-        </Row>
-
-        <Row>
-          <Field label="Horizontal align">
-            <Select
-              value={overlay.align}
-              onChange={(align) => onChange({ align })}
-              options={[
-                { value: 'start', label: 'Left' },
-                { value: 'center', label: 'Center' },
-                { value: 'end', label: 'Right' },
-              ]}
-            />
-          </Field>
-          <Field label="Vertical align">
-            <Select
-              value={overlay.justify}
-              onChange={(justify) => onChange({ justify })}
-              options={[
-                { value: 'start', label: 'Top' },
-                { value: 'center', label: 'Middle' },
-                { value: 'end', label: 'Bottom' },
-              ]}
-            />
-          </Field>
-        </Row>
-      </Panel>
-
-      <Panel title="Appearance">
-        <Row>
-          <Field label="Font family">
-            <TextInput value={style.fontFamily} onChange={(fontFamily) => setStyle({ fontFamily })} />
-          </Field>
-          <Field label="Font size">
-            <NumberInput value={style.fontSize} onChange={(fontSize) => setStyle({ fontSize })} min={6} max={200} />
-          </Field>
-          <Field label="Font weight">
-            <NumberInput
-              value={style.fontWeight}
-              onChange={(fontWeight) => setStyle({ fontWeight })}
-              min={100}
-              max={900}
-              step={100}
-            />
-          </Field>
-        </Row>
-
-        <Row>
-          <ColorField label="Text" value={style.textColor} onChange={(textColor) => setStyle({ textColor })} />
-          <ColorField label="Accent" value={style.accentColor} onChange={(accentColor) => setStyle({ accentColor })} />
-          <Field label="Page background" hint="Keep transparent for a browser source">
-            <TextInput value={style.backgroundColor} onChange={(backgroundColor) => setStyle({ backgroundColor })} />
-          </Field>
-          <Field label="Item background">
-            <TextInput value={style.itemBackground} onChange={(itemBackground) => setStyle({ itemBackground })} />
-          </Field>
-        </Row>
-
-        <Row>
-          <Field label="Corner radius">
-            <NumberInput value={style.borderRadius} onChange={(borderRadius) => setStyle({ borderRadius })} min={0} max={200} />
-          </Field>
-          <Field label="Padding">
-            <NumberInput value={style.padding} onChange={(padding) => setStyle({ padding })} min={0} max={200} />
-          </Field>
-          <Field label="Gap">
-            <NumberInput value={style.gap} onChange={(gap) => setStyle({ gap })} min={0} max={200} />
-          </Field>
-          <Field label="Opacity">
-            <Slider value={style.opacity} onChange={(opacity) => setStyle({ opacity })} />
-          </Field>
-        </Row>
-
-        <Row>
-          <Field label="Text outline width" hint="Helps text stay readable over busy footage">
-            <NumberInput value={style.textStroke} onChange={(textStroke) => setStyle({ textStroke })} min={0} max={20} />
-          </Field>
-          <ColorField
-            label="Outline colour"
-            value={style.textStrokeColor}
-            onChange={(textStrokeColor) => setStyle({ textStrokeColor })}
-          />
-          <Field label=" ">
-            <Toggle label="Drop shadow" checked={style.shadow} onChange={(shadow) => setStyle({ shadow })} />
-          </Field>
-        </Row>
-
-        <Field label="Custom CSS" hint="Injected into this source only. Target .chat-row, .alert-card, etc.">
-          <TextArea
-            monospace
-            rows={5}
-            value={style.customCss}
-            onChange={(customCss) => setStyle({ customCss })}
-            placeholder=".chat-row { border-left: 3px solid #fe2c55; }"
+      <Row>
+        <Field label="Font family">
+          <TextInput value={style.fontFamily} onChange={(fontFamily) => setStyle({ fontFamily })} />
+        </Field>
+        <Field label="Font size">
+          <NumberInput value={style.fontSize} onChange={(fontSize) => setStyle({ fontSize })} min={6} max={200} />
+        </Field>
+        <Field label="Font weight">
+          <NumberInput
+            value={style.fontWeight}
+            onChange={(fontWeight) => setStyle({ fontWeight })}
+            min={100}
+            max={900}
+            step={100}
           />
         </Field>
-      </Panel>
+      </Row>
 
-      <Panel title="Behaviour">
-        <SettingsEditor
-          settings={overlay.settings}
-          onChange={(settings) => onChange({ settings })}
+      <h3>Colour</h3>
+      <Row>
+        <ColorField label="Text" value={style.textColor} onChange={(textColor) => setStyle({ textColor })} />
+        <ColorField label="Accent" value={style.accentColor} onChange={(accentColor) => setStyle({ accentColor })} />
+        <Field label="Page background" hint="Keep transparent for a browser source">
+          <TextInput value={style.backgroundColor} onChange={(backgroundColor) => setStyle({ backgroundColor })} />
+        </Field>
+        <Field label="Item background">
+          <TextInput value={style.itemBackground} onChange={(itemBackground) => setStyle({ itemBackground })} />
+        </Field>
+      </Row>
+
+      <h3>Shape and spacing</h3>
+      <Row>
+        <Field label="Corner radius">
+          <NumberInput value={style.borderRadius} onChange={(borderRadius) => setStyle({ borderRadius })} min={0} max={200} />
+        </Field>
+        <Field label="Padding">
+          <NumberInput value={style.padding} onChange={(padding) => setStyle({ padding })} min={0} max={200} />
+        </Field>
+        <Field label="Gap">
+          <NumberInput value={style.gap} onChange={(gap) => setStyle({ gap })} min={0} max={200} />
+        </Field>
+        <Field label="Opacity">
+          <Slider value={style.opacity} onChange={(opacity) => setStyle({ opacity })} />
+        </Field>
+      </Row>
+
+      <h3>Text legibility</h3>
+      <Row>
+        <Field label="Outline width" hint="Helps text stay readable over busy footage">
+          <NumberInput value={style.textStroke} onChange={(textStroke) => setStyle({ textStroke })} min={0} max={20} />
+        </Field>
+        <ColorField
+          label="Outline colour"
+          value={style.textStrokeColor}
+          onChange={(textStrokeColor) => setStyle({ textStrokeColor })}
         />
-      </Panel>
+      </Row>
+      <Toggle label="Drop shadow" checked={style.shadow} onChange={(shadow) => setStyle({ shadow })} />
+
+      <h3>Custom CSS</h3>
+      <Field label="Injected into this source only" hint="Target .chat-row, .alert-card, etc.">
+        <TextArea
+          monospace
+          rows={5}
+          value={style.customCss}
+          onChange={(customCss) => setStyle({ customCss })}
+          placeholder=".chat-row { outline: 1px solid #ffb23e; }"
+        />
+      </Field>
     </>
   );
 }

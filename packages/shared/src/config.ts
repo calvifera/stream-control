@@ -389,38 +389,41 @@ export function settingsFor(
 }
 
 /* ------------------------------------------------------------------ *
- * Gating
+ * Rule conditions
  * ------------------------------------------------------------------ */
 
-export interface GateConfig {
-  followersOnly: boolean;
-  /** Mutuals only — stricter than followersOnly. */
-  friendsOnly: boolean;
-  subscribersOnly: boolean;
-  moderatorsOnly: boolean;
-  /** Must have sent at least one gift during this session. */
-  giftersOnly: boolean;
-  /** Cumulative diamonds this user has gifted this session. */
-  minSessionDiamonds: number;
-  /** TikTok follower count of the commenter. */
-  minFollowerCount: number;
-  /** Minimum fans-club level. 0 disables. */
-  minFansClubLevel: number;
-  /** @handles that bypass every gate above. */
-  allowUsers: string[];
-}
+/** What a viewer can be, for a "Viewer is…" condition. */
+export const VIEWER_ROLES = ['follower', 'mutual', 'subscriber', 'moderator', 'gifter'] as const;
+export type ViewerRole = (typeof VIEWER_ROLES)[number];
 
-export const DEFAULT_GATE: GateConfig = {
-  followersOnly: false,
-  friendsOnly: false,
-  subscribersOnly: false,
-  moderatorsOnly: false,
-  giftersOnly: false,
-  minSessionDiamonds: 0,
-  minFollowerCount: 0,
-  minFansClubLevel: 0,
-  allowUsers: [],
-};
+/**
+ * One test a rule applies. Every condition on a rule has to be true at once.
+ *
+ * A condition only looks at the kind of event it is about: a gift condition
+ * is ignored for a chat message on a rule that listens to both. The host and
+ * anyone on the rule's `alwaysAllow` list skip the viewer conditions.
+ */
+export type RuleCondition =
+  | { id: string; type: 'startsWith'; text: string; strip: boolean }
+  | { id: string; type: 'matches'; pattern: string }
+  | { id: string; type: 'minLength'; chars: number }
+  | { id: string; type: 'giftValue'; diamonds: number }
+  | { id: string; type: 'giftIs'; names: string[] }
+  | { id: string; type: 'likeCount'; count: number }
+  | { id: string; type: 'viewerIs'; role: ViewerRole }
+  | { id: string; type: 'viewerGifted'; diamonds: number }
+  | { id: string; type: 'followerCount'; count: number }
+  | { id: string; type: 'fansClub'; level: number };
+
+export type RuleConditionType = RuleCondition['type'];
+
+/** Conditions about the viewer rather than the event's content. */
+export const VIEWER_CONDITION_TYPES: readonly RuleConditionType[] = [
+  'viewerIs',
+  'viewerGifted',
+  'followerCount',
+  'fansClub',
+];
 
 /* ------------------------------------------------------------------ *
  * TTS
@@ -439,32 +442,6 @@ export interface GoogleTtsConfig {
   /** Fallback language when a voice name doesn't imply one. */
   languageCode: string;
 }
-
-export interface RuleConditions {
-  /** Only fire when the message starts with this (e.g. `!say`). Empty = any. */
-  requirePrefix: string;
-  /** Remove the prefix before speaking. */
-  stripPrefix: boolean;
-  /** Regex the message must match. Empty = any. */
-  matchRegex: string;
-  minLength: number;
-  /** Gift rules: minimum diamond value of the (completed) gift. */
-  minDiamonds: number;
-  /** Gift rules: only these gift names. Empty = any gift. */
-  giftNames: string[];
-  /** Like rules: only fire once the user crosses this like count. */
-  minLikeCount: number;
-}
-
-export const DEFAULT_CONDITIONS: RuleConditions = {
-  requirePrefix: '',
-  stripPrefix: true,
-  matchRegex: '',
-  minLength: 1,
-  minDiamonds: 0,
-  giftNames: [],
-  minLikeCount: 0,
-};
 
 export interface TtsRule {
   id: string;
@@ -495,8 +472,10 @@ export interface TtsRule {
   cooldownSeconds: number;
   /** Hard cap on spoken characters after templating. */
   maxChars: number;
-  gate: GateConfig;
-  conditions: RuleConditions;
+  /** Every one has to be true for the rule to speak. Empty means always. */
+  conditions: RuleCondition[];
+  /** @handles that skip this rule's viewer conditions. */
+  alwaysAllow: string[];
   /** 0..1, applied client-side in the overlay. */
   volume: number;
   /** Playback rate multiplier, 0.5..2. */
@@ -516,6 +495,12 @@ export interface TtsConfig {
   googleLegacy: { defaultVoice: string };
   /** Fall back to the overlay's built-in browser speech synth on failure. */
   fallbackToBrowser: boolean;
+  /**
+   * Speak only for viewers on the allow list (`users.trusted`) and the host.
+   * Everyone else is dropped before any rule is looked at. Their voice
+   * profiles still apply, since a profile is part of being on the list.
+   */
+  onlyAllowList: boolean;
   /** Drop the oldest queued item once the queue exceeds this. */
   maxQueueLength: number;
   /** Skip anything still queued after this many seconds. */
@@ -604,14 +589,16 @@ export interface OverlayStyle {
 }
 
 export const DEFAULT_STYLE: OverlayStyle = {
-  fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+  // The platform's own UI face. The old default named Inter, which nothing
+  // loaded, so it fell back to this on most machines anyway.
+  fontFamily: "'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif",
   fontSize: 22,
   fontWeight: 600,
   textColor: '#ffffff',
-  accentColor: '#25f4ee',
+  accentColor: '#f2b33d',
   backgroundColor: 'transparent',
-  itemBackground: 'rgba(10, 10, 16, 0.62)',
-  borderRadius: 14,
+  itemBackground: 'rgba(10, 11, 14, 0.8)',
+  borderRadius: 10,
   padding: 12,
   gap: 8,
   textStroke: 0,
@@ -978,8 +965,8 @@ export const DEFAULT_TTS_RULE: Omit<TtsRule, 'id'> = {
   priority: 0,
   cooldownSeconds: 5,
   maxChars: 200,
-  gate: DEFAULT_GATE,
-  conditions: DEFAULT_CONDITIONS,
+  conditions: [],
+  alwaysAllow: [],
   volume: 1,
   rate: 1,
 };

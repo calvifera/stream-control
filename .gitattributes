@@ -11,6 +11,9 @@
 # so there is no reason to let it vary.
 * text=auto eol=lf
 
+# cmd.exe misreads labels and multi-line blocks in LF-only batch files.
+*.bat text eol=crlf
+
 # Never line-ending-process these — Git's binary detection is good, but an
 # icon mangled by a newline substitution is a corrupt file that still looks
 # like a valid path in a diff.

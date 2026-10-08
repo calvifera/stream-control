@@ -3,7 +3,7 @@ import { PLATFORMS, PLATFORM_INFO, type AppConfig, type ConnectionState, type Pl
 import { api, type ServerMeta } from '../lib/api.js';
 import { identify, useLive } from '../lib/store.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
-import { usePersistentState } from '../lib/usePersistentState.js';
+import { setPersisted, usePersistentState } from '../lib/usePersistentState.js';
 import { useTtsPlayer } from '../lib/useTtsPlayer.js';
 import { ArchiveTab } from './ArchiveTab.js';
 import { ChatPopoutButton } from './ChatPopout.js';
@@ -12,14 +12,52 @@ import { CredentialsTab } from './CredentialsTab.js';
 import { ConnectTab } from './ConnectTab.js';
 import { GalleryTab } from './GalleryTab.js';
 import { TtsTab } from './TtsTab.js';
+import { RulesTab } from './RulesTab.js';
 import { FiltersTab } from './FiltersTab.js';
 import { PeopleTab } from './PeopleTab.js';
 import { LogTab } from './LogTab.js';
 import { StatusDot } from './controls.js';
+import { Icon, type IconName } from './icons.js';
+import '../styles/system.css';
+import '../styles/shell.css';
 import '../styles/dashboard.css';
+import '../styles/pages.css';
 
-const TABS = ['Setup', 'Keys', 'Chat', 'Sources', 'TTS', 'Filters', 'People', 'Archive', 'Log'] as const;
+const TABS = ['Setup', 'Keys', 'Chat', 'Sources', 'TTS', 'Rules', 'Filters', 'People', 'Archive', 'Log'] as const;
 type Tab = (typeof TABS)[number];
+
+/**
+ * The areas, grouped by the job they do. The order follows a first setup:
+ * connect, add keys, add overlays and a voice, write the rules, then the places
+ * you watch things happen.
+ */
+const NAV: Array<{ group: string; items: Array<{ id: Tab; label: string; icon: IconName }> }> = [
+  {
+    group: 'Set up',
+    items: [
+      { id: 'Setup', label: 'Go live', icon: 'live' },
+      { id: 'Keys', label: 'Keys', icon: 'key' },
+      { id: 'Sources', label: 'Overlays', icon: 'layers' },
+      { id: 'TTS', label: 'Voice', icon: 'audio' },
+    ],
+  },
+  {
+    group: 'Rules',
+    items: [
+      { id: 'Rules', label: 'Speech rules', icon: 'speech' },
+      { id: 'Filters', label: 'Filters', icon: 'filter' },
+      { id: 'People', label: 'Viewers', icon: 'people' },
+    ],
+  },
+  {
+    group: 'Activity',
+    items: [
+      { id: 'Chat', label: 'Chat', icon: 'chat' },
+      { id: 'Archive', label: 'Archive', icon: 'archive' },
+      { id: 'Log', label: 'Log', icon: 'log' },
+    ],
+  },
+];
 
 export function Dashboard(): JSX.Element {
   const { config, snapshot, socketConnected, tts } = useLive();
@@ -67,6 +105,16 @@ export function Dashboard(): JSX.Element {
     });
   }, []);
 
+  /** Opens an area, optionally already on one of its in-page tabs. */
+  const go = useCallback(
+    (target: { tab: string; area?: string; sub?: string }) => {
+      if (target.area && target.sub) setPersisted(`sub.${target.area}`, target.sub);
+      setTab(target.tab as Tab);
+      window.scrollTo({ top: 0 });
+    },
+    [setTab],
+  );
+
   if (!config) {
     return (
       <div className="app-loading">
@@ -75,89 +123,121 @@ export function Dashboard(): JSX.Element {
     );
   }
 
-  // Only platforms that are doing something get a chip; three "idle" chips
-  // for services you are not using is noise.
   const connections = snapshot?.connections ?? {};
-  const activePlatforms = PLATFORMS.filter((platform) => (connections[platform]?.status ?? 'idle') !== 'idle');
   // Anything speaking counts too, not just what is waiting behind it.
   const queued = (tts?.queue.length ?? 0) + (tts?.speaking ? 1 : 0);
   // Audio lands here only when no real TTS source is open.
   const playingHere = (tts?.overlayListeners ?? 0) === 0;
-  const monitoring = config?.tts.monitorInDashboard ?? false;
+  const monitoring = config.tts.monitorInDashboard;
+  const sourceCount = tts?.overlayListeners ?? 0;
 
   return (
     <div className="app">
       <audio ref={player.audioRef} onEnded={player.onEnded} onError={player.onError} />
-      <header className="app-header">
+
+      <aside className="rail">
+        <div className="rail-top">
         <div className="brand">
-          <span className="brand-mark" />
-          <div>
-            <h1>Stream Control</h1>
-            <p className="muted">Multi-platform live chat, overlays, TTS and moderation</p>
-          </div>
+          <BrandMark />
+          <span className="brand-name">Stream Control</span>
         </div>
 
-        <div className="header-status">
-          {activePlatforms.length === 0 ? (
-            <span className="header-chip">
-              <StatusDot status="idle" />
-              not connected
-            </span>
-          ) : (
-            activePlatforms.map((platform) => (
-              <span
-                key={platform}
-                className="header-chip"
-                title={`${PLATFORM_INFO[platform].label}: ${connections[platform]?.status}`}
-              >
-                <PlatformLogo platform={platform} size={13} />
-                <StatusDot status={connections[platform]?.status ?? 'idle'} />
-                {chipLabel(platform, connections[platform])}
-              </span>
-            ))
-          )}
-          <span className="header-chip">
-            <StatusDot status={socketConnected ? 'connected' : 'error'} />
-            {socketConnected ? 'server online' : 'server offline'}
-          </span>
+        <ul className="onair" aria-label="Connections">
+          {PLATFORMS.map((platform) => {
+            const state = connections[platform];
+            const status = state?.status ?? 'idle';
+            return (
+              <li key={platform}>
+                <button
+                  type="button"
+                  className="onair-row"
+                  onClick={() => go({ tab: 'Setup', area: 'setup', sub: 'platforms' })}
+                  title={`${PLATFORM_INFO[platform].label}: ${status}`}
+                >
+                  <PlatformLogo platform={platform} size={14} />
+                  <span className="onair-name">{PLATFORM_INFO[platform].label}</span>
+                  <span className="onair-state">
+                    <StatusDot status={status} />
+                    {chipLabel(platform, state)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        <nav className="nav" aria-label="Areas">
+          {NAV.map((section) => (
+            <div className="nav-group" key={section.group}>
+              <p className="nav-group-label">{section.group}</p>
+              {section.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={item.id === tab ? 'nav-item nav-item-on' : 'nav-item'}
+                  aria-current={item.id === tab ? 'page' : undefined}
+                  onClick={() => go({ tab: item.id })}
+                >
+                  <Icon name={item.icon} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+        </div>
+
+        <div className="rail-foot">
           {/* Clickable, because this is a mid-stream decision. Streaming
               software is commonly set up to send a browser source into the
-              stream without monitoring it to your own speakers — so you cannot
+              stream without monitoring it to your own speakers, so you cannot
               hear your own TTS, and wanting to hear it in order to answer
               someone happens while you are live, not while you are in a
               settings tab. */}
           <button
             type="button"
-            className={`header-chip header-chip-toggle${monitoring && !playingHere ? ' chip-on' : ''}`}
-            title={audioHint(tts?.overlayListeners ?? 0, monitoring)}
+            className={`rail-audio${playingHere ? ' rail-audio-warn' : ''}`}
+            title={audioHint(sourceCount, monitoring)}
             onClick={() => patch({ tts: { monitorInDashboard: !monitoring } })}
           >
-            <StatusDot status={playingHere || monitoring ? 'connecting' : 'connected'} />
-            {playingHere
-              ? 'audio: this tab'
-              : monitoring
-                ? `audio: ${tts?.overlayListeners} source${tts?.overlayListeners === 1 ? '' : 's'} + here`
-                : `audio: ${tts?.overlayListeners} browser source${tts?.overlayListeners === 1 ? '' : 's'}`}
+            <Icon name="audio" />
+            <span className="rail-audio-text">
+              <strong>
+                {playingHere
+                  ? 'Audio: this tab only'
+                  : monitoring
+                    ? 'Audio: stream and here'
+                    : 'Audio: to the stream'}
+              </strong>
+              <span>
+                {playingHere
+                  ? 'Your stream will not hear it'
+                  : monitoring
+                    ? 'Click to stop monitoring'
+                    : 'Click to also hear it here'}
+              </span>
+            </span>
           </button>
 
-          {/* Lives in the header, not the Chat tab: mounted there it was
-              torn down the moment you switched tabs, which closed the
-              pop-out window with it. */}
-          <ChatPopoutButton />
-
           {player.blocked ? (
-            <button type="button" className="header-chip header-chip-action" onClick={player.unlock}>
-              🔇 Click to enable audio
+            <button type="button" className="btn btn-primary rail-wide" onClick={player.unlock}>
+              Enable audio in this tab
             </button>
           ) : null}
 
-          {/* Lives in the header rather than the TTS tab on purpose: during an
-              incident you should not have to find the right tab and scroll.
-              Never disabled — if the state shown here is stale, the button
-              still has to work. */}
+          {/* Lives in the rail rather than a tab because it is mounted here
+              for good: inside a tab it was torn down the moment you switched,
+              which closed the pop-out window with it. */}
+          <div className="rail-chat">
+            <ChatPopoutButton />
+          </div>
+
+          {/* Never disabled: if the state shown here is stale, the button
+              still has to work. Outline until pointed at, so it is findable
+              without being the loudest thing on every screen. */}
           <button
             type="button"
-            className="header-chip header-kill"
+            className="kill"
             title="Stop what is speaking now and drop everything queued"
             onClick={() => {
               setKilled(true);
@@ -165,54 +245,41 @@ export function Dashboard(): JSX.Element {
               void api.clearTts().catch(() => undefined);
             }}
           >
-            {killed ? '■ Killed' : '■ Kill TTS'}
+            <Icon name="stop" size={16} />
+            <span>{killed ? 'Stopped' : 'Kill TTS'}</span>
             {!killed && queued > 0 ? <span className="kill-count">{queued}</span> : null}
           </button>
 
           {authRequired ? (
             <button
               type="button"
-              className="header-chip"
+              className="rail-signout"
               title="Sign out of this dashboard"
               onClick={() => {
                 void api.logout().then(() => window.location.reload());
               }}
             >
+              <Icon name="signout" size={16} />
               Sign out
             </button>
           ) : null}
         </div>
-      </header>
+      </aside>
 
-      {playingHere ? (
-        <div className="banner app-banner">
-          No TTS browser source is open, so speech is playing through this tab —
-          handy for testing, but <strong>your stream won't hear it</strong>. Add the{' '}
-          <strong>TTS audio</strong> browser source and it takes over automatically.
-        </div>
-      ) : null}
+      <main className="main">
+        {!socketConnected ? (
+          <div className="banner banner-error app-banner">
+            Lost the connection to the stream server. Changes will not save until it is back.
+          </div>
+        ) : null}
+        {saveError ? <div className="banner banner-error app-banner">{saveError}</div> : null}
 
-      <nav className="tabs">
-        {TABS.map((name) => (
-          <button
-            key={name}
-            type="button"
-            className={name === tab ? 'tab tab-on' : 'tab'}
-            onClick={() => setTab(name)}
-          >
-            {name}
-          </button>
-        ))}
-      </nav>
-
-      {saveError ? <div className="banner banner-error app-banner">{saveError}</div> : null}
-
-      <main className="app-main">
-        {tab === 'Setup' ? <ConnectTab config={config} patch={patch} meta={meta} /> : null}
+        {tab === 'Setup' ? <ConnectTab config={config} patch={patch} meta={meta} go={go} /> : null}
         {tab === 'Keys' ? <CredentialsTab origin={window.location.origin} /> : null}
         {tab === 'Chat' ? <ChatTab config={config} patch={patch} /> : null}
         {tab === 'Sources' ? <GalleryTab config={config} patch={patch} /> : null}
         {tab === 'TTS' ? <TtsTab config={config} patch={patch} meta={meta} onCredentialsChanged={refreshMeta} /> : null}
+        {tab === 'Rules' ? <RulesTab config={config} patch={patch} go={go} /> : null}
         {tab === 'Filters' ? <FiltersTab config={config} patch={patch} /> : null}
         {tab === 'People' ? <PeopleTab config={config} patch={patch} /> : null}
         {tab === 'Archive' ? <ArchiveTab config={config} patch={patch} /> : null}
@@ -222,18 +289,45 @@ export function Dashboard(): JSX.Element {
   );
 }
 
+/** Three platform gels running into one line: what the product does. */
+function BrandMark(): JSX.Element {
+  return (
+    <svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" focusable="false" style={{ flex: 'none' }}>
+      <path d="M2 6h9l5 8" fill="none" stroke="var(--gel-tiktok)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2 14h14" fill="none" stroke="var(--gel-youtube)" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M2 22h9l5-8" fill="none" stroke="var(--gel-twitch)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 14h10" fill="none" stroke="var(--accent)" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** The name when there is one worth showing, otherwise the state. */
 function chipLabel(platform: Platform, state: ConnectionState | undefined): string {
-  if (state?.status !== 'connected') return state?.status ?? 'idle';
+  if (state?.status !== 'connected') return statusWord(state?.status);
   // YouTube's "name" is a video id or a stream title, which says nothing here.
   if (platform === 'tiktok' && state.username) return `@${state.username}`;
   if (platform === 'twitch' && state.username) return state.username;
-  return 'connected';
+  return 'Connected';
+}
+
+function statusWord(status: ConnectionState['status'] | undefined): string {
+  switch (status) {
+    case 'connecting':
+      return 'Connecting';
+    case 'reconnecting':
+      return 'Retrying';
+    case 'error':
+      return 'Problem';
+    case 'connected':
+      return 'Connected';
+    default:
+      return 'Not connected';
+  }
 }
 
 function audioHint(overlayListeners: number, monitoring: boolean): string {
   if (overlayListeners === 0) {
-    return 'No TTS browser source is open — speech plays in this tab so you can hear it, but it is not going into your stream.';
+    return 'No TTS browser source is open — speech plays in this tab so you can hear it, but it is not going into your stream. Add the TTS audio source and it takes over.';
   }
   return monitoring
     ? 'Speech is going to your TTS browser source and also playing here. Click to stop monitoring.'

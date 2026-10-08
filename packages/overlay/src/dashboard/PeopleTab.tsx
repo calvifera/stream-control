@@ -9,12 +9,14 @@ import {
   NEUTRAL_VOICE_PROFILE,
   settingsFor,
   type AppConfig,
+  type PenaltyEntry,
+  type Platform,
   type TrustConfig,
   type TtsProvider,
   type UserVoiceProfile,
   type VoiceSettings,
 } from '@streaming/shared';
-import { api, type VoiceProbeResult, type VoiceProfilePatch } from '../lib/api.js';
+import { api, type UserSearchResult, type VoiceProfilePatch } from '../lib/api.js';
 import { AvatarPanel } from './AvatarPanel.js';
 import { useKnownUsers } from '../lib/useKnownUsers.js';
 import { useVoices } from '../lib/useVoices.js';
@@ -32,442 +34,479 @@ import {
 } from './controls.js';
 import { UserPicker } from './UserPicker.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
-import { PlatformTabs, type PlatformTab } from './PlatformTabs.js';
+import { Page, SubTabs, useSubTab } from './layout.js';
 
 interface Props {
   config: AppConfig;
   patch: (patch: Record<string, unknown>) => void;
 }
 
+const SUBS = ['viewers', 'automatic', 'enforcement'] as const;
+
 export function PeopleTab({ config, patch }: Props): JSX.Element {
+  const [sub, setSub] = useSubTab('people', 'viewers', SUBS);
   const users = config.users;
-  // Only the voice-probe panel at the bottom needs the globally selected
-  // backend's list; each profile editor loads the list for whichever backend
-  // it is currently editing.
-  const { options: providerVoices } = useVoices(config.tts.provider);
-  const [probe, setProbe] = useState<VoiceProbeResult | null>(null);
-  const [probing, setProbing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editingProfile, setEditingProfile] = useState<string | null>(null);
-  const [trustedTab, setTrustedTab] = useState<PlatformTab>('all');
-  const [newestFirst, setNewestFirst] = useState(true);
-  const trustedDetail = useKnownUsers(users.trusted);
-
-  /**
-   * The trusted list, split by service and ordered by when each person was
-   * added.
-   *
-   * That order is the array's own: every write appends and every removal
-   * filters, so position *is* add order. It is the only record of when
-   * somebody was trusted — unlike the penalty box, a trusted entry carries no
-   * timestamp — so it is worth not scrambling.
-   */
-  const trustedRows = useMemo(() => {
-    const rows = users.trusted.map((entry) => ({
-      entry,
-      platform: readViewerKey(entry).platform,
-    }));
-    const scoped =
-      trustedTab === 'all' ? rows : rows.filter((row) => row.platform === trustedTab);
-    return newestFirst ? scoped.slice().reverse() : scoped;
-  }, [users.trusted, trustedTab, newestFirst]);
-
-  const trustedCounts = useMemo(() => {
-    const counts = Object.fromEntries(PLATFORMS.map((platform) => [platform, 0])) as Record<
-      (typeof PLATFORMS)[number],
-      number
-    >;
-    for (const entry of users.trusted) counts[readViewerKey(entry).platform] += 1;
-    return counts;
-  }, [users.trusted]);
 
   const run = (action: Promise<unknown>): void => {
     setError(null);
     void action.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   };
 
-  const profileFor = (username: string): UserVoiceProfile =>
-    users.voiceProfiles.find((p) => listKey(p.username) === listKey(username)) ?? {
-      ...NEUTRAL_VOICE_PROFILE,
-      username,
-      // Never the raw key — a placeholder name of "tiktok:someone" would get
-      // saved the moment the editor is touched.
-      displayName: displayHandle(username).slice(1),
-    };
+  return (
+    <Page
+      title="Viewers"
+      lead="Who is allowed, who is muted, and who has their own voice, all in one list. Everyone is identified by platform and handle, so a mute on Twitch never silences a TikTok stranger with the same name."
+    >
+      {error ? <div className="banner banner-error app-banner">{error}</div> : null}
+
+      <SubTabs
+        label="Viewer sections"
+        value={sub}
+        onChange={setSub}
+        tabs={[
+          { id: 'viewers', label: 'Viewers', note: countViewers(users) || null },
+          { id: 'automatic', label: 'Automatic protection' },
+          { id: 'enforcement', label: 'Platform enforcement' },
+        ]}
+      />
+
+      {sub === 'viewers' ? (
+        <>
+          <ViewersTable config={config} run={run} />
+          <AvatarPanel />
+        </>
+      ) : null}
+
+      {sub === 'automatic' ? (
+        <>
+          <TrustPanel config={config} patch={patch} />
+          <AutoPenaltyPanel config={config} patch={patch} />
+          <SevereTermsPanel config={config} patch={patch} />
+        </>
+      ) : null}
+
+      {sub === 'enforcement' ? (
+        <>
+          <TwitchModerationPanel config={config} patch={patch} />
+          <YouTubeModerationPanel config={config} patch={patch} />
+        </>
+      ) : null}
+    </Page>
+  );
+}
+
+function viewerKeys(users: AppConfig['users']): string[] {
+  const keys = new Set<string>();
+  for (const entry of users.trusted) keys.add(listKey(entry));
+  for (const entry of users.penaltyBox) keys.add(listKey(entry.username));
+  for (const profile of users.voiceProfiles) keys.add(listKey(profile.username));
+  return [...keys];
+}
+
+function countViewers(users: AppConfig['users']): number {
+  return viewerKeys(users).length;
+}
+
+/* ------------------------------------------------------------------ *
+ * The viewers table
+ *
+ * Three lists used to live on three tabs: the allow list, the penalty box and
+ * per-user voices. They were all the same thing, a viewer with something set
+ * on them, so a person who was allowed, had their own voice and had once been
+ * muted appeared in three places. This is one list of people; what is set on
+ * each of them is a column and, once a row is open, a form.
+ * ------------------------------------------------------------------ */
+
+interface ViewerRow {
+  key: string;
+  platform: Platform;
+  name: string;
+  handle: string;
+  avatarUrl: string | null;
+  allowed: boolean;
+  penalty: PenaltyEntry | null;
+  profile: UserVoiceProfile | null;
+  detail: UserSearchResult | undefined;
+}
+
+type StatusFilter = 'all' | 'allowed' | 'muted' | 'voice';
+type AddAs = 'allowed' | 'muted' | 'voice';
+
+function ViewersTable({
+  config,
+  run,
+}: {
+  config: AppConfig;
+  run: (action: Promise<unknown>) => void;
+}): JSX.Element {
+  const users = config.users;
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [status, setStatus] = useState<StatusFilter>('all');
+  const [platform, setPlatform] = useState<Platform | 'all'>('all');
+  const [search, setSearch] = useState('');
+  const [addAs, setAddAs] = useState<AddAs>('allowed');
+
+  const keys = useMemo(() => viewerKeys(users), [users]);
+  const known = useKnownUsers(keys);
+
+  const rows = useMemo<ViewerRow[]>(() => {
+    const trusted = new Set(users.trusted.map(listKey));
+    const penalties = new Map(users.penaltyBox.map((entry) => [listKey(entry.username), entry]));
+    const profiles = new Map(users.voiceProfiles.map((profile) => [listKey(profile.username), profile]));
+
+    return keys
+      .map((key) => {
+        const detail = known.get(key);
+        const penalty = penalties.get(key) ?? null;
+        const profile = profiles.get(key) ?? null;
+        const handle = displayHandle(key);
+        return {
+          key,
+          platform: readViewerKey(key).platform,
+          name: detail?.displayName ?? penalty?.displayName ?? profile?.displayName ?? handle.replace(/^@/, ''),
+          handle,
+          avatarUrl: detail?.avatarUrl ?? null,
+          allowed: trusted.has(key),
+          penalty,
+          profile,
+          detail,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }, [keys, known, users]);
+
+  const counts = {
+    all: rows.length,
+    allowed: rows.filter((row) => row.allowed).length,
+    muted: rows.filter((row) => row.penalty).length,
+    voice: rows.filter((row) => row.profile).length,
+  };
+
+  const needle = search.trim().toLowerCase();
+  const shown = rows
+    .filter((row) => (platform === 'all' ? true : row.platform === platform))
+    .filter((row) =>
+      status === 'all'
+        ? true
+        : status === 'allowed'
+          ? row.allowed
+          : status === 'muted'
+            ? row.penalty !== null
+            : row.profile !== null,
+    )
+    .filter((row) => (needle ? `${row.name} ${row.handle}`.toLowerCase().includes(needle) : true));
+
+  const add = (picked: { key: string; displayName: string }): void => {
+    const key = listKey(picked.key);
+    if (addAs === 'allowed') run(api.trustUser(picked.key, picked.displayName));
+    else if (addAs === 'muted') run(api.penalizeUser(picked.key, 'Added manually', picked.displayName));
+    else {
+      run(api.setUserVoice({ username: picked.key, displayName: picked.displayName }));
+      setOpenKey(key);
+    }
+    setStatus('all');
+    setPlatform('all');
+    setSearch('');
+  };
 
   return (
-    <>
-      {error ? <div className="banner banner-error">{error}</div> : null}
-
-      <Panel
-        title="Trusted"
-        description="Regulars who bypass every rule gate and per-user cooldown. Trusting someone also lifts a mute and clears their strikes."
-      >
-        <Field label="Add someone">
-          <UserPicker
-            placeholder="Search your chat history…"
-            onPick={(user) => run(api.trustUser(user.key, user.displayName))}
+    <Panel
+      title="Viewers"
+      description="Anyone with an access setting or a voice of their own. Open a row to change what is set on them."
+    >
+      <div className="viewers-add">
+        <Field label="Add someone as">
+          <Select
+            value={addAs}
+            onChange={setAddAs}
+            options={[
+              { value: 'allowed', label: 'Allowed (allow list)' },
+              { value: 'muted', label: 'Muted from speech' },
+              { value: 'voice', label: 'Own voice' },
+            ]}
           />
         </Field>
+        <Field label="Find in your chat history">
+          <UserPicker placeholder="Search by name or handle…" onPick={add} />
+        </Field>
+      </div>
 
-        <PlatformTabs
-          counts={trustedCounts}
-          total={users.trusted.length}
-          active={trustedTab}
-          onPick={setTrustedTab}
+      <div className="viewers-toolbar">
+        <input
+          className="input"
+          type="search"
+          value={search}
+          placeholder="Search these viewers"
+          aria-label="Search these viewers"
+          onChange={(event) => setSearch(event.target.value)}
         />
-
-        <div className="list-controls">
-          <label className="list-sort">
-            Order
-            <select
-              value={newestFirst ? 'desc' : 'asc'}
-              onChange={(event) => setNewestFirst(event.target.value === 'desc')}
-            >
-              <option value="desc">Recently added</option>
-              <option value="asc">Longest trusted</option>
-            </select>
-          </label>
-          <span className="muted people-count">
-            {trustedRows.length} {trustedRows.length === 1 ? 'person' : 'people'}
-            {trustedTab === 'all' ? '' : ` on ${PLATFORM_INFO[trustedTab].label}`}
-          </span>
+        <select
+          className="input viewers-platform"
+          aria-label="Platform"
+          value={platform}
+          onChange={(event) => setPlatform(event.target.value as Platform | 'all')}
+        >
+          <option value="all">All platforms</option>
+          {PLATFORMS.map((id) => (
+            <option key={id} value={id}>
+              {PLATFORM_INFO[id].label}
+            </option>
+          ))}
+        </select>
+        <div className="chips" role="group" aria-label="Show">
+          {(
+            [
+              ['all', 'Everyone'],
+              ['allowed', 'Allowed'],
+              ['muted', 'Muted'],
+              ['voice', 'Own voice'],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} type="button" className={status === id ? 'chip chip-on' : 'chip'} onClick={() => setStatus(id)}>
+              {label} {counts[id]}
+            </button>
+          ))}
         </div>
+      </div>
 
-        {trustedRows.length === 0 ? (
-          <p className="muted">
-            {users.trusted.length === 0
-              ? 'No trusted users yet.'
-              : `Nobody trusted on ${
-                  trustedTab === 'all' ? 'any platform' : PLATFORM_INFO[trustedTab].label
-                } yet.`}
-          </p>
-        ) : (
-          <div className="people-list">
-            {trustedRows.map(({ entry: username, platform }) => {
-              // The stored entry may be a qualified `platform:handle` or a
-              // bare legacy one; `listKey` collapses both to what the map is
-              // keyed on. The handle shown is always the bare one — nobody
-              // wants to read "@tiktok:someone".
-              const detail = trustedDetail.get(listKey(username));
-              const handle = displayHandle(username);
-              const open = editingProfile === username;
-              return (
-                <div key={username} className="person-block">
-                  <div className={open ? 'person-row person-row-open' : 'person-row'}>
-                    {detail?.avatarUrl ? (
-                      <img src={detail.avatarUrl} alt="" className="person-avatar" />
-                    ) : (
-                      <span className="person-avatar person-avatar-blank" />
-                    )}
-                    <div className="person-detail">
-                      <span className="person-name">
-                        {detail && `@${detail.displayName}` !== handle ? (
-                          <>
-                            {detail.displayName} <span className="muted">{handle}</span>
-                          </>
+      {rows.length === 0 ? (
+        <p className="muted">Nobody yet. Add someone above, or use the Allow and Mute buttons beside a message in the chat log.</p>
+      ) : shown.length === 0 ? (
+        <p className="muted">Nobody matches.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="table viewers-table">
+            <thead>
+              <tr>
+                <th scope="col">Viewer</th>
+                <th scope="col">Platform</th>
+                <th scope="col">Access</th>
+                <th scope="col">Voice</th>
+                <th scope="col">
+                  <span className="sr-only">Open</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((row) => {
+                const open = openKey === row.key;
+                return [
+                  <tr key={row.key} className={open ? 'viewer-row viewer-row-open' : 'viewer-row'}>
+                    <td data-label="Viewer">
+                      <div className="viewer-cell">
+                        {row.avatarUrl ? (
+                          <img src={row.avatarUrl} alt="" className="person-avatar" />
                         ) : (
-                          handle
+                          <span className="person-avatar person-avatar-blank" />
                         )}
+                        <div className="viewer-names">
+                          <button type="button" className="rules-name" aria-expanded={open} onClick={() => setOpenKey(open ? null : row.key)}>
+                            {row.name}
+                          </button>
+                          <span className="rules-cell-sub">{row.handle}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td data-label="Platform">
+                      <span className="viewer-platform">
+                        <PlatformLogo platform={row.platform} size={13} />
+                        {PLATFORM_INFO[row.platform].label}
                       </span>
-                      {/* Only on the merged view — inside a platform tab
-                          every row would say the same thing. */}
-                      {trustedTab === 'all' ? (
-                        <span className="muted person-platform">
-                          <PlatformLogo platform={platform} size={11} />
-                          {PLATFORM_INFO[platform].label}
-                        </span>
-                      ) : null}
-                      {detail ? (
-                        <span className="muted">
-                          {detail.messages} msg{detail.messages === 1 ? '' : 's'}
-                          {detail.lastSeen
-                            ? ` · last seen ${new Date(detail.lastSeen).toLocaleDateString()}`
-                            : ''}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="button-row">
-                      <Button
-                        variant={open ? 'primary' : 'default'}
-                        onClick={() => {
-                          // Creating the profile up front means the editor edits
-                          // a real record rather than a phantom default.
-                          if (
-                            !open &&
-                            !users.voiceProfiles.some((p) => listKey(p.username) === listKey(username))
-                          ) {
-                            run(
-                              api.setUserVoice({
-                                username,
-                                displayName: detail?.displayName ?? username,
-                              }),
-                            );
-                          }
-                          setEditingProfile(open ? null : username);
-                        }}
-                      >
-                        {open ? 'Done' : 'Voice'}
+                    </td>
+                    <td data-label="Access">
+                      <div className="vtags">
+                        {row.allowed ? <span className="vtag">Allowed</span> : null}
+                        {row.penalty ? (
+                          <span className="vtag vtag-muted">{row.penalty.automatic ? 'Muted (automatic)' : 'Muted'}</span>
+                        ) : null}
+                        {!row.allowed && !row.penalty ? <span className="rules-cell-sub">Normal</span> : null}
+                      </div>
+                    </td>
+                    <td data-label="Voice">
+                      {row.profile ? <span className="vtag">Own voice</span> : <span className="rules-cell-sub">Follows the rule</span>}
+                    </td>
+                    <td className="viewer-col-open">
+                      <Button variant={open ? 'primary' : 'default'} onClick={() => setOpenKey(open ? null : row.key)}>
+                        {open ? 'Done' : 'Edit'}
                       </Button>
-                      <Button variant="ghost" onClick={() => run(api.untrustUser(username))}>
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
+                    </td>
+                  </tr>,
+                  open ? (
+                    <tr key={`${row.key}:detail`} className="viewer-detail-row">
+                      <td colSpan={5}>
+                        <ViewerDetail row={row} config={config} run={run} />
+                      </td>
+                    </tr>
+                  ) : null,
+                ];
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
+}
 
-                  {/* Opens right here rather than in the panel below, which
-                      looked like the button had done nothing. */}
-                  {open ? (
-                    <VoiceProfileEditor
-                      profile={profileFor(username)}
-                      globalProvider={config.tts.provider}
-                      onChange={(next) => run(api.setUserVoice({ ...next, username }))}
-                    />
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Panel>
+function ViewerDetail({
+  row,
+  config,
+  run,
+}: {
+  row: ViewerRow;
+  config: AppConfig;
+  run: (action: Promise<unknown>) => void;
+}): JSX.Element {
+  const profile =
+    row.profile ??
+    ({ ...NEUTRAL_VOICE_PROFILE, username: row.key, displayName: row.name } as UserVoiceProfile);
 
-      <Panel
-        title="Penalty box"
-        description="Muted from TTS only — their messages still show in chat overlays and still count toward stats. This is where the auto-penalty puts people who route a severe term around the filter."
-      >
-        <Field label="Mute someone">
-          <UserPicker
-            placeholder="Search your chat history…"
-            onPick={(user) =>
-              run(api.penalizeUser(user.key, 'Added manually', user.displayName))
-            }
-          />
-        </Field>
+  return (
+    <div className="viewer-detail">
+      {row.detail ? (
+        <p className="muted viewer-seen">
+          {row.detail.messages} message{row.detail.messages === 1 ? '' : 's'}
+          {row.detail.lastSeen ? ` · last seen ${new Date(row.detail.lastSeen).toLocaleDateString()}` : ''}
+          {row.detail.strikes > 0 ? ` · ${row.detail.strikes} strike${row.detail.strikes === 1 ? '' : 's'}` : ''}
+        </p>
+      ) : null}
 
-        {users.penaltyBox.length === 0 ? (
-          <p className="muted">Nobody is muted.</p>
-        ) : (
-          <div className="people-list">
-            {users.penaltyBox.map((entry) => (
-              <div key={entry.username} className="person-row person-row-penalty">
-                <div className="person-detail">
-                  <span className="person-name">
-                    {entry.displayName} <span className="muted">{displayHandle(entry.username)}</span>
-                  </span>
-                  <span className="muted">
-                    {entry.automatic ? 'Automatic' : 'Manual'} ·{' '}
-                    {new Date(entry.addedAt).toLocaleString()} · {entry.reason}
-                  </span>
-                  {entry.evidence ? (
-                    <span className="person-evidence mono">“{entry.evidence}”</span>
-                  ) : null}
-                </div>
-                <div className="button-row">
-                  <Button variant="ghost" onClick={() => run(api.pardonUser(entry.username))}>
-                    Unmute
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
+      <div className="viewer-section">
+        <h3>Access</h3>
+        <Toggle
+          label="On the allow list"
+          hint="Skips every rule's viewer conditions and every cooldown, and is spoken even when only the allow list is. Adding someone also lifts a mute and clears their strikes."
+          checked={row.allowed}
+          onChange={(on) => run(on ? api.trustUser(row.key, row.name) : api.untrustUser(row.key))}
+        />
+        <Toggle
+          label="Muted from speech"
+          hint={
+            row.penalty
+              ? `${row.penalty.automatic ? 'Automatic' : 'Manual'} · ${new Date(row.penalty.addedAt).toLocaleString()} · ${row.penalty.reason}`
+              : 'Their messages still show in chat and count toward stats; they are never read aloud. Muting also takes them off the allow list.'
+          }
+          checked={row.penalty !== null}
+          onChange={(on) =>
+            run(on ? api.penalizeUser(row.key, 'Muted from the viewers list', row.name) : api.pardonUser(row.key))
+          }
+        />
+        {row.penalty?.evidence ? <span className="person-evidence mono">“{row.penalty.evidence}”</span> : null}
+      </div>
 
-      <Panel
-        title="Automatic penalties"
-        description="Strikes are only recorded for the severe list below, and by default only when someone disguises the term to get past the filter. Ordinary swearing never lands anyone here."
-      >
-        <Row>
-          <Toggle
-            label="Enabled"
-            checked={users.autoPenalty.enabled}
-            onChange={(enabled) => patch({ users: { autoPenalty: { ...users.autoPenalty, enabled } } })}
-          />
-          <Toggle
-            label="Only count disguised attempts"
-            hint="Cross-script, homoglyph or mixed-script spellings. Off means plainly typing a severe term also counts."
-            checked={users.autoPenalty.onlyCountEvasion}
-            onChange={(onlyCountEvasion) =>
-              patch({ users: { autoPenalty: { ...users.autoPenalty, onlyCountEvasion } } })
-            }
-          />
-          <Toggle
-            label="Trusted users are exempt"
-            checked={users.autoPenalty.exemptTrusted}
-            onChange={(exemptTrusted) =>
-              patch({ users: { autoPenalty: { ...users.autoPenalty, exemptTrusted } } })
-            }
-          />
-          <Field label="Strikes before muting" hint="1 mutes on the first attempt">
-            <NumberInput
-              value={users.autoPenalty.strikesBeforePenalty}
-              onChange={(strikesBeforePenalty) =>
-                patch({ users: { autoPenalty: { ...users.autoPenalty, strikesBeforePenalty } } })
-              }
-              min={1}
-              max={20}
-            />
-          </Field>
-        </Row>
-      </Panel>
-
-      <TrustPanel config={config} patch={patch} />
-
-      <TwitchModerationPanel config={config} patch={patch} />
-      <YouTubeModerationPanel config={config} patch={patch} />
-
-      <Panel
-        title="Severe terms"
-        description="The zero-tolerance list. Separate from the ordinary word list on purpose: these are the terms worth tracking a person over. Matches always drop the whole message, never censor it."
-      >
-        <Row>
-          <Field label="Words" hint="Whole-word matches, checked against every romanized view">
-            <ListEditor
-              values={users.severe.words}
-              onChange={(words) => patch({ users: { severe: { ...users.severe, words } } })}
-              placeholder="one term per line"
-            />
-          </Field>
-          <Field label="Phrases" hint="Matched anywhere, can span words">
-            <ListEditor
-              values={users.severe.phrases}
-              onChange={(phrases) => patch({ users: { severe: { ...users.severe, phrases } } })}
-            />
-          </Field>
-          <Field label="Regex" hint="One JS regex per line">
-            <ListEditor
-              values={users.severe.regex}
-              onChange={(regex) => patch({ users: { severe: { ...users.severe, regex } } })}
-            />
-          </Field>
-        </Row>
-      </Panel>
-
-      <Panel
-        title="Per-user voices"
-        description="Give specific people their own voice, speed and pitch. Anything left at the neutral value inherits from whichever rule fired."
-      >
-        <Field label="Set up a voice for someone">
-          <UserPicker
-            placeholder="Search your chat history…"
-            onPick={(user) => {
-              // `key`, not `username`: a profile filed under a bare handle
-              // would apply to whoever holds that name on every platform.
-              run(
-                api.setUserVoice({
-                  username: user.key,
-                  displayName: user.displayName,
-                }),
-              );
-              setEditingProfile(user.key);
-            }}
-          />
-        </Field>
-
-        {users.voiceProfiles.length === 0 ? (
-          <p className="muted">No custom voices set.</p>
-        ) : (
-          <div className="people-list">
-            {users.voiceProfiles.map((profile) => (
-              <div key={profile.username} className="person-block">
-                <div
-                  className={
-                    editingProfile === profile.username ? 'person-row person-row-open' : 'person-row'
-                  }
-                >
-                  <div className="person-detail">
-                    <span className="person-name">
-                      {profile.displayName}{' '}
-                      <span className="muted">{displayHandle(profile.username)}</span>
-                    </span>
-                    <span className="muted">{summarize(profile, config.tts.provider)}</span>
-                  </div>
-                  <div className="button-row">
-                    <Button
-                      variant={editingProfile === profile.username ? 'primary' : 'default'}
-                      onClick={() =>
-                        setEditingProfile(editingProfile === profile.username ? null : profile.username)
-                      }
-                    >
-                      {editingProfile === profile.username ? 'Done' : 'Edit'}
-                    </Button>
-                    <Button variant="ghost" onClick={() => run(api.clearUserVoice(profile.username))}>
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-
-                {editingProfile === profile.username ? (
-                  <VoiceProfileEditor
-                    profile={profile}
-                    globalProvider={config.tts.provider}
-                    onChange={(next) => run(api.setUserVoice({ ...next, username: profile.username }))}
-                  />
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Covers the gap between creating a profile and the config broadcast
-            coming back. Trusted users edit inline in their own panel, so they
-            are excluded or the editor would briefly appear twice. */}
-        {editingProfile &&
-        !users.voiceProfiles.some((p) => listKey(p.username) === listKey(editingProfile)) &&
-        !users.trusted.some((u) => listKey(u) === listKey(editingProfile)) ? (
+      <div className="viewer-section">
+        <h3>Voice</h3>
+        <Toggle
+          label="Own voice settings"
+          hint={
+            row.profile
+              ? summarize(row.profile, config.tts.provider)
+              : 'Off: this person is read with whatever voice the matching rule uses. Turning it on lets you pick a voice, speed and pitch for them.'
+          }
+          checked={row.profile !== null}
+          onChange={(on) =>
+            run(
+              on
+                ? api.setUserVoice({ username: row.key, displayName: row.name })
+                : api.clearUserVoice(row.key),
+            )
+          }
+        />
+        {row.profile ? (
           <VoiceProfileEditor
-            profile={profileFor(editingProfile)}
+            profile={profile}
             globalProvider={config.tts.provider}
-            onChange={(next) => run(api.setUserVoice({ ...next, username: editingProfile }))}
+            onChange={(next) => run(api.setUserVoice({ ...next, username: row.key }))}
           />
         ) : null}
-      </Panel>
+      </div>
+    </div>
+  );
+}
 
-      <AvatarPanel />
+/* ------------------------------------------------------------------ *
+ * Automatic protection
+ * ------------------------------------------------------------------ */
 
-      <Panel
-        title="Check which voices your account can use"
-        description="There is no TikTok endpoint that lists voices — the catalogue is a fixed set of speaker codes. What can be checked is which of them your session is actually allowed to synthesize, by trying each one."
-        actions={
-          <Button
-            variant="primary"
-            disabled={probing}
-            onClick={() => {
-              setProbing(true);
-              setError(null);
-              void api
-                .probeVoices()
-                .then(setProbe)
-                .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-                .finally(() => setProbing(false));
-            }}
-          >
-            {probing ? 'Testing…' : 'Test voices'}
-          </Button>
-        }
-      >
-        {probing ? <p className="muted">Synthesizing one word per voice — this takes a minute.</p> : null}
+function AutoPenaltyPanel({
+  config,
+  patch,
+}: {
+  config: AppConfig;
+  patch: (partial: Record<string, unknown>) => void;
+}): JSX.Element {
+  const users = config.users;
+  const set = (over: Partial<typeof users.autoPenalty>): void =>
+    patch({ users: { autoPenalty: { ...users.autoPenalty, ...over } } });
 
-        {probe ? (
-          <>
-            <div className="banner banner-ok">
-              {probe.available} of {probe.tested} voices available on this session
-            </div>
-            <div className="chips">
-              {probe.results.map((result) => (
-                <span
-                  key={result.code}
-                  className={result.ok ? 'chip chip-on chip-static' : 'chip chip-strike chip-static'}
-                  title={result.error ?? 'Available'}
-                >
-                  {providerVoices.find((v) => v.value === result.code)?.label ?? result.code}
-                </span>
-              ))}
-            </div>
-          </>
-        ) : null}
-      </Panel>
-    </>
+  return (
+    <Panel
+      title="Automatic penalties"
+      description="Strikes are only recorded for the severe list below, and by default only when someone disguises the term to get past the filter. Ordinary swearing never lands anyone here."
+    >
+      <Row>
+        <Toggle label="Enabled" checked={users.autoPenalty.enabled} onChange={(enabled) => set({ enabled })} />
+        <Toggle
+          label="Only count disguised attempts"
+          hint="Cross-script, homoglyph or mixed-script spellings. Off means plainly typing a severe term also counts."
+          checked={users.autoPenalty.onlyCountEvasion}
+          onChange={(onlyCountEvasion) => set({ onlyCountEvasion })}
+        />
+        <Toggle
+          label="People on the allow list are exempt"
+          checked={users.autoPenalty.exemptTrusted}
+          onChange={(exemptTrusted) => set({ exemptTrusted })}
+        />
+        <Field label="Strikes before muting" hint="1 mutes on the first attempt">
+          <NumberInput
+            value={users.autoPenalty.strikesBeforePenalty}
+            onChange={(strikesBeforePenalty) => set({ strikesBeforePenalty })}
+            min={1}
+            max={20}
+          />
+        </Field>
+      </Row>
+    </Panel>
+  );
+}
+
+function SevereTermsPanel({
+  config,
+  patch,
+}: {
+  config: AppConfig;
+  patch: (partial: Record<string, unknown>) => void;
+}): JSX.Element {
+  const users = config.users;
+
+  return (
+    <Panel
+      title="Severe terms"
+      description="The zero-tolerance list. Separate from the ordinary blocklist on purpose: these are the terms worth tracking a person over. Matches always drop the whole message, never censor it."
+    >
+      <Row>
+        <Field label="Words" hint="Whole-word matches, checked against every romanized view">
+          <ListEditor
+            values={users.severe.words}
+            onChange={(words) => patch({ users: { severe: { ...users.severe, words } } })}
+            placeholder="one term per line"
+          />
+        </Field>
+        <Field label="Phrases" hint="Matched anywhere, can span words">
+          <ListEditor
+            values={users.severe.phrases}
+            onChange={(phrases) => patch({ users: { severe: { ...users.severe, phrases } } })}
+          />
+        </Field>
+        <Field label="Regex" hint="One JS regex per line">
+          <ListEditor
+            values={users.severe.regex}
+            onChange={(regex) => patch({ users: { severe: { ...users.severe, regex } } })}
+          />
+        </Field>
+      </Row>
+    </Panel>
   );
 }
 
@@ -501,7 +540,7 @@ function summarize(profile: UserVoiceProfile, globalProvider: TtsProvider): stri
   const settings = settingsFor(profile, provider);
   const backend = profile.provider
     ? (PROVIDER_LABELS[profile.provider] ?? profile.provider)
-    : `${PROVIDER_LABELS[globalProvider] ?? globalProvider} (following the TTS tab)`;
+    : `${PROVIDER_LABELS[globalProvider] ?? globalProvider} (following the Voice page)`;
 
   return [
     backend,
@@ -557,8 +596,8 @@ function VoiceProfileEditor({
           label="Spoken with"
           hint={
             profile.provider
-              ? 'This person only — everyone else follows the TTS tab'
-              : `Following the TTS tab (${PROVIDER_LABELS[globalProvider] ?? globalProvider})`
+              ? 'This person only — everyone else follows the Voice page'
+              : `Following the Voice page (${PROVIDER_LABELS[globalProvider] ?? globalProvider})`
           }
         >
           <Select
@@ -568,7 +607,7 @@ function VoiceProfileEditor({
               if (provider) setEditing(provider as TtsProvider);
             }}
             options={[
-              { value: '', label: `Follow the TTS tab (${PROVIDER_LABELS[globalProvider] ?? globalProvider})` },
+              { value: '', label: `Follow the Voice page (${PROVIDER_LABELS[globalProvider] ?? globalProvider})` },
               ...Object.entries(PROVIDER_LABELS).map(([value, label]) => ({ value, label })),
             ]}
           />
@@ -868,7 +907,7 @@ function TwitchModerationPanel({
 
       {mod.enabled && !twitch.channel ? (
         <div className="banner banner-warn">
-          No Twitch channel is set, so there is nothing to moderate. Set one on the Setup tab.
+          No Twitch channel is set, so there is nothing to moderate. Set one on Go live.
         </div>
       ) : null}
 

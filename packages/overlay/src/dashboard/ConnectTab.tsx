@@ -9,17 +9,24 @@ import { api, type OverlayWithUrls, type ServerMeta } from '../lib/api.js';
 import { useLive } from '../lib/store.js';
 import { Button, CopyButton, Field, Panel, Row, TextInput, Toggle } from './controls.js';
 import { CredentialField, credentialField, useCredentials } from './CredentialsTab.js';
+import { Page, SubTabs, useSubTab } from './layout.js';
 import { PlatformsPanel } from './PlatformsPanel.js';
+import { SignalPath, useStations, type Station } from './SignalPath.js';
 import { formatNumber } from '../overlay/style.js';
 
 interface Props {
   config: AppConfig;
   patch: (patch: Record<string, unknown>) => void;
   meta: ServerMeta | null;
+  go: (target: Station['go']) => void;
 }
 
-export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
-  const { snapshot, stats } = useLive();
+const SUBS = ['platforms', 'sources', 'remote', 'session'] as const;
+
+export function ConnectTab({ config, patch, meta, go }: Props): JSX.Element {
+  const { snapshot, stats, tts } = useLive();
+  const stations = useStations(config, meta);
+  const [sub, setSub] = useSubTab('setup', 'platforms', SUBS);
   const { statusOf, reload: reloadCredentials } = useCredentials();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,192 +68,208 @@ export function ConnectTab({ config, patch, meta }: Props): JSX.Element {
     }
   };
 
+  const enabledSources = overlays.filter((overlay) => overlay.enabled).length;
+
   return (
-    <>
-      <PlatformsPanel config={config} patch={patch} />
+    <Page
+      title="Go live"
+      lead="Chat from every platform runs through the same five stops. Fix the first one that is not ready, then copy your overlay URLs into your streaming software."
+    >
+      <SignalPath stations={stations} onGo={go} />
 
-      <Panel
-        title="TikTok options"
-        description="Settings that only apply to TikTok. Which room to join is set above."
-      >
-        <Row>
-          <Toggle
-            label="Fetch extended gift info"
-            hint="Needed for diamond values and gift images"
-            checked={config.connection.enableExtendedGiftInfo}
-            onChange={(enableExtendedGiftInfo) => patch({ connection: { enableExtendedGiftInfo } })}
-          />
-        </Row>
+      <SubTabs
+        label="Go live sections"
+        value={sub}
+        onChange={setSub}
+        tabs={[
+          { id: 'platforms', label: 'Platforms' },
+          { id: 'sources', label: 'Browser sources', note: enabledSources || null },
+          { id: 'remote', label: 'Remote access', note: tunnel?.url ? 'on' : null },
+          { id: 'session', label: 'This session' },
+        ]}
+      />
 
-        {meta && !meta.env.hasSignApiKey ? (
-          <div className="banner">
-            No Euler Stream key set. The connector is using a shared, rate-limited signing quota —
-            fine to start with, but add a free key on the Keys tab if connecting starts failing.
-          </div>
-        ) : null}
-      </Panel>
+      {sub === 'platforms' ? <PlatformsPanel config={config} patch={patch} meta={meta} /> : null}
 
-      <Panel title="This session">
-        <div className="stat-grid">
-          <Stat
-            label="Viewers"
-            value={stats?.viewerCount ?? 0}
-            sub={viewerSourceNote(
-              stats?.viewerCounts,
-              PLATFORMS.filter((platform) => connections[platform]?.status === 'connected'),
-            )}
-          />
-          <Stat label="Peak" value={stats?.peakViewerCount ?? 0} />
-          <Stat label="Likes" value={stats?.likes ?? 0} />
-          <Stat label="Diamonds" value={stats?.diamonds ?? 0} />
-          <Stat label="Gifts" value={stats?.gifts ?? 0} />
-          <Stat label="New follows" value={stats?.followers ?? 0} />
-          <Stat label="Shares" value={stats?.shares ?? 0} />
-          <Stat label="Comments" value={stats?.comments ?? 0} />
-          <Stat label="Chatters" value={stats?.uniqueChatters ?? 0} />
-        </div>
-      </Panel>
-
-      <Panel
-        title="Browser source URLs"
-        description="Add these as Browser Sources at the listed size. When the capture software runs on this machine, no tunnel is needed."
-      >
-        <Row>
-          <Field
-            label="Source hostname"
-            hint={
-              config.sources.host
-                ? `Copied links use http://${config.sources.host}:… instead of this page's address.`
-                : 'Leave blank for most software. Set it if yours rejects the URL — some refuse localhost and bare IP addresses alike, and want a hostname.'
-            }
-          >
-            <TextInput
-              value={config.sources.host}
-              onChange={(host) => patch({ sources: { host } })}
-              placeholder="(this page's address)"
-            />
-          </Field>
-          <Field label=" ">
-            <Button
-              onClick={() => patch({ sources: { host: 'stream.localhost.direct' } })}
-              title="A public DNS name that resolves to 127.0.0.1, so the link stays on this machine"
-              disabled={config.sources.host === 'stream.localhost.direct'}
-            >
-              Use stream.localhost.direct
-            </Button>
-          </Field>
-          {config.sources.host ? (
-            <Field label=" ">
-              <Button onClick={runHostCheck} disabled={checking}>
-                {checking ? 'Checking…' : 'Re-check'}
-              </Button>
-            </Field>
+      {sub === 'sources' ? (
+        <Panel
+          title="Browser source URLs"
+          description="Add each one to your streaming software as a browser source at the size shown. When it runs on this machine, no tunnel is needed."
+        >
+          {(tts?.overlayListeners ?? 0) === 0 ? (
+            <div className="banner banner-warn">
+              No TTS audio source is open yet. Add the <strong>TTS audio</strong> source below to
+              your streaming software, or your viewers will not hear speech.
+            </div>
           ) : null}
-        </Row>
 
-        <HostCheckBanner check={hostCheck} checking={checking} />
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Size</th>
+                <th>URL</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {overlays.map((overlay) => {
+                const url = overlay.sourceUrl;
+                return (
+                  <tr key={overlay.id} className={overlay.enabled ? '' : 'row-disabled'}>
+                    <td>
+                      <strong>{overlay.name}</strong>
+                      <div className="muted">
+                        {overlay.type}
+                        {overlay.enabled ? '' : ' (off)'}
+                      </div>
+                    </td>
+                    <td className="mono nowrap">
+                      {overlay.width}×{overlay.height}
+                    </td>
+                    <td className="mono url-cell">{url}</td>
+                    <td className="nowrap">
+                      <CopyButton text={url} />
+                      <a className="btn btn-ghost" href={overlay.localUrl} target="_blank" rel="noreferrer">
+                        Open
+                      </a>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Source</th>
-              <th>Size</th>
-              <th>URL</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {overlays.map((overlay) => {
-              const url = overlay.sourceUrl;
-              return (
-                <tr key={overlay.id} className={overlay.enabled ? '' : 'row-disabled'}>
-                  <td>
-                    <strong>{overlay.name}</strong>
-                    <div className="muted">{overlay.type}</div>
-                  </td>
-                  <td className="mono">
-                    {overlay.width}×{overlay.height}
-                  </td>
-                  <td className="mono url-cell">{url}</td>
-                  <td className="nowrap">
-                    <CopyButton text={url} />
-                    <a className="btn btn-ghost" href={overlay.localUrl} target="_blank" rel="noreferrer">
-                      Open
-                    </a>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Panel>
+          <h3>Hostname for copied links</h3>
+          <Row>
+            <Field
+              label="Source hostname"
+              hint={
+                config.sources.host
+                  ? `Copied links use http://${config.sources.host}:… instead of this page's address.`
+                  : 'Leave blank for most software. Set it if yours rejects the URL — some refuse localhost and bare IP addresses alike, and want a hostname.'
+              }
+            >
+              <TextInput
+                value={config.sources.host}
+                onChange={(host) => patch({ sources: { host } })}
+                placeholder="(this page's address)"
+              />
+            </Field>
+            <Field label=" ">
+              <div className="button-row">
+                <Button
+                  onClick={() => patch({ sources: { host: 'stream.localhost.direct' } })}
+                  title="A public DNS name that resolves to 127.0.0.1, so the link stays on this machine"
+                  disabled={config.sources.host === 'stream.localhost.direct'}
+                >
+                  Use stream.localhost.direct
+                </Button>
+                {config.sources.host ? (
+                  <Button onClick={runHostCheck} disabled={checking}>
+                    {checking ? 'Checking…' : 'Re-check'}
+                  </Button>
+                ) : null}
+              </div>
+            </Field>
+          </Row>
 
-      <Panel
-        title="Public tunnel (ngrok)"
-        description="Exposes this server on a public URL so streaming software on another machine — or a co-host — can load the overlays."
-        actions={
-          <Button variant={tunnel?.url ? 'danger' : 'primary'} onClick={toggleTunnel} disabled={busy}>
-            {tunnel?.url ? 'Stop tunnel' : 'Start tunnel'}
-          </Button>
-        }
-      >
-        {tunnel?.url ? (
-          <div className="banner banner-ok">
-            Public URL: <code>{tunnel.url}</code> <CopyButton text={tunnel.url} />
-            {tunnel.external ? (
-              <span className="muted">
-                — from the ngrok agent already running on this machine. Stopping here only
-                detaches; your agent keeps running.
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-        {error ? <div className="banner banner-error">{error}</div> : null}
-        {tunnel?.error ? <div className="banner banner-error">{tunnel.error}</div> : null}
+          <HostCheckBanner check={hostCheck} checking={checking} />
+        </Panel>
+      ) : null}
 
-        {/* An agent that is up but pointed elsewhere looks like a working
-            tunnel right until nothing loads, so name it explicitly. */}
-        {tunnel?.mismatch ? (
-          <div className="banner">
-            That agent is forwarding: <code>{tunnel.mismatch}</code>
-          </div>
-        ) : null}
+      {sub === 'remote' ? (
+        <Panel
+          title="Public tunnel (ngrok)"
+          description="Exposes this server on a public URL so streaming software on another machine, or a co-host, can load the overlays."
+          actions={
+            <Button variant={tunnel?.url ? 'danger' : 'primary'} onClick={toggleTunnel} disabled={busy}>
+              {tunnel?.url ? 'Stop tunnel' : 'Start tunnel'}
+            </Button>
+          }
+        >
+          {tunnel?.url ? (
+            <div className="banner banner-ok">
+              Public URL: <code>{tunnel.url}</code> <CopyButton text={tunnel.url} />
+              {tunnel.external ? (
+                <span className="muted">
+                  {' '}
+                  — from the ngrok agent already running on this machine. Stopping here only
+                  detaches; your agent keeps running.
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          {error ? <div className="banner banner-error">{error}</div> : null}
+          {tunnel?.error ? <div className="banner banner-error">{tunnel.error}</div> : null}
 
-        {meta && !meta.env.hasNgrokToken ? (
-          <div className="banner">
-            Add your ngrok authtoken on the Keys tab before starting the tunnel. Free tokens come
-            from dashboard.ngrok.com.
-          </div>
-        ) : null}
+          {/* An agent that is up but pointed elsewhere looks like a working
+              tunnel right until nothing loads, so name it explicitly. */}
+          {tunnel?.mismatch ? (
+            <div className="banner banner-warn">
+              That agent is forwarding: <code>{tunnel.mismatch}</code>
+            </div>
+          ) : null}
 
-        <Row>
-          <Field label="Reserved domain" hint="Optional, e.g. my-stream.ngrok.app">
-            <TextInput
-              value={config.tunnel.domain}
-              onChange={(domain) => patch({ tunnel: { domain } })}
-              placeholder="(random URL)"
+          {meta && !meta.env.hasNgrokToken ? (
+            <div className="banner banner-warn">
+              Add your ngrok authtoken on the Keys tab before starting the tunnel. Free tokens come
+              from dashboard.ngrok.com.
+            </div>
+          ) : null}
+
+          <Row>
+            <Field label="Reserved domain" hint="Optional, e.g. my-stream.ngrok.app">
+              <TextInput
+                value={config.tunnel.domain}
+                onChange={(domain) => patch({ tunnel: { domain } })}
+                placeholder="(random URL)"
+              />
+            </Field>
+          </Row>
+
+          <CredentialField
+            field={credentialField('TUNNEL_BASIC_AUTH')}
+            status={statusOf('TUNNEL_BASIC_AUTH')}
+            onSaved={reloadCredentials}
+          />
+          {tunnel?.external ? (
+            <div className="banner">
+              The tunnel login does not apply right now — this tunnel is your own agent. Restart it
+              as <code>ngrok http 4700 --basic-auth "user:pass"</code>.
+            </div>
+          ) : null}
+          <Toggle
+            label="Open the tunnel on startup"
+            checked={config.tunnel.enabled}
+            onChange={(enabled) => patch({ tunnel: { enabled } })}
+          />
+        </Panel>
+      ) : null}
+
+      {sub === 'session' ? (
+        <Panel title="This session">
+          <div className="stat-grid">
+            <Stat
+              label="Viewers"
+              value={stats?.viewerCount ?? 0}
+              sub={viewerSourceNote(
+                stats?.viewerCounts,
+                PLATFORMS.filter((platform) => connections[platform]?.status === 'connected'),
+              )}
             />
-          </Field>
-        </Row>
-
-        <CredentialField
-          field={credentialField('TUNNEL_BASIC_AUTH')}
-          status={statusOf('TUNNEL_BASIC_AUTH')}
-          onSaved={reloadCredentials}
-        />
-        {tunnel?.external ? (
-          <div className="banner">
-            The tunnel login does not apply right now — this tunnel is your own agent. Restart it
-            as <code>ngrok http 4700 --basic-auth "user:pass"</code>.
+            <Stat label="Peak" value={stats?.peakViewerCount ?? 0} />
+            <Stat label="Likes" value={stats?.likes ?? 0} />
+            <Stat label="Diamonds" value={stats?.diamonds ?? 0} />
+            <Stat label="Gifts" value={stats?.gifts ?? 0} />
+            <Stat label="New follows" value={stats?.followers ?? 0} />
+            <Stat label="Shares" value={stats?.shares ?? 0} />
+            <Stat label="Comments" value={stats?.comments ?? 0} />
+            <Stat label="Chatters" value={stats?.uniqueChatters ?? 0} />
           </div>
-        ) : null}
-        <Toggle
-          label="Open the tunnel on startup"
-          checked={config.tunnel.enabled}
-          onChange={(enabled) => patch({ tunnel: { enabled } })}
-        />
-      </Panel>
-    </>
+        </Panel>
+      ) : null}
+    </Page>
   );
 }
 
@@ -310,5 +333,3 @@ function Stat({
     </div>
   );
 }
-
-

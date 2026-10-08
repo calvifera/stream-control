@@ -11,21 +11,9 @@
  * Printing the matrix is the cheapest way to see that before a stream rather
  * than during one.
  */
-import { checkGate } from '../pipeline/gates.js';
+import { checkGate, OPEN_GATE as OPEN, type GateConfig } from './legacy-gate.js';
 import { SessionState } from '../state/session.js';
-import { PLATFORM_INFO, type GateConfig, type Platform, type StreamUser } from '@streaming/shared';
-
-const OPEN_GATE: GateConfig = {
-  followersOnly: false,
-  friendsOnly: false,
-  subscribersOnly: false,
-  moderatorsOnly: false,
-  giftersOnly: false,
-  minSessionDiamonds: 0,
-  minFollowerCount: 0,
-  minFansClubLevel: 0,
-  allowUsers: [],
-};
+import { PLATFORM_INFO, type Platform, type StreamUser } from '@streaming/shared';
 
 const person = (platform: Platform, over: Partial<StreamUser>): StreamUser => ({
   platform,
@@ -80,11 +68,11 @@ const CAST: Record<Platform, Array<{ label: string; user: StreamUser }>> = {
 };
 
 const GATES: Array<{ label: string; gate: GateConfig }> = [
-  { label: 'no gate', gate: OPEN_GATE },
-  { label: 'followers only', gate: { ...OPEN_GATE, followersOnly: true } },
-  { label: 'mutuals only', gate: { ...OPEN_GATE, friendsOnly: true } },
-  { label: 'subscribers only', gate: { ...OPEN_GATE, subscribersOnly: true } },
-  { label: 'moderators only', gate: { ...OPEN_GATE, moderatorsOnly: true } },
+  { label: 'no gate', gate: OPEN },
+  { label: 'followers only', gate: { ...OPEN, followersOnly: true } },
+  { label: 'mutuals only', gate: { ...OPEN, friendsOnly: true } },
+  { label: 'subscribers only', gate: { ...OPEN, subscribersOnly: true } },
+  { label: 'moderators only', gate: { ...OPEN, moderatorsOnly: true } },
 ];
 
 const session = new SessionState();

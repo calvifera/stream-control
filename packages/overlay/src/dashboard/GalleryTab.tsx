@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   OVERLAY_TYPES,
   overlayUrl,
@@ -8,8 +8,9 @@ import {
 } from '@streaming/shared';
 import { api } from '../lib/api.js';
 import { usePersistentState } from '../lib/usePersistentState.js';
-import { Button, CopyButton, Field, Modal, Panel, Row, Select, TextInput } from './controls.js';
-import { SourceEditor } from './SourceEditor.js';
+import { Button, CopyButton, Field, Panel, Row, Select, StatusDot, TextInput } from './controls.js';
+import { Disclosure, Page, SubTabs } from './layout.js';
+import { SettingsEditor, SourceLayoutFields, SourceLookFields } from './SourceEditor.js';
 
 interface Props {
   config: AppConfig;
@@ -31,21 +32,23 @@ const BLURB: Record<OverlayType, string> = {
   custom: 'Your own HTML and CSS, driven by the same event data.',
 };
 
-const CARD_WIDTH = 340;
 const UNGROUPED = 'Ungrouped';
+const EDIT_TABS = ['layout', 'look', 'behaviour'] as const;
+type EditTab = (typeof EDIT_TABS)[number];
 
 /**
- * The single place sources are managed: preview, URL, and every setting.
- *
- * Style used to live on a separate tab from layout, which meant editing one
- * source in two places. Everything is here now, opened inline under whichever
- * card you picked.
+ * Every browser source in one place: pick one on the left, see it running on
+ * the right, and edit it in three tabs (where it sits, how it looks, what it
+ * does). There is no dialog: the preview and the settings stay side by side so
+ * a change can be judged as it is made.
  */
 export function GalleryTab({ config, patch }: Props): JSX.Element {
-  const [openId, setOpenId] = usePersistentState<string | null>('gallery.open', null, (stored) =>
+  const [pickedId, setPickedId] = usePersistentState<string | null>('gallery.open', null, (stored) =>
     stored === null || config.overlays.some((o) => o.id === stored),
   );
-  const [collapsed, setCollapsed] = usePersistentState<string[]>('gallery.collapsed', []);
+  const [tab, setTab] = usePersistentState<EditTab>('gallery.tab', 'layout', (stored) =>
+    EDIT_TABS.includes(stored),
+  );
   const [error, setError] = useState<string | null>(null);
   const [nudge, setNudge] = useState(0);
   const [newType, setNewType] = usePersistentState<OverlayType>('gallery.newType', 'chat', (t) =>
@@ -65,7 +68,8 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
   const add = (): void => {
     run(
       api.addOverlay(newType, newName || undefined).then((created) => {
-        setOpenId(created.id);
+        setPickedId(created.id);
+        setTab('layout');
         setNewName('');
       }),
     );
@@ -86,218 +90,266 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
   if (groups.has(UNGROUPED)) groupNames.push(UNGROUPED);
 
   const existingGroups = [...new Set(config.overlays.map((o) => o.group.trim()).filter(Boolean))];
-  const open = config.overlays.find((o) => o.id === openId) ?? null;
+  // Always show something: with nothing picked, the first source is open.
+  const active = config.overlays.find((o) => o.id === pickedId) ?? config.overlays[0] ?? null;
   const missingTypes = OVERLAY_TYPES.filter((t) => !config.overlays.some((o) => o.type === t));
-
-  const toggleGroup = (name: string): void =>
-    setCollapsed(collapsed.includes(name) ? collapsed.filter((g) => g !== name) : [...collapsed, name]);
+  const showGroupNames = groupNames.length > 1 || (groupNames[0] !== undefined && groupNames[0] !== UNGROUPED);
 
   return (
-    <>
-      <Panel
-        title="Sources"
-        description="Every browser source, previewed against invented data — the same components your streaming software renders. Previews never connect to the room, so nothing here competes with your live sources for audio."
-        actions={
-          <Button onClick={() => setNudge((n) => n + 1)} title="Reload every preview">
-            Refresh previews
-          </Button>
-        }
-      >
-        {error ? <div className="banner banner-error">{error}</div> : null}
+    <Page
+      title="Overlays"
+      lead="Each overlay is a browser source for your streaming software. Pick one to see it running against invented data, then adjust where it sits, how it looks and what it does."
+      actions={
+        <Button onClick={() => setNudge((n) => n + 1)} title="Reload the preview">
+          Refresh preview
+        </Button>
+      }
+    >
+      {error ? <div className="banner banner-error app-banner">{error}</div> : null}
 
-        <Row>
-          <Field label="Add a source">
-            <Select
-              value={newType}
-              onChange={setNewType}
-              options={OVERLAY_TYPES.map((type) => ({ value: type, label: type }))}
-            />
-          </Field>
-          <Field label="Name" hint="Also becomes the URL slug">
-            <TextInput value={newName} onChange={setNewName} placeholder="Main chat" />
-          </Field>
-          <Field label=" ">
-            <Button variant="primary" onClick={add}>
-              Add
-            </Button>
-          </Field>
-        </Row>
-
-        {missingTypes.length > 0 ? (
-          <div className="chips">
-            <span className="field-hint" style={{ alignSelf: 'center' }}>
-              Not set up yet:
-            </span>
-            {missingTypes.map((type) => (
-              <button
-                key={type}
-                type="button"
-                className="chip"
-                title={BLURB[type]}
-                onClick={() => run(api.addOverlay(type).then((c) => setOpenId(c.id)))}
-              >
-                + {type}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        {groupNames.map((name) => {
-          const sources = groups.get(name) ?? [];
-          const isCollapsed = collapsed.includes(name);
-          return (
-            <section key={name} className="gallery-group">
-              <button
-                type="button"
-                className="gallery-group-head"
-                onClick={() => toggleGroup(name)}
-                aria-expanded={!isCollapsed}
-              >
-                <span className={isCollapsed ? 'gallery-caret' : 'gallery-caret gallery-caret-open'}>
-                  ▸
-                </span>
-                <strong>{name}</strong>
-                <span className="muted">
-                  {sources.length} source{sources.length === 1 ? '' : 's'}
-                </span>
-              </button>
-
-              {!isCollapsed ? (
-                <div className="gallery-grid">
-                  {sources.map((overlay) => (
-                    <GalleryCard
-                      key={`${overlay.id}-${nudge}`}
-                      overlay={overlay}
-                      host={config.sources.host}
-                      open={openId === overlay.id}
-                      onToggle={() => setOpenId(openId === overlay.id ? null : overlay.id)}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
-      </Panel>
-
-      {open ? (
-        <Modal
-          title={open.name}
-          subtitle={`${open.type} source · add as a browser source at ${open.width}×${open.height}`}
-          onClose={() => setOpenId(null)}
-          actions={
-            <CopyButton
-              text={overlayUrl(window.location.origin, config.sources.host, open.id)}
-              label="Copy URL"
-            />
-          }
-        >
-          <Panel
-            title="Organisation"
-            description="Groups are for your own sanity when the list gets long; they change nothing about what a source renders."
-          >
-            <Row>
-              <Field
-                label="Group"
-                hint={
-                  existingGroups.length > 0
-                    ? `Existing: ${existingGroups.join(', ')}`
-                    : 'e.g. Main scene, Starting soon, Just chatting'
-                }
-              >
-                <TextInput
-                  value={open.group}
-                  onChange={(group) => updateOverlay(open.id, { group })}
-                  placeholder="Ungrouped"
-                />
-              </Field>
-              {existingGroups.length > 0 ? (
-                <Field label="Or pick one">
-                  <Select
-                    value={open.group}
-                    onChange={(group) => updateOverlay(open.id, { group })}
-                    options={[
-                      { value: '', label: UNGROUPED },
-                      ...existingGroups.map((g) => ({ value: g, label: g })),
-                    ]}
-                  />
-                </Field>
-              ) : null}
-            </Row>
+      <div className="split overlays-split">
+        <div className="stack">
+          <Panel title="Your overlays" description={`${config.overlays.length} browser ${config.overlays.length === 1 ? 'source' : 'sources'}`}>
+            {config.overlays.length === 0 ? (
+              <p className="muted">None yet. Add one below.</p>
+            ) : (
+              groupNames.map((name) => (
+                <section key={name} className="src-group">
+                  {showGroupNames ? <h3 className="src-group-name">{name}</h3> : null}
+                  <ul className="src-list">
+                    {(groups.get(name) ?? []).map((overlay) => (
+                      <li key={overlay.id}>
+                        <button
+                          type="button"
+                          className={overlay.id === active?.id ? 'src-item src-item-on' : 'src-item'}
+                          aria-pressed={overlay.id === active?.id}
+                          onClick={() => setPickedId(overlay.id)}
+                        >
+                          <span className="src-main">
+                            <span className={overlay.enabled ? 'src-name' : 'src-name src-name-off'}>{overlay.name}</span>
+                            <span className="src-meta">
+                              {overlay.type} · {overlay.width}×{overlay.height}
+                            </span>
+                          </span>
+                          <span className="src-state">
+                            <StatusDot status={overlay.enabled ? 'connected' : 'idle'} />
+                            {overlay.enabled ? 'On' : 'Off'}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))
+            )}
           </Panel>
 
-          <SourceEditor
-            overlay={open}
-            onChange={(next) => updateOverlay(open.id, next)}
+          <Panel title="Add an overlay">
+            <Row>
+              <Field label="Type">
+                <Select
+                  value={newType}
+                  onChange={setNewType}
+                  options={OVERLAY_TYPES.map((type) => ({ value: type, label: type }))}
+                />
+              </Field>
+              <Field label="Name">
+                <TextInput value={newName} onChange={setNewName} placeholder="Main chat" />
+              </Field>
+            </Row>
+            <p className="muted src-blurb">{BLURB[newType]}</p>
+            <div className="button-row">
+              <Button variant="primary" onClick={add}>
+                Add overlay
+              </Button>
+            </div>
+
+            {missingTypes.length > 0 ? (
+              <Disclosure summary="Types you have not set up yet">
+                <div className="chips">
+                  {missingTypes.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      className="chip chip-action"
+                      title={BLURB[type]}
+                      onClick={() => run(api.addOverlay(type).then((c) => setPickedId(c.id)))}
+                    >
+                      Add {type}
+                    </button>
+                  ))}
+                </div>
+              </Disclosure>
+            ) : null}
+          </Panel>
+        </div>
+
+        {active ? (
+          <Workspace
+            key={active.id}
+            overlay={active}
+            host={config.sources.host}
+            nudge={nudge}
+            tab={tab}
+            onTab={setTab}
+            existingGroups={existingGroups}
+            onChange={(next) => updateOverlay(active.id, next)}
             onDelete={() =>
               run(
-                api.deleteOverlay(open.id).then(() => {
-                  setOpenId(null);
+                api.deleteOverlay(active.id).then(() => {
+                  setPickedId(null);
                 }),
               )
             }
-            onReset={() => run(api.resetOverlay(open.id))}
+            onReset={() => run(api.resetOverlay(active.id))}
           />
-        </Modal>
-      ) : null}
-    </>
+        ) : (
+          <div className="empty">
+            <strong>No overlays yet</strong>
+            <p>Add a chat overlay to start. You can add alerts, goals and the TTS audio source after.</p>
+          </div>
+        )}
+      </div>
+    </Page>
   );
 }
 
-function GalleryCard({
+function Workspace({
   overlay,
   host,
-  open,
-  onToggle,
+  nudge,
+  tab,
+  onTab,
+  existingGroups,
+  onChange,
+  onDelete,
+  onReset,
 }: {
   overlay: OverlaySource;
   host: string;
-  open: boolean;
-  onToggle: () => void;
+  nudge: number;
+  tab: EditTab;
+  onTab: (tab: EditTab) => void;
+  existingGroups: string[];
+  onChange: (next: Partial<OverlaySource>) => void;
+  onDelete: () => void;
+  onReset: () => void;
 }): JSX.Element {
-  // What gets copied honours the source hostname; the preview iframe and the
-  // Open link stay on this page's origin, since they load right here.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // What gets copied honours the source hostname; the preview and the Open
+  // link stay on this page's origin, since they load right here.
   const url = overlayUrl(window.location.origin, host, overlay.id);
   const localUrl = `${window.location.origin}/overlay/${overlay.id}`;
-  // Scale the real dimensions down into the card, keeping aspect.
-  const scale = Math.min(1, CARD_WIDTH / overlay.width);
-  const frameHeight = Math.min(overlay.height * scale, 260);
 
   return (
-    <div className={open ? 'gallery-card gallery-card-on' : 'gallery-card'}>
-      <div className="gallery-stage" style={{ height: frameHeight }}>
+    <section className="panel workspace">
+      <header className="panel-head">
+        <div>
+          <h2>{overlay.name}</h2>
+          <p className="muted">
+            {overlay.type} source. Add it to your streaming software at {overlay.width}×{overlay.height}.
+          </p>
+        </div>
+        <div className="panel-actions">
+          <CopyButton text={url} label="Copy URL" />
+          <a className="btn btn-ghost" href={localUrl} target="_blank" rel="noreferrer">
+            Open
+          </a>
+        </div>
+      </header>
+
+      <PreviewStage overlay={overlay} nudge={nudge} />
+
+      <div className="workspace-tabs">
+        <SubTabs
+          label="Overlay settings"
+          value={tab}
+          onChange={onTab}
+          tabs={[
+            { id: 'layout', label: 'Layout' },
+            { id: 'look', label: 'Look' },
+            { id: 'behaviour', label: 'Behaviour' },
+          ]}
+        />
+      </div>
+
+      <div className="panel-body">
+        {tab === 'layout' ? (
+          <SourceLayoutFields overlay={overlay} existingGroups={existingGroups} onChange={onChange} />
+        ) : null}
+        {tab === 'look' ? <SourceLookFields overlay={overlay} onChange={onChange} /> : null}
+        {tab === 'behaviour' ? (
+          <SettingsEditor settings={overlay.settings} onChange={(settings) => onChange({ settings })} />
+        ) : null}
+      </div>
+
+      <footer className="form-foot">
+        {confirmDelete ? (
+          <>
+            <span className="muted">Delete “{overlay.name}”? Its URL will stop working.</span>
+            <div className="button-row">
+              <Button onClick={() => setConfirmDelete(false)}>Keep it</Button>
+              <Button variant="danger" onClick={onDelete}>
+                Delete overlay
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <Button onClick={onReset}>Reset to defaults</Button>
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+              Delete overlay…
+            </Button>
+          </>
+        )}
+      </footer>
+    </section>
+  );
+}
+
+/**
+ * The real overlay page in a frame, scaled to fit the space it is given.
+ *
+ * Previews never connect to the room (`demo=1`), so nothing here competes with
+ * a live source for audio. A checkerboard sits behind it so a transparent
+ * overlay reads as transparent, the way streaming software shows it.
+ */
+function PreviewStage({ overlay, nudge }: { overlay: OverlaySource; nudge: number }): JSX.Element {
+  const box = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+  const maxHeight = 340;
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = (): void => setWidth(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const scale = width > 0 ? Math.min(1, width / overlay.width, maxHeight / overlay.height) : 0;
+  const height = Math.max(120, overlay.height * scale);
+
+  return (
+    <div className="preview-stage" ref={box} style={{ height }}>
+      {scale > 0 ? (
         <iframe
+          key={`${overlay.id}-${nudge}`}
           className="gallery-frame"
           src={`/overlay/${overlay.id}?demo=1`}
           title={`${overlay.name} preview`}
           width={overlay.width}
           height={overlay.height}
-          style={{ transform: `scale(${scale})` }}
+          style={{
+            transform: `scale(${scale})`,
+            left: Math.max(0, (width - overlay.width * scale) / 2),
+          }}
           sandbox="allow-scripts allow-same-origin"
-          loading="lazy"
         />
-        {!overlay.enabled ? <span className="gallery-disabled">disabled</span> : null}
-      </div>
-
-      <div className="gallery-meta">
-        <div className="gallery-title">
-          <strong>{overlay.name}</strong>
-          <span className="muted">
-            {overlay.type} · {overlay.width}×{overlay.height}
-          </span>
-        </div>
-        <p className="muted gallery-blurb">{BLURB[overlay.type]}</p>
-        <code className="gallery-url mono">/overlay/{overlay.id}</code>
-        <div className="button-row">
-          <CopyButton text={url} label="Copy URL" />
-          <a className="btn btn-ghost" href={localUrl} target="_blank" rel="noreferrer">
-            Open
-          </a>
-          <Button variant={open ? 'primary' : 'default'} onClick={onToggle}>
-            Edit
-          </Button>
-        </div>
-      </div>
+      ) : null}
+      {!overlay.enabled ? <span className="gallery-disabled">Off</span> : null}
     </div>
   );
 }

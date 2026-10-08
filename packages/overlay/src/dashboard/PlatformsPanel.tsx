@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import {
   CAPABILITY_LABELS,
   MAX_CAPABILITIES,
@@ -12,9 +12,10 @@ import {
   type PlatformAuthState,
   type PlatformCapabilities,
 } from '@streaming/shared';
-import { api } from '../lib/api.js';
+import { api, type ServerMeta } from '../lib/api.js';
 import { useLive } from '../lib/store.js';
-import { Panel, StatusDot, Toggle } from './controls.js';
+import { StatusDot, Toggle } from './controls.js';
+import { Disclosure } from './layout.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
 
 /**
@@ -28,6 +29,7 @@ import { PlatformLogo } from '../lib/PlatformLogo.js';
 interface Props {
   config: AppConfig;
   patch: (partial: Record<string, unknown>) => void;
+  meta: ServerMeta | null;
 }
 
 /** Everything a card needs that differs between platforms. */
@@ -85,7 +87,7 @@ const WIRING: Record<Platform, PlatformWiring> = {
   },
 };
 
-export function PlatformsPanel({ config, patch }: Props): JSX.Element {
+export function PlatformsPanel({ config, patch, meta }: Props): JSX.Element {
   const { snapshot } = useLive();
   const [auth, setAuth] = useState<AuthOverview | null>(null);
 
@@ -107,24 +109,20 @@ export function PlatformsPanel({ config, patch }: Props): JSX.Element {
   const connections = snapshot?.connections ?? {};
 
   return (
-    <Panel
-      title="Platforms"
-      description="Connect each service and sign in where it unlocks more. Everything you connect feeds one chat log."
-    >
-      <div className="platform-grid">
-        {PLATFORMS.map((platform) => (
-          <PlatformCard
-            key={platform}
-            platform={platform}
-            config={config}
-            patch={patch}
-            state={connections[platform]}
-            auth={auth?.[platform] ?? null}
-            onAuthChanged={reload}
-          />
-        ))}
-      </div>
-    </Panel>
+    <div className="platform-grid">
+      {PLATFORMS.map((platform) => (
+        <PlatformCard
+          key={platform}
+          platform={platform}
+          config={config}
+          patch={patch}
+          meta={meta}
+          state={connections[platform]}
+          auth={auth?.[platform] ?? null}
+          onAuthChanged={reload}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -132,6 +130,7 @@ function PlatformCard({
   platform,
   config,
   patch,
+  meta,
   state,
   auth,
   onAuthChanged,
@@ -139,6 +138,7 @@ function PlatformCard({
   platform: Platform;
   config: AppConfig;
   patch: (partial: Record<string, unknown>) => void;
+  meta: ServerMeta | null;
   state: ConnectionState | undefined;
   auth: PlatformAuthState | null;
   onAuthChanged: () => void;
@@ -181,103 +181,137 @@ function PlatformCard({
   };
 
   return (
-    <div className="platform-card" style={{ borderTopColor: info.color }}>
+    <div className="platform-card" style={{ '--gel': info.color } as CSSProperties}>
       <div className="platform-card-head">
-        <span className="platform-name" style={{ color: info.color }}>
-          <PlatformLogo platform={platform} size={17} />
+        <span className="platform-name">
+          <span className="gel-chip">
+            <PlatformLogo platform={platform} size={16} />
+          </span>
           {info.label}
         </span>
         <span className="platform-status">
           <StatusDot status={status} />
-          {status}
+          {STATUS_WORD[status] ?? status}
         </span>
       </div>
 
-      <input
-        type="text"
-        className="platform-input"
-        placeholder={wiring.placeholder}
-        value={handle}
-        onChange={(event) => {
-          setHandleLocal(event.target.value);
-          patch(wiring.setHandle(config, event.target.value));
-        }}
-      />
-
-      <div className="chips">
-        {/*
-          YouTube is the one platform with nothing to type: with no video id
-          it finds whichever broadcast on your own channel is live, so an
-          empty field is the normal case rather than an unfinished one.
-        */}
+      {/*
+        YouTube is the one platform with nothing to type: with no video id
+        it finds whichever broadcast on your own channel is live, so an
+        empty field is the normal case rather than an unfinished one.
+      */}
+      <div className="platform-connect">
+        <input
+          type="text"
+          className="input"
+          aria-label={`${info.label} channel or handle`}
+          placeholder={wiring.placeholder}
+          value={handle}
+          onChange={(event) => {
+            setHandleLocal(event.target.value);
+            patch(wiring.setHandle(config, event.target.value));
+          }}
+        />
         <button
           type="button"
-          className="chip"
+          className={live ? 'btn' : 'btn btn-primary'}
           disabled={busy || (platform !== 'youtube' && !handle.trim() && !live)}
           onClick={() => act(() => (live ? wiring.disconnect() : wiring.connect(handle.trim())))}
         >
           {live ? 'Disconnect' : 'Connect'}
         </button>
-
-        {auth && platform !== 'tiktok' ? (
-          auth.level === 'user' ? (
-            <button
-              type="button"
-              className="chip"
-              disabled={busy}
-              onClick={() => act(() => api.authSignOut(platform))}
-            >
-              Sign out{auth.account ? ` (${auth.account})` : ''}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="chip chip-signin"
-              disabled={busy || !auth.appConfigured}
-              title={auth.appConfigured ? undefined : "Add this platform's client credentials on the Keys tab first"}
-              onClick={signIn}
-            >
-              <PlatformLogo platform={platform} size={13} color="currentColor" />
-              Sign in with {info.label}
-            </button>
-          )
-        ) : null}
       </div>
+
+      {auth && platform !== 'tiktok' ? (
+        auth.level === 'user' ? (
+          <button
+            type="button"
+            className="btn btn-ghost platform-signin"
+            disabled={busy}
+            onClick={() => act(() => api.authSignOut(platform))}
+          >
+            Sign out{auth.account ? ` (${auth.account})` : ''}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn platform-signin"
+            disabled={busy || !auth.appConfigured}
+            title={auth.appConfigured ? undefined : "Add this platform's client credentials on the Keys tab first"}
+            onClick={signIn}
+          >
+            <PlatformLogo platform={platform} size={14} color="currentColor" />
+            Sign in with {info.label}
+          </button>
+        )
+      ) : null}
 
       {/* Why it is not connected is the thing you need while it is not, and
           the status word alone ("error") does not say. */}
-      <p className="platform-detail muted">
-        {state?.roomId ? <span>room {state.roomId}</span> : null}
-        {state?.reconnectAttempts ? <span>retry #{state.reconnectAttempts}</span> : null}
-        {state?.lastError ? <span className="error-text">{state.lastError}</span> : null}
-      </p>
+      {state?.roomId || state?.reconnectAttempts || state?.lastError ? (
+        <p className="platform-detail muted">
+          {state?.roomId ? <span>room {state.roomId}</span> : null}
+          {state?.reconnectAttempts ? <span>retry #{state.reconnectAttempts}</span> : null}
+          {state?.lastError ? <span className="error-text">{state.lastError}</span> : null}
+        </p>
+      ) : null}
 
-      {platform === 'youtube' ? <YouTubeSource config={config} patch={patch} auth={auth} /> : null}
-      {error ? <p className="muted platform-note platform-error">{error}</p> : null}
-      {platform === 'youtube' && live && config.youtube?.source === 'api' ? <QuotaMeter /> : null}
-      {auth ? <CapabilityList platform={platform} capabilities={auth.capabilities} /> : null}
+      {error ? <p className="platform-note error-text">{error}</p> : null}
 
       {auth?.nextStep ? <p className="muted platform-note">{auth.nextStep}</p> : null}
       {!auth?.nextStep && wiring.note ? (
         <p className="muted platform-note">{wiring.note}</p>
       ) : null}
 
-      <div className="platform-options">
-        <Toggle
-          label="Reconnect automatically"
-          hint={wiring.reconnectHint}
-          checked={options.autoReconnect}
-          onChange={(autoReconnect) => patch({ [wiring.section]: { autoReconnect } })}
-        />
-        <Toggle
-          label="Connect on startup"
-          checked={options.connectOnStartup}
-          onChange={(connectOnStartup) => patch({ [wiring.section]: { connectOnStartup } })}
-        />
-      </div>
+      {platform === 'youtube' ? <YouTubeSource config={config} patch={patch} auth={auth} /> : null}
+      {platform === 'youtube' && live && config.youtube?.source === 'api' ? <QuotaMeter /> : null}
+
+      <Disclosure summary="What this unlocks">
+        {auth ? <CapabilityList platform={platform} capabilities={auth.capabilities} /> : null}
+      </Disclosure>
+
+      <Disclosure summary="Connection options">
+        <div className="platform-options">
+          <Toggle
+            label="Reconnect automatically"
+            hint={wiring.reconnectHint}
+            checked={options.autoReconnect}
+            onChange={(autoReconnect) => patch({ [wiring.section]: { autoReconnect } })}
+          />
+          <Toggle
+            label="Connect on startup"
+            checked={options.connectOnStartup}
+            onChange={(connectOnStartup) => patch({ [wiring.section]: { connectOnStartup } })}
+          />
+          {platform === 'tiktok' ? (
+            <>
+              <Toggle
+                label="Fetch extended gift info"
+                hint="Needed for diamond values and gift images"
+                checked={config.connection.enableExtendedGiftInfo}
+                onChange={(enableExtendedGiftInfo) => patch({ connection: { enableExtendedGiftInfo } })}
+              />
+              {meta && !meta.env.hasSignApiKey ? (
+                <p className="muted platform-note">
+                  No Euler Stream key is set, so the connector shares a rate-limited signing quota.
+                  Fine to start; add a free key on the Keys tab if connecting starts failing.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      </Disclosure>
     </div>
   );
 }
+
+const STATUS_WORD: Record<string, string> = {
+  idle: 'Not connected',
+  connecting: 'Connecting',
+  reconnecting: 'Retrying',
+  connected: 'Connected',
+  error: 'Problem',
+};
 
 /**
  * Which way YouTube chat is read.
@@ -437,7 +471,11 @@ function CapabilityList({
     <ul className="capability-list">
       {keys.map((key) => (
         <li key={key} className={capabilities[key] ? 'cap cap-on' : 'cap cap-off'}>
-          <span className="cap-mark">{capabilities[key] ? '✓' : '·'}</span>
+          <span
+            className="cap-mark"
+            role="img"
+            aria-label={capabilities[key] ? 'available' : 'not available yet'}
+          />
           {CAPABILITY_LABELS[key]}
         </li>
       ))}

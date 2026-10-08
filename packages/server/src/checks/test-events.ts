@@ -7,12 +7,11 @@
  * synthetic event must leave no trace in the permanent archive, which is the
  * whole reason the flag exists.
  */
-import { checkGate } from '../pipeline/gates.js';
+import { checkGate, OPEN_GATE as OPEN, type GateConfig } from './legacy-gate.js';
 import { SessionState } from '../state/session.js';
 import { createTestEvent } from '../testEvents.js';
 import {
   TEST_PERSONAS,
-  type GateConfig,
   type StreamEvent,
   type TestEventSpec,
 } from '@streaming/shared';
@@ -31,18 +30,6 @@ function check(label: string, actual: unknown, expected: unknown): void {
     console.log(`         actual   ${JSON.stringify(actual)}`);
   }
 }
-
-const OPEN: GateConfig = {
-  followersOnly: false,
-  friendsOnly: false,
-  subscribersOnly: false,
-  moderatorsOnly: false,
-  giftersOnly: false,
-  minSessionDiamonds: 0,
-  minFollowerCount: 0,
-  minFansClubLevel: 0,
-  allowUsers: [],
-};
 
 const spec = (over: Partial<TestEventSpec> = {}): TestEventSpec => ({
   type: 'chat',

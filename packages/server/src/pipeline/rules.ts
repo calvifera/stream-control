@@ -6,12 +6,13 @@ import {
   settingsFor,
   type TtsConfig,
   type TtsProvider,
+  type RuleCondition,
   type TtsRule,
   type UsersConfig,
   type UserVoiceProfile,
 } from '@streaming/shared';
 import type { SessionState } from '../state/session.js';
-import { checkGate } from './gates.js';
+import { checkViewer } from './gates.js';
 import { createLogger } from '../logger.js';
 import { stripEmoteCodes } from '../text/shortcodes.js';
 
@@ -94,6 +95,13 @@ function textOf(event: StreamEvent): string | null {
   return null;
 }
 
+function conditionsOf<T extends RuleCondition['type']>(
+  rule: TtsRule,
+  type: T,
+): Array<Extract<RuleCondition, { type: T }>> {
+  return rule.conditions.filter((c): c is Extract<RuleCondition, { type: T }> => c.type === type);
+}
+
 function pickVoice(rule: TtsRule): string {
   if (rule.voice !== 'random') return rule.voice;
   const pool = rule.voicePool.filter(Boolean);
@@ -153,6 +161,16 @@ export class RuleEngine {
     }
 
     const trusted = Boolean(handle) && users.trusted.some((u) => listKey(u) === handle);
+
+    // Allow-list mode: speech is for the people on the list and the host, and
+    // nobody else, whatever the rules say. Checked before the rules so the log
+    // shows one clear reason instead of one rejection per rule.
+    if (tts.onlyAllowList && event.user && !trusted && !event.user.isHost) {
+      return {
+        matches,
+        rejections: [{ ruleId: 'allow-list', ruleName: 'Allow list', reason: 'not on the allow list' }],
+      };
+    }
     const profile = handle
       ? users.voiceProfiles.find((p) => listKey(p.username) === handle)
       : undefined;
@@ -198,19 +216,24 @@ export class RuleEngine {
       if (event.type === 'gift') {
         // Wait for the combo to settle so one 50x rose is one thank-you.
         if (event.streakable && !event.repeatEnd) continue;
-        if (event.totalDiamonds < rule.conditions.minDiamonds) {
-          reject(`gift worth ${event.totalDiamonds} < ${rule.conditions.minDiamonds} diamonds`);
+        const minDiamonds = Math.max(0, ...conditionsOf(rule, 'giftValue').map((c) => c.diamonds));
+        if (event.totalDiamonds < minDiamonds) {
+          reject(`gift worth ${event.totalDiamonds} < ${minDiamonds} diamonds`);
           continue;
         }
-        const wanted = rule.conditions.giftNames.map((g) => g.trim().toLowerCase()).filter(Boolean);
+        const wanted = conditionsOf(rule, 'giftIs')
+          .flatMap((c) => c.names)
+          .map((g) => g.trim().toLowerCase())
+          .filter(Boolean);
         if (wanted.length > 0 && !wanted.includes(event.giftName.toLowerCase())) {
           reject(`gift "${event.giftName}" not in the rule's gift list`);
           continue;
         }
       }
 
-      if (event.type === 'like' && event.likeCount < rule.conditions.minLikeCount) {
-        continue;
+      if (event.type === 'like') {
+        const minLikes = Math.max(0, ...conditionsOf(rule, 'likeCount').map((c) => c.count));
+        if (event.likeCount < minLikes) continue;
       }
 
       // --- text-shaped events ---------------------------------------------
@@ -229,24 +252,30 @@ export class RuleEngine {
           continue;
         }
 
-        const prefix = rule.conditions.requirePrefix.trim();
-        if (prefix) {
+        for (const condition of conditionsOf(rule, 'startsWith')) {
+          const prefix = condition.text.trim();
+          if (!prefix) continue;
           const lower = messageText.trimStart().toLowerCase();
           const needle = prefix.toLowerCase();
           const startsWith =
             lower.startsWith(needle) &&
             (lower.length === needle.length || /[\s:,]/.test(lower.charAt(needle.length)));
-          if (!startsWith) continue;
-          if (rule.conditions.stripPrefix) {
+          if (!startsWith) {
+            messageText = null;
+            break;
+          }
+          if (condition.strip) {
             messageText = messageText.trimStart().slice(prefix.length).replace(/^[\s:,]+/, '');
           }
         }
+        if (messageText === null) continue;
 
-        const regex = compileRegex(rule.conditions.matchRegex);
-        if (regex && !regex.test(messageText)) continue;
+        const patterns = conditionsOf(rule, 'matches').map((c) => compileRegex(c.pattern));
+        if (patterns.some((regex) => regex && !regex.test(messageText as string))) continue;
 
-        if (messageText.trim().length < rule.conditions.minLength) {
-          reject(`message shorter than ${rule.conditions.minLength} characters`);
+        const minLength = Math.max(0, ...conditionsOf(rule, 'minLength').map((c) => c.chars));
+        if (messageText.trim().length < minLength) {
+          reject(`message shorter than ${minLength} characters`);
           continue;
         }
       }
@@ -255,7 +284,7 @@ export class RuleEngine {
       // Trusted users skip every gate and cooldown — that is the whole point
       // of the list, so you never have to special-case a regular again.
       if (event.user && !trusted) {
-        const gate = checkGate(rule.gate, event.user, session);
+        const gate = checkViewer(rule.conditions, rule.alwaysAllow, event.user, session);
         if (!gate.allowed) {
           reject(gate.reason ?? 'gated');
           continue;

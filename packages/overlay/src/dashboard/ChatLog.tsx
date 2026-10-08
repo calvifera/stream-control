@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   describeEvent,
   messageDisplay,
@@ -479,7 +479,6 @@ const ChatRow = memo(function ChatRow({
     return (
       <div
         className={`chatnotice${animate ? ' chatrow-fresh' : ''}${selected ? ' chatrow-selected' : ''}`}
-        style={{ borderLeftColor: info.color }}
         onClick={open}
       >
         {showPlatform ? <PlatformMark platform={event.platform} /> : null}
@@ -496,9 +495,9 @@ const ChatRow = memo(function ChatRow({
   return (
     <div
       className={`chatrow${selected ? ' chatrow-selected' : ''}${animate ? ' chatrow-fresh' : ''}`}
-      // The accent bar is the point: it reads peripherally while you are
-      // playing, which a small logo glyph does not.
-      style={{ borderLeftColor: info.color }}
+      // The platform's colour rings the avatar: it reads peripherally while
+      // you are playing, which a small logo glyph does not.
+      style={{ '--platform': info.color } as CSSProperties}
       onClick={open}
     >
       <Avatar user={user} platform={event.platform} />
@@ -660,16 +659,16 @@ function RowActions({
         className={trusted ? 'is-on' : undefined}
         title={
           trusted
-            ? `${user.nickname} is trusted — exempt from automatic penalties. Click to remove.`
-            : `Trust ${user.nickname}: exempt them from automatic penalties.`
+            ? `${user.nickname} is on the allow list. Click to remove.`
+            : `Add ${user.nickname} to the allow list: exempt from automatic penalties and rule conditions, and can be spoken when only the allow list is.`
         }
         onClick={
           trusted
-            ? run('trust', 'untrusted', () => api.untrustUser(key))
-            : run('trust', 'trusted', () => api.trustUser(key, user.nickname))
+            ? run('trust', 'removed', () => api.untrustUser(key))
+            : run('trust', 'allowed', () => api.trustUser(key, user.nickname))
         }
       >
-        {trusted ? 'Trusted' : 'Trust'}
+        {trusted ? 'Allowed' : 'Allow'}
       </button>
     </div>
   );

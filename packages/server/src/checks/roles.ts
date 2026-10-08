@@ -9,7 +9,7 @@
  * So there are two things to pin down. What each platform can actually report,
  * and who still gets through when it can't.
  */
-import { checkGate } from '../pipeline/gates.js';
+import { checkGate, OPEN_GATE as OPEN, type GateConfig } from './legacy-gate.js';
 import { SessionState } from '../state/session.js';
 import {
   gateWarning,
@@ -18,7 +18,6 @@ import {
   ROLE_SIGNALS,
   PLATFORM_ROLES,
   PLATFORMS,
-  type GateConfig,
   type Platform,
   type StreamUser,
 } from '@streaming/shared';
@@ -37,18 +36,6 @@ function check(label: string, actual: unknown, expected: unknown): void {
     console.log(`         actual   ${JSON.stringify(actual)}`);
   }
 }
-
-const OPEN: GateConfig = {
-  followersOnly: false,
-  friendsOnly: false,
-  subscribersOnly: false,
-  moderatorsOnly: false,
-  giftersOnly: false,
-  minSessionDiamonds: 0,
-  minFollowerCount: 0,
-  minFansClubLevel: 0,
-  allowUsers: [],
-};
 
 const person = (platform: Platform, over: Partial<StreamUser> = {}): StreamUser => ({
   platform,
