@@ -103,16 +103,20 @@ panel** button launches it. Opacity and text size are on the **Chat** tab.
 
 ## What it does
 
-- **Filters.** Blocked words, phrases, regexes and users, censored or dropped.
+- **Filters.** One blocklist table of words, phrases, patterns and users, censored or
+  dropped; add one at a time or paste many.
   Matching sees through leetspeak, lookalike letters, other writing systems and
   mixed-script tricks. The **Filters** tab has a **Test a message** box.
-- **People.** Trust regulars (they skip every gate), mute people from speech
-  only, give individuals their own voice, and auto-penalize anyone who uses a
-  disguised bypass to get something read aloud.
-- **Speech rules.** Choose what is read, by whom and how: templates like
-  `{{nickname}} says {{message}}`, gates (followers, subscribers, minimum gifts),
-  prefix or regex conditions, priority and cooldowns. The **Log** tab explains
-  why a message was *not* read.
+- **Viewers.** One list of people, with allow list, mute and own-voice settings on
+  each row. Allowed regulars skip every rule condition, and turning on **Only the
+  allow list** under Speech rules means nobody else is read aloud. Mute people
+  from speech only, and auto-penalize anyone who uses a disguised bypass to get
+  something read aloud.
+- **Speech rules.** A table of rules; open one to set when it fires, a list of
+  conditions that must all be true (message prefix or pattern, gift value or
+  name, viewer is a follower, subscriber or moderator, minimum gifts), what it
+  says (templates like `{{nickname}} says {{message}}`), priority and cooldowns.
+  The **Log** tab explains why a message was *not* read.
 - **Voices.** Google Cloud (recommended), TikTok, an unofficial Google engine, or
   browser speech. Details and setup are in [docs/tts.md](docs/tts.md).
 - **Public URLs.** Add an ngrok token on the **Keys** tab to reach overlays from

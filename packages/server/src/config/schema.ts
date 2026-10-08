@@ -21,6 +21,7 @@ import {
   OVERLAY_TYPES,
   SLIDESHOW_TRANSITIONS,
   STREAM_EVENT_TYPES,
+  VIEWER_ROLES,
 } from '@streaming/shared';
 
 /**
@@ -116,47 +117,95 @@ const giftFeedFields = (soundsEnabled: boolean) => ({
   sounds: soundSettings(soundsEnabled),
 });
 
-export const gateSchema = z.object({
-  followersOnly: z.boolean(),
-  friendsOnly: z.boolean(),
-  subscribersOnly: z.boolean(),
-  moderatorsOnly: z.boolean(),
-  giftersOnly: z.boolean(),
-  minSessionDiamonds: z.number().int().min(0),
-  minFollowerCount: z.number().int().min(0),
-  minFansClubLevel: z.number().int().min(0),
-  allowUsers: z.array(z.string()),
-});
+const count = z.number().int().min(0);
 
-export const conditionsSchema = z.object({
-  requirePrefix: z.string(),
-  stripPrefix: z.boolean(),
-  matchRegex: z.string(),
-  minLength: z.number().int().min(0),
-  minDiamonds: z.number().int().min(0),
-  giftNames: z.array(z.string()),
-  minLikeCount: z.number().int().min(0),
-});
+export const ruleConditionSchema = z.discriminatedUnion('type', [
+  z.object({ id: z.string().min(1), type: z.literal('startsWith'), text: z.string(), strip: z.boolean() }),
+  z.object({ id: z.string().min(1), type: z.literal('matches'), pattern: z.string() }),
+  z.object({ id: z.string().min(1), type: z.literal('minLength'), chars: count }),
+  z.object({ id: z.string().min(1), type: z.literal('giftValue'), diamonds: count }),
+  z.object({ id: z.string().min(1), type: z.literal('giftIs'), names: z.array(z.string()) }),
+  z.object({ id: z.string().min(1), type: z.literal('likeCount'), count }),
+  z.object({ id: z.string().min(1), type: z.literal('viewerIs'), role: z.enum(VIEWER_ROLES) }),
+  z.object({ id: z.string().min(1), type: z.literal('viewerGifted'), diamonds: count }),
+  z.object({ id: z.string().min(1), type: z.literal('followerCount'), count }),
+  z.object({ id: z.string().min(1), type: z.literal('fansClub'), level: count }),
+]);
 
-export const ttsRuleSchema = z.object({
-  id: z.string().min(1),
-  name: z.string(),
-  enabled: z.boolean(),
-  eventTypes: z.array(eventType),
-  // Defaulted to empty so rules saved before platforms existed keep firing on
-  // every platform rather than silently going quiet.
-  platforms: z.array(z.enum(PLATFORMS)).default([]),
-  template: z.string(),
-  voice: z.string(),
-  voicePool: z.array(z.string()),
-  priority: z.number().int(),
-  cooldownSeconds: z.number().min(0),
-  maxChars: z.number().int().min(1).max(1000),
-  gate: gateSchema,
-  conditions: conditionsSchema,
-  volume: z.number().min(0).max(1),
-  rate: z.number().min(0.5).max(2),
-});
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Turns a rule saved in the old shape into the current one.
+ *
+ * Rules used to carry two fixed objects: `gate` (who may trigger it, a dozen
+ * switches and minimums) and `conditions` (what the message or gift must be).
+ * They are now one list of conditions plus an `alwaysAllow` list. Every switch
+ * that was on becomes one condition, in the order the old engine checked them,
+ * so a migrated rule speaks for exactly the same events it did before. A
+ * minimum length of 1 or less was never a real condition (an empty message is
+ * dropped earlier), so it is not carried over.
+ */
+export function migrateLegacyRule(input: unknown): unknown {
+  if (!isRecord(input)) return input;
+  const legacyConditions = isRecord(input.conditions) ? input.conditions : null;
+  const legacyGate = isRecord(input.gate) ? input.gate : null;
+  if (!legacyConditions && !legacyGate) return input;
+
+  const { gate: _gate, conditions: _conditions, ...rest } = input;
+  const out: Array<Record<string, unknown>> = [];
+  const add = (type: string, fields: Record<string, unknown>): void => {
+    const suffix = typeof fields.role === 'string' ? `-${fields.role}` : '';
+    out.push({ id: `c-${type}${suffix}`, type, ...fields });
+  };
+
+  const c = legacyConditions ?? {};
+  const g = legacyGate ?? {};
+  const num = (value: unknown): number => (typeof value === 'number' && value > 0 ? value : 0);
+  const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+  const list = (value: unknown): string[] => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
+
+  if (text(c.requirePrefix).trim()) add('startsWith', { text: text(c.requirePrefix), strip: c.stripPrefix !== false });
+  if (text(c.matchRegex).trim()) add('matches', { pattern: text(c.matchRegex) });
+  if (num(c.minLength) > 1) add('minLength', { chars: num(c.minLength) });
+  if (num(c.minDiamonds) > 0) add('giftValue', { diamonds: num(c.minDiamonds) });
+  if (list(c.giftNames).length > 0) add('giftIs', { names: list(c.giftNames) });
+  if (num(c.minLikeCount) > 0) add('likeCount', { count: num(c.minLikeCount) });
+
+  if (g.moderatorsOnly) add('viewerIs', { role: 'moderator' });
+  if (g.friendsOnly) add('viewerIs', { role: 'mutual' });
+  if (g.followersOnly) add('viewerIs', { role: 'follower' });
+  if (g.subscribersOnly) add('viewerIs', { role: 'subscriber' });
+  if (g.giftersOnly) add('viewerIs', { role: 'gifter' });
+  if (num(g.minSessionDiamonds) > 0) add('viewerGifted', { diamonds: num(g.minSessionDiamonds) });
+  if (num(g.minFollowerCount) > 0) add('followerCount', { count: num(g.minFollowerCount) });
+  if (num(g.minFansClubLevel) > 0) add('fansClub', { level: num(g.minFansClubLevel) });
+
+  return { ...rest, conditions: out, alwaysAllow: list(g.allowUsers) };
+}
+
+export const ttsRuleSchema = z.preprocess(
+  migrateLegacyRule,
+  z.object({
+    id: z.string().min(1),
+    name: z.string(),
+    enabled: z.boolean(),
+    eventTypes: z.array(eventType),
+    // Defaulted to empty so rules saved before platforms existed keep firing on
+    // every platform rather than silently going quiet.
+    platforms: z.array(z.enum(PLATFORMS)).default([]),
+    template: z.string(),
+    voice: z.string(),
+    voicePool: z.array(z.string()),
+    priority: z.number().int(),
+    cooldownSeconds: z.number().min(0),
+    maxChars: z.number().int().min(1).max(1000),
+    conditions: z.array(ruleConditionSchema).default([]),
+    alwaysAllow: z.array(z.string()).default([]),
+    volume: z.number().min(0).max(1),
+    rate: z.number().min(0.5).max(2),
+  }),
+);
 
 export const filterSchema = z.object({
   enabled: z.boolean(),
@@ -380,6 +429,8 @@ export const ttsSchema = z.object({
     return trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
   }),
   fallbackToBrowser: z.boolean(),
+  // Added after the first release, so existing config files lack it.
+  onlyAllowList: z.boolean().default(false),
   maxQueueLength: z.number().int().min(1).max(500),
   itemTtlSeconds: z.number().min(5).max(3600),
   gapMs: z.number().min(0).max(10000),

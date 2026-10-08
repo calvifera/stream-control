@@ -154,8 +154,8 @@ export function ChatPopoutButton(): JSX.Element {
     if (pipWindow) return 'Close pop-out';
     // Reflects the panel rather than just offering to open one, so the button
     // is never claiming a window exists that has already been closed.
-    if (canOpenPanel && running) return '\u29c9 Panel open';
-    return canOpenPanel ? '\u29c9 Open chat panel' : '\u29c9 Pop out chat';
+    if (canOpenPanel && running) return 'Chat panel open';
+    return canOpenPanel ? 'Open chat panel' : 'Pop out chat';
   };
 
   return (
@@ -163,7 +163,7 @@ export function ChatPopoutButton(): JSX.Element {
       <button
         ref={openerRef}
         type="button"
-        className={canOpenPanel && running ? 'chip chip-on' : 'chip'}
+        className={canOpenPanel && running ? 'chip chip-on' : 'chip chip-action'}
         disabled={opening}
         title={
           canOpenPanel && running
@@ -180,7 +180,7 @@ export function ChatPopoutButton(): JSX.Element {
       {/* The panel is the better window, but PiP still works and needs no
           build step, so it stays reachable rather than being replaced. */}
       {canOpenPanel && supported && !pipWindow ? (
-        <button type="button" className="chip chip-ghost" onClick={openPip} title="Floating browser window instead — not see-through, but needs no build.">
+        <button type="button" className="chip chip-ghost chip-action" onClick={openPip} title="Floating browser window instead — not see-through, but needs no build.">
           Browser pop-out
         </button>
       ) : null}

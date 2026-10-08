@@ -3,6 +3,7 @@ import { describeEvent, type StreamEvent } from '@streaming/shared';
 import { TestEventPanel } from './TestEventPanel.js';
 import { useLive } from '../lib/store.js';
 import { Panel } from './controls.js';
+import { Page, SubTabs, useSubTab } from './layout.js';
 
 interface Rejection {
   ruleId: string;
@@ -12,7 +13,10 @@ interface Rejection {
   ts: number;
 }
 
+const SUBS = ['why', 'events', 'server', 'test'] as const;
+
 export function LogTab(): JSX.Element {
+  const [sub, setSub] = useSubTab('log', 'why', SUBS);
   const { events, logs } = useLive();
   const [rejections, setRejections] = useState<Rejection[]>([]);
 
@@ -30,9 +34,25 @@ export function LogTab(): JSX.Element {
   }, []);
 
   return (
-    <>
-      <TestEventPanel />
+    <Page
+      title="Log"
+      lead="What happened, and why. Start with why a message was not read: it is the fastest way to find a rule or gate that is too tight."
+    >
+      <SubTabs
+        label="Log sections"
+        value={sub}
+        onChange={setSub}
+        tabs={[
+          { id: 'why', label: 'Not read', note: rejections.length || null },
+          { id: 'events', label: 'Live events' },
+          { id: 'server', label: 'Server log' },
+          { id: 'test', label: 'Send a test event' },
+        ]}
+      />
 
+      {sub === 'test' ? <TestEventPanel /> : null}
+
+      {sub === 'why' ? (
       <Panel
         title="Why didn't that get read?"
         description="Rules that matched an event type but declined it — the fastest way to debug a gate."
@@ -62,7 +82,9 @@ export function LogTab(): JSX.Element {
           </table>
         )}
       </Panel>
+      ) : null}
 
+      {sub === 'events' ? (
       <Panel title="Live events">
         <div className="event-log">
           {[...events].reverse().slice(0, 80).map((event) => (
@@ -75,7 +97,9 @@ export function LogTab(): JSX.Element {
           {events.length === 0 ? <p className="muted">No events yet.</p> : null}
         </div>
       </Panel>
+      ) : null}
 
+      {sub === 'server' ? (
       <Panel title="Server log">
         <div className="event-log">
           {[...logs].reverse().slice(0, 80).map((entry, index) => (
@@ -88,7 +112,8 @@ export function LogTab(): JSX.Element {
           ))}
         </div>
       </Panel>
-    </>
+      ) : null}
+    </Page>
   );
 }
 

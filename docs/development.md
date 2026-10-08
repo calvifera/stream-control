@@ -10,7 +10,7 @@ npm test
 
 Typechecks all three packages, then runs every check that needs no server and no
 network: the filter engine (transliteration, homoglyph folding, mixed-script
-detection, severity, censoring), the rule gates, trust scoring, the YouTube and
+detection, severity, censoring), the rule conditions and allow-list mode, trust scoring, the YouTube and
 Twitch parsers, gifts, the credentials store and more. Each one lives in
 `packages/server/src/checks/`, and can be run alone with
 `npm run check:<name> -w @streaming/server`.

@@ -2,7 +2,6 @@ import { formatNumber } from '../overlay/style.js';
 import { formatElapsed, useElapsed } from '../lib/useElapsed.js';
 import {
   emptyPlatformStats,
-  PLATFORM_INFO,
   type Platform,
   type SessionStats,
 } from '@streaming/shared';
@@ -49,7 +48,6 @@ export function PlatformStats({ platform, stats, connected, liveSince }: Props):
    * as unknown until the server catches up, rather than as NaN.
    */
   const slice = { ...emptyPlatformStats(), ...(stats?.platforms?.[platform] ?? {}) };
-  const info = PLATFORM_INFO[platform];
 
   /*
    * A null viewer count is not zero.
@@ -63,7 +61,7 @@ export function PlatformStats({ platform, stats, connected, liveSince }: Props):
     slice.viewers === null ? (connected ? 'not reported' : '—') : formatNumber(slice.viewers);
 
   return (
-    <div className="pstats" style={{ borderLeftColor: info.color }}>
+    <div className="pstats">
       <Stat label="Watching" value={viewers} wide={slice.viewers === null} title="People watching right now" />
       {liveFor !== null ? (
         <Stat

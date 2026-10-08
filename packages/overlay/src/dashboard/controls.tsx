@@ -313,7 +313,7 @@ export function ScrollNumber({
         <span className="scrub-track" aria-hidden="true">
           <span
             className="scrub-fill"
-            style={{ width: `${((clamp(value) - min) / (max - min)) * 100}%` }}
+            style={{ transform: `scaleX(${(clamp(value) - min) / (max - min)})` }}
           />
         </span>
         {caption ? <span className="scrub-caption">{caption}</span> : null}

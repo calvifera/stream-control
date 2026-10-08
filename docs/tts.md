@@ -1,10 +1,10 @@
 # Speech backends and TikTok voices
 
-Reference for the **Voice and rules** page. Back to the [README](../README.md).
+Reference for the **Voice** page and the **Speech rules** that use it. Back to the [README](../README.md).
 
 ## Speech backends
 
-TTS runs through swappable providers, chosen on the **Voice and rules** page (Engine tab). Per-user voice
+TTS runs through swappable providers, chosen on the **Voice** page (Engine tab). Per-user voice
 profiles and rule voices always follow whichever one is active.
 
 | Provider | Voices | Pitch & speed | Notes |
@@ -26,7 +26,7 @@ Setting it up takes about five minutes:
 3. **APIs & Services → Credentials → Create credentials → API key**.
 4. **Restrict the key to the Text-to-Speech API** — an unrestricted key works
    for anything on the project if it ever leaks.
-5. Put it in `.env` as `GOOGLE_TTS_API_KEY`, or paste it on the Engine tab of **Voice and rules**.
+5. Put it in `.env` as `GOOGLE_TTS_API_KEY`, or paste it on the Engine tab of **Voice**.
 
 Then verify it:
 
@@ -82,7 +82,7 @@ npm run probe:endpoints -w @streaming/server
 ```
 
 It prints a status line per host and lists any that returned audio — put a
-working one in the endpoint field on the Engine tab of **Voice and rules**. To check synthesis end to end
+working one in the endpoint field on the Engine tab of **Voice**. To check synthesis end to end
 through the real code path:
 
 ```bash
@@ -120,4 +120,4 @@ if any entry has gone stale):
 npm run probe:voices -w @streaming/server -- --shipped
 ```
 
-There's also a **Test voices** button on the People tab for a quick in-app check.
+There's also a **Test voices** button on the Viewers page for a quick in-app check.

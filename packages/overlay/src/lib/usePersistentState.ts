@@ -35,6 +35,14 @@ export function usePersistentState<T>(
 }
 
 /**
+ * Sets a remembered value from outside the component that owns it, so a link
+ * on one screen can open another screen already on the right tab.
+ */
+export function setPersisted(key: string, value: unknown): void {
+  write(key, value);
+}
+
+/**
  * Storage can throw rather than merely be empty: Chrome raises on
  * `localStorage` access when third-party cookies are blocked, and a browser
  * source running from a file:// origin has no usable store at all. A dashboard

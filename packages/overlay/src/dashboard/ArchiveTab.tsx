@@ -18,6 +18,7 @@ import { api } from '../lib/api.js';
 import { Panel } from './controls.js';
 import { PlatformLogo } from '../lib/PlatformLogo.js';
 import { PlatformTabs, type PlatformTab } from './PlatformTabs.js';
+import { Page, SubTabs, useSubTab } from './layout.js';
 
 const PAGE_SIZE = 50;
 
@@ -51,7 +52,10 @@ interface Props {
   patch: (partial: Record<string, unknown>) => void;
 }
 
+const SUBS = ['viewers', 'analytics'] as const;
+
 export function ArchiveTab({ config }: Props): JSX.Element {
+  const [sub, setSub] = useSubTab('archive', 'viewers', SUBS);
   const [platform, setPlatform] = useState<PlatformTab>('all');
   const [filter, setFilter] = useState<ArchiveFilter>('all');
   // Chronological by when someone was added is the default view: the archive
@@ -125,9 +129,33 @@ export function ArchiveTab({ config }: Props): JSX.Element {
   const activeFilter = FILTERS.find((f) => f.id === filter);
 
   return (
-    <section className="panel-stack">
-      {stats ? <ArchiveSummary stats={stats} platform={platform} /> : null}
+    <Page
+      title="Archive"
+      lead="Everyone the server has recorded, kept across restarts and reconnects. Open a viewer for their full history, notes and moderation."
+    >
+      <SubTabs
+        label="Archive sections"
+        value={sub}
+        onChange={setSub}
+        tabs={[
+          { id: 'viewers', label: 'Viewers', note: stats ? stats.totalViewers.toLocaleString() : null },
+          { id: 'analytics', label: 'Analytics' },
+        ]}
+      />
 
+      {sub === 'analytics' ? (
+        <>
+          <PlatformTabs
+            counts={platformCounts}
+            total={stats?.totalViewers ?? null}
+            active={platform}
+            onPick={setPlatform}
+          />
+          {stats ? <ArchiveSummary stats={stats} platform={platform} /> : <p className="muted">Loading…</p>}
+        </>
+      ) : null}
+
+      {sub === 'viewers' ? (
       <Panel
         title="Viewer archive"
         description="Everyone the server has recorded, kept across restarts and reconnects."
@@ -274,6 +302,7 @@ export function ArchiveTab({ config }: Props): JSX.Element {
           </div>
         ) : null}
       </Panel>
+      ) : null}
 
       {selected ? (
         <ViewerDetail
@@ -286,7 +315,7 @@ export function ArchiveTab({ config }: Props): JSX.Element {
           }}
         />
       ) : null}
-    </section>
+    </Page>
   );
 }
 
@@ -397,7 +426,7 @@ function ArchiveSummary({
     >
       {scope && scope.viewers === 0 ? (
         <p className="muted">
-          Nothing recorded from {label} yet. Connect it on the Setup tab and these fill in as
+          Nothing recorded from {label} yet. Connect it on Go live and these fill in as
           people show up.
         </p>
       ) : (
@@ -537,7 +566,7 @@ function RetentionChart({
                 <div key={minutes} className="retention-row">
                   <span className="retention-label">{formatMinutes(minutes)}</span>
                   <span className="retention-track">
-                    <span className="retention-fill" style={{ width: `${rate * 100}%` }} />
+                    <span className="retention-fill" style={{ transform: `scaleX(${Math.max(rate, 0.01)})` }} />
                   </span>
                   <span className="retention-value">
                     {Math.round(rate * 100)}%

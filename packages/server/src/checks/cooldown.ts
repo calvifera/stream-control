@@ -8,7 +8,7 @@
  * cooldown silently never fired. A config field that reads back correctly and
  * does nothing is worse than a missing one, so the behaviour is asserted here.
  */
-import { createDefaultConfig, DEFAULT_GATE } from '@streaming/shared';
+import { createDefaultConfig } from '@streaming/shared';
 import type { StreamEvent, StreamUser, TtsConfig, UsersConfig } from '@streaming/shared';
 import { RuleEngine } from '../pipeline/rules.js';
 import { SessionState } from '../state/session.js';
@@ -69,8 +69,8 @@ function ttsConfig(userCooldownSeconds: number): TtsConfig {
     eventTypes: ['chat' as const],
     template: '{{message}}',
     cooldownSeconds: 0,
-    gate: { ...DEFAULT_GATE },
-    conditions: { ...BASE.tts.rules[0]!.conditions, minLength: 0 },
+    conditions: [],
+    alwaysAllow: [],
   });
 
   return { ...BASE.tts, userCooldownSeconds, rules: [rule('r1'), rule('r2')] };

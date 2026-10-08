@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type CredentialStatus, type ServerMeta } from '../lib/api.js';
+import { usePersistentState } from '../lib/usePersistentState.js';
 import { Button, CopyButton, Panel, TextInput } from './controls.js';
+import { Disclosure, Page } from './layout.js';
 
 /**
  * Entering the API keys the app needs, without a text editor.
@@ -250,51 +252,102 @@ export function useCredentials(): {
   return { statusOf, reload, error };
 }
 
+const ACCESS_ID = 'access';
+
+type Selection = typeof ACCESS_ID | Group['id'];
+
 export function CredentialsTab({ origin }: Props): JSX.Element {
   const { statusOf, reload, error } = useCredentials();
+  const [picked, setPicked] = usePersistentState<Selection>('keys.group', ACCESS_ID, (stored) =>
+    stored === ACCESS_ID || GROUPS.some((group) => group.id === stored),
+  );
+
+  const group = GROUPS.find((entry) => entry.id === picked) ?? null;
+  const passworded = statusOf('DASHBOARD_PASSWORD')?.configured ?? false;
 
   return (
-    <section className="panel-stack">
-      <Panel
-        title="Credentials"
-        description="Keys for the services this connects to. Each one is created on that service's own site — the steps are below. Nothing here is sent anywhere except back to the service it belongs to."
-      >
+    <Page
+      title="Keys"
+      lead="API keys and the dashboard password. Most are optional: each one says what it unlocks and where it is sent. Everything is stored on this machine only."
+    >
+      <Disclosure summary="How your keys are handled">
         <div className="cred-privacy">
           <p>
             <strong>This app has no server of its own.</strong> It runs entirely on this machine
-            and talks only to the platforms themselves — TikTok, Twitch, Google and, if you use a
+            and talks only to the platforms themselves: TikTok, Twitch, Google and, if you use a
             tunnel, ngrok. There is no account to make, no telemetry, and nothing is reported to
             whoever wrote this.
           </p>
           <p>
-            Every credential below says exactly which hosts it reaches and when, because a key is
-            useless unless it goes <em>somewhere</em> — the useful question is where. That list is
+            Every credential says exactly which hosts it reaches and when, because a key is useless
+            unless it goes <em>somewhere</em>, so the useful question is where. That list is
             enforced by a test that fails if the code ever contacts a host not named on this
             screen.
           </p>
-          <p className="cred-privacy-note">
-            Keys are stored in <code>data/secrets.json</code> on this machine, never in{' '}
-            <code>config.json</code> — that one is broadcast to every overlay browser source. Once
-            saved a value is never displayed again, including here: the server reports only whether
-            a key is set, where it came from and how long it is. Saved keys apply immediately, with
-            no restart.
+          <p className="muted">
+            Keys are stored in <code>data/secrets.json</code>, never in <code>config.json</code>,
+            which is broadcast to every overlay browser source. Once saved a value is never
+            displayed again, including here: the server reports only whether a key is set, where it
+            came from and how long it is. Saved keys apply immediately, with no restart.
           </p>
         </div>
-        {error ? <div className="banner banner-error">{error}</div> : null}
-      </Panel>
+      </Disclosure>
 
-      <AccessPanel statusOf={statusOf} onSaved={reload} />
+      {error ? <div className="banner banner-error">{error}</div> : null}
 
-      {GROUPS.map((group) => (
-        <CredentialGroup
-          key={group.id}
-          group={group}
-          origin={origin}
-          statusOf={statusOf}
-          onSaved={reload}
-        />
-      ))}
-    </section>
+      <div className="split keys-split">
+        <nav className="key-list" aria-label="Services">
+          <button
+            type="button"
+            className={picked === ACCESS_ID ? 'key-item key-item-on' : 'key-item'}
+            aria-pressed={picked === ACCESS_ID}
+            onClick={() => setPicked(ACCESS_ID)}
+          >
+            <span className="key-item-name">This dashboard</span>
+            <span className="key-item-meta">
+              <span className="cred-tag cred-tag-optional">password</span>
+              <KeyState done={passworded} word={passworded ? 'Set' : 'Not set'} />
+            </span>
+          </button>
+
+          {GROUPS.map((entry) => {
+            const configured = entry.fields.every((field) => statusOf(field.key)?.configured);
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                className={picked === entry.id ? 'key-item key-item-on' : 'key-item'}
+                aria-pressed={picked === entry.id}
+                onClick={() => setPicked(entry.id)}
+              >
+                <span className="key-item-name">{entry.title}</span>
+                <span className="key-item-meta">
+                  <span className={`cred-tag cred-tag-${entry.required}`}>{entry.required}</span>
+                  <KeyState done={configured} word={configured ? 'Set' : 'Not set'} />
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="key-detail">
+          {group ? (
+            <CredentialGroup group={group} origin={origin} statusOf={statusOf} onSaved={reload} />
+          ) : (
+            <AccessPanel statusOf={statusOf} onSaved={reload} />
+          )}
+        </div>
+      </div>
+    </Page>
+  );
+}
+
+function KeyState({ done, word }: { done: boolean; word: string }): JSX.Element {
+  return (
+    <span className="key-state">
+      <span className={done ? 'dot dot-connected' : 'dot dot-idle'} />
+      {word}
+    </span>
   );
 }
 
@@ -309,37 +362,17 @@ function CredentialGroup({
   statusOf: (key: string) => CredentialStatus | undefined;
   onSaved: () => void;
 }): JSX.Element {
-  const configured = group.fields.every((field) => statusOf(field.key)?.configured);
-
   return (
-    <Panel title={group.title} description={group.unlocks}>
-      <div className="cred-head">
-        <span className={`cred-tag cred-tag-${group.required}`}>{group.required}</span>
-        {configured ? <span className="cred-done">configured</span> : null}
-        <a className="cred-link" href={group.link.href} target="_blank" rel="noreferrer noopener">
-          {group.link.label} ↗
+    <Panel
+      title={group.title}
+      description={group.unlocks}
+      actions={
+        <a className="btn" href={group.link.href} target="_blank" rel="noreferrer noopener">
+          {group.link.label}
         </a>
-      </div>
-
+      }
+    >
       {group.caveat ? <div className="banner banner-warn cred-caveat">{group.caveat}</div> : null}
-
-      <ol className="cred-steps">
-        {group.steps(origin).map((step, index) =>
-          typeof step === 'string' ? (
-            // eslint-disable-next-line react/no-array-index-key
-            <li key={index}>{step}</li>
-          ) : (
-            // eslint-disable-next-line react/no-array-index-key
-            <li key={index}>
-              {step.label}
-              <span className="cred-copy">
-                <code>{step.copy}</code>
-                <CopyButton text={step.copy} />
-              </span>
-            </li>
-          ),
-        )}
-      </ol>
 
       {group.fields.map((field) => (
         <CredentialField
@@ -349,6 +382,26 @@ function CredentialGroup({
           onSaved={onSaved}
         />
       ))}
+
+      <Disclosure summary={`How to get ${group.fields.length === 1 ? 'this key' : 'these keys'}`}>
+        <ol className="cred-steps">
+          {group.steps(origin).map((step, index) =>
+            typeof step === 'string' ? (
+              // eslint-disable-next-line react/no-array-index-key
+              <li key={index}>{step}</li>
+            ) : (
+              // eslint-disable-next-line react/no-array-index-key
+              <li key={index}>
+                {step.label}
+                <span className="cred-copy">
+                  <code>{step.copy}</code>
+                  <CopyButton text={step.copy} />
+                </span>
+              </li>
+            ),
+          )}
+        </ol>
+      </Disclosure>
     </Panel>
   );
 }
@@ -405,12 +458,16 @@ export function CredentialField({
         <span className="cred-field-label">{field.label}</span>
         {status?.configured ? (
           <span className={wrongLength ? 'cred-state cred-state-warn' : 'cred-state'}>
-            set · {status.length} chars
-            {status.source === 'env' ? ' · from .env' : ''}
-            {wrongLength ? ` · expected ${field.expect}` : ''}
+            <span className={wrongLength ? 'dot dot-connecting' : 'dot dot-connected'} />
+            Set, {status.length} chars
+            {status.source === 'env' ? ', from .env' : ''}
+            {wrongLength ? `, expected ${field.expect}` : ''}
           </span>
         ) : (
-          <span className="cred-state cred-state-missing">not set</span>
+          <span className="cred-state">
+            <span className="dot dot-idle" />
+            Not set
+          </span>
         )}
       </div>
 
@@ -435,11 +492,12 @@ export function CredentialField({
         ) : null}
       </div>
 
-      <p className="cred-usage">
-        <span className="cred-usage-label">Sent to</span> {field.sentTo}
-        <br />
-        <span className="cred-usage-label">When</span> {field.when}
-      </p>
+      <dl className="cred-usage">
+        <dt>Sent to</dt>
+        <dd>{field.sentTo}</dd>
+        <dt>When</dt>
+        <dd>{field.when}</dd>
+      </dl>
 
       {error ? <div className="banner banner-error">{error}</div> : null}
     </div>
@@ -498,7 +556,7 @@ function AccessPanel({
               .{' '}
               {passworded
                 ? 'They will need the password to change anything.'
-                : 'With no password set, they can change anything you can — connections, filters, the penalty box.'}
+                : 'With no password set, they can change anything you can: connections, filters, the penalty box.'}
             </>
           ) : (
             <>
@@ -509,6 +567,24 @@ function AccessPanel({
           )}
         </div>
       ) : null}
+
+      <CredentialField
+        field={{
+          key: 'DASHBOARD_PASSWORD',
+          label: 'Dashboard password',
+          placeholder: passworded ? 'enter a new password to replace it' : 'leave empty for none',
+          sentTo: 'nowhere. It never leaves this machine',
+          when: 'compared locally when someone logs in. It is the one credential here that is not sent to any service',
+        }}
+        status={statusOf('DASHBOARD_PASSWORD')}
+        onSaved={onSaved}
+      />
+
+      <p className="muted access-note">
+        Setting a password takes effect at once, and you stay signed in on this browser. Anyone
+        else, including you on another device, will be asked for it. Clearing it removes the login
+        entirely.
+      </p>
 
       <div className="access-grid">
         <div>
@@ -521,7 +597,7 @@ function AccessPanel({
         <div>
           <h4>The network binding</h4>
           <p>
-            Controls who can <em>reach</em> the page at all — a stronger guarantee, and not
+            Controls who can <em>reach</em> the page at all: a stronger guarantee, and not
             something a password can give you. Set <code>HOST=127.0.0.1</code> in your{' '}
             <code>.env</code> and restart to close it to everything but this computer.
           </p>
@@ -529,29 +605,11 @@ function AccessPanel({
         <div>
           <h4>Overlays either way</h4>
           <p>
-            Overlay URLs stay reachable with or without a password, because streaming software has no
-            way to log in. A password protects control, never the event stream.
+            Overlay URLs stay reachable with or without a password, because streaming software has
+            no way to log in. A password protects control, never the event stream.
           </p>
         </div>
       </div>
-
-      <CredentialField
-        field={{
-          key: 'DASHBOARD_PASSWORD',
-          label: 'Dashboard password',
-          placeholder: passworded ? 'enter a new password to replace it' : 'leave empty for none',
-          sentTo: 'nowhere — it never leaves this machine',
-          when: 'compared locally when someone logs in. It is the one credential here that is not sent to any service',
-        }}
-        status={statusOf('DASHBOARD_PASSWORD')}
-        onSaved={onSaved}
-      />
-
-      <p className="muted access-note">
-        Setting a password takes effect at once, and you stay signed in on this browser. Anyone
-        else — including you on another device — will be asked for it. Clearing it removes the
-        login entirely.
-      </p>
     </Panel>
   );
 }

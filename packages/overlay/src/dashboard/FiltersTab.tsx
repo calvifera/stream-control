@@ -10,8 +10,10 @@ import {
 } from '@streaming/shared';
 import { api, type FilterTestResult } from '../lib/api.js';
 import { usePersistentState } from '../lib/usePersistentState.js';
+import { Blocklist } from './Blocklist.js';
 import { ReviewPanel } from './ReviewPanel.js';
-import { Button, Field, ListEditor, Panel, Row, Select, TextInput, Toggle } from './controls.js';
+import { Button, Field, Panel, Row, Select, TextInput, Toggle } from './controls.js';
+import { Page, SubTabs, useSubTab } from './layout.js';
 
 interface Props {
   config: AppConfig;
@@ -42,7 +44,10 @@ const SCRIPTS = [
   'Tibetan',
 ];
 
+const SUBS = ['lists', 'matching', 'scripts', 'review', 'test'] as const;
+
 export function FiltersTab({ config, patch }: Props): JSX.Element {
+  const [sub, setSub] = useSubTab('filters', 'lists', SUBS);
   const filters = config.filters;
   const setFilters = (next: Partial<AppConfig['filters']>): void => patch({ filters: next });
 
@@ -54,276 +59,275 @@ export function FiltersTab({ config, patch }: Props): JSX.Element {
     setTestResult(await api.testFilter(testText));
   };
 
-  return (
-    <>
-      <Panel
-        title="Text filter"
-        description="Runs before anything is spoken. Blocked users are dropped entirely — no TTS, no overlay, no stats."
-        actions={
-          <Toggle
-            label="Enabled"
-            checked={filters.enabled}
-            onChange={(enabled) => setFilters({ enabled })}
-          />
-        }
-      >
-        <Row>
-          <Field
-            label="When something matches"
-            hint="Censor swaps just the match; skip drops the whole message"
-          >
-            <Select
-              value={filters.action}
-              onChange={(action) => setFilters({ action })}
-              options={[
-                { value: 'skip', label: 'Skip the whole message' },
-                { value: 'censor', label: 'Censor the match' },
-              ]}
-            />
-          </Field>
-          <Field label="Censor replacement">
-            <TextInput
-              value={filters.censorReplacement}
-              onChange={(censorReplacement) => setFilters({ censorReplacement })}
-            />
-          </Field>
-          <Field label="Max length" hint="Longer messages are truncated">
-            <TextInput
-              type="number"
-              value={String(filters.maxLength)}
-              onChange={(value) => setFilters({ maxLength: Number(value) || 200 })}
-            />
-          </Field>
-        </Row>
+  const entries =
+    filters.blockedWords.length +
+    filters.blockedPhrases.length +
+    filters.blockedRegex.length +
+    filters.blockedUsers.length;
 
-        <Row>
-          <Toggle
-            label="Fold leetspeak"
-            hint="Catches f4ke, f@ke, f-a-k-e"
-            checked={filters.normalizeLeetspeak}
-            onChange={(normalizeLeetspeak) => setFilters({ normalizeLeetspeak })}
-          />
-          <Toggle
-            label="Collapse repeated letters"
-            hint="Catches faaaake"
-            checked={filters.collapseRepeatedChars}
-            onChange={(collapseRepeatedChars) => setFilters({ collapseRepeatedChars })}
-          />
-          <Toggle
-            label="Strip links"
-            checked={filters.stripUrls}
-            onChange={(stripUrls) => setFilters({ stripUrls })}
-          />
-          <Toggle
-            label="Strip emoji"
-            checked={filters.stripEmoji}
-            onChange={(stripEmoji) => setFilters({ stripEmoji })}
-          />
-          <Toggle
-            label="Review sound-alikes"
-            hint="Reports “deal dough”-style bypasses below. Never blocks on its own."
-            checked={filters.reviewNearMatches}
-            onChange={(reviewNearMatches) => setFilters({ reviewNearMatches })}
-          />
+  return (
+    <Page
+      title="Filters"
+      lead="Everything a comment passes through before it is spoken or shown. Blocked users are dropped entirely: no TTS, no overlay, no stats."
+      actions={
+        <Toggle label="Filter on" checked={filters.enabled} onChange={(enabled) => setFilters({ enabled })} />
+      }
+    >
+      <SubTabs
+        label="Filter sections"
+        value={sub}
+        onChange={setSub}
+        tabs={[
+          { id: 'lists', label: 'Blocklist', note: entries || null },
+          { id: 'matching', label: 'Matching' },
+          { id: 'scripts', label: 'Writing systems' },
+          { id: 'review', label: 'Sound-alikes' },
+          { id: 'test', label: 'Test a message' },
+        ]}
+      />
+
+      {sub === 'lists' ? (
+        <>
+          <Blocklist filters={filters} onChange={setFilters} />
+
+          <Panel
+            title="Starter lists"
+            description="Curated slur lists you can add to the blocked words. They are ordinary entries once added: edit or delete any of them, and adding a pack never touches terms you wrote yourself."
+          >
+            {WORDLIST_PACKS.map((pack) => (
+              <PackRow
+                key={pack.id}
+                pack={pack}
+                words={filters.blockedWords}
+                phrases={filters.blockedPhrases}
+                onApply={(blockedWords, blockedPhrases) => setFilters({ blockedWords, blockedPhrases })}
+              />
+            ))}
+          </Panel>
+        </>
+      ) : null}
+
+      {sub === 'matching' ? (
+        <Panel
+          title="How a match is handled"
+          description="What happens when something is caught, and how hard the filter tries to see through disguises."
+        >
+          <Row>
+            <Field label="When something matches" hint="Censor swaps just the match; skip drops the whole message">
+              <Select
+                value={filters.action}
+                onChange={(action) => setFilters({ action })}
+                options={[
+                  { value: 'skip', label: 'Skip the whole message' },
+                  { value: 'censor', label: 'Censor the match' },
+                ]}
+              />
+            </Field>
+            <Field label="Censor replacement">
+              <TextInput
+                value={filters.censorReplacement}
+                onChange={(censorReplacement) => setFilters({ censorReplacement })}
+              />
+            </Field>
+            <Field label="Max length" hint="Longer messages are truncated">
+              <TextInput
+                type="number"
+                value={String(filters.maxLength)}
+                onChange={(value) => setFilters({ maxLength: Number(value) || 200 })}
+              />
+            </Field>
+          </Row>
+
+          <h3>Disguises it sees through</h3>
+          <div className="toggle-grid">
+            <Toggle
+              label="Fold leetspeak"
+              hint="Catches f4ke, f@ke, f-a-k-e"
+              checked={filters.normalizeLeetspeak}
+              onChange={(normalizeLeetspeak) => setFilters({ normalizeLeetspeak })}
+            />
+            <Toggle
+              label="Collapse repeated letters"
+              hint="Catches faaaake"
+              checked={filters.collapseRepeatedChars}
+              onChange={(collapseRepeatedChars) => setFilters({ collapseRepeatedChars })}
+            />
+          </div>
+
+          <h3>Clean-up before speaking</h3>
+          <div className="toggle-grid">
+            <Toggle
+              label="Strip links"
+              checked={filters.stripUrls}
+              onChange={(stripUrls) => setFilters({ stripUrls })}
+            />
+            <Toggle
+              label="Strip emoji"
+              checked={filters.stripEmoji}
+              onChange={(stripEmoji) => setFilters({ stripEmoji })}
+            />
+          </div>
+
+          <h3>Where it applies</h3>
           <Toggle
             label="Apply to chat overlays too"
             hint="Off means overlays show the raw message and only TTS is filtered"
             checked={filters.applyToOverlay}
             onChange={(applyToOverlay) => setFilters({ applyToOverlay })}
           />
-        </Row>
-      </Panel>
+        </Panel>
+      ) : null}
 
-      <Panel
-        title="Cross-script bypasses"
-        description="TTS reads other writing systems phonetically, so a slur typed in Ethiopic, Hangul, kana or Cyrillic gets spoken aloud while never matching a latin word list. These settings close that hole."
-      >
-        <Toggle
-          label="Match romanized copies of every message"
-          hint="ገበታ, 바보, バカ and дурак are all checked against your latin word list. A hit found only after romanizing always drops the message — it can't be censored in place."
-          checked={filters.matchTransliterations}
-          onChange={(matchTransliterations) => setFilters({ matchTransliterations })}
-        />
-
-        <Toggle
-          label="Drop words that mix two writing systems"
-          hint="ᏣΟᏒΝ spells “corn” from Cherokee and Greek letters. Words like that are spoofs by construction. Left off, they still count as evasion for strikes — this just also drops the message."
-          checked={filters.blockMixedScriptWords}
-          onChange={(blockMixedScriptWords) => setFilters({ blockMixedScriptWords })}
-        />
-
-        <Toggle
-          label="Refuse scripts that aren't on the allowlist"
-          hint="The backstop for writing systems that can't be romanized at all. Turn this on if you get targeted; leave it off if your audience writes in many languages."
-          checked={filters.blockDisallowedScripts}
-          onChange={(blockDisallowedScripts) => setFilters({ blockDisallowedScripts })}
-        />
-
-        {filters.blockDisallowedScripts ? (
-          <Field label="Allowed scripts">
-            <div className="chips">
-              {SCRIPTS.map((script) => {
-                const active = filters.allowedScripts.includes(script);
-                return (
-                  <button
-                    key={script}
-                    type="button"
-                    className={active ? 'chip chip-on' : 'chip'}
-                    onClick={() =>
-                      setFilters({
-                        allowedScripts: active
-                          ? filters.allowedScripts.filter((s) => s !== script)
-                          : [...filters.allowedScripts, script],
-                      })
-                    }
-                  >
-                    {script}
-                  </button>
-                );
-              })}
-            </div>
-          </Field>
-        ) : null}
-      </Panel>
-
-      <Panel
-        title="Starter lists"
-        description="Curated slur lists you can drop into the word list below. They are ordinary entries once added — edit or delete any of them freely, and adding a pack never touches terms you wrote yourself."
-      >
-        {WORDLIST_PACKS.map((pack) => (
-          <PackRow
-            key={pack.id}
-            pack={pack}
-            words={filters.blockedWords}
-            phrases={filters.blockedPhrases}
-            onApply={(blockedWords, blockedPhrases) => setFilters({ blockedWords, blockedPhrases })}
+      {sub === 'scripts' ? (
+        <Panel
+          title="Writing-system bypasses"
+          description="TTS reads other writing systems phonetically, so a slur typed in Ethiopic, Hangul, kana or Cyrillic gets spoken aloud while never matching a latin word list. These settings close that hole."
+        >
+          <Toggle
+            label="Match romanized copies of every message"
+            hint="ገበታ, 바보, バカ and дурак are all checked against your latin word list. A hit found only after romanizing always drops the message — it can't be censored in place."
+            checked={filters.matchTransliterations}
+            onChange={(matchTransliterations) => setFilters({ matchTransliterations })}
           />
-        ))}
-      </Panel>
 
-      <Panel title="Word lists">
-        <Row>
-          <Field
-            label="Blocked words"
-            hint="Whole-word matches. “ass” will not hit “classy”."
-          >
-            <ListEditor
-              values={filters.blockedWords}
-              onChange={(blockedWords) => setFilters({ blockedWords })}
-              placeholder={'badword\nanotherword'}
-            />
-          </Field>
-          <Field label="Blocked phrases" hint="Matched anywhere, can span words">
-            <ListEditor
-              values={filters.blockedPhrases}
-              onChange={(blockedPhrases) => setFilters({ blockedPhrases })}
-              placeholder={'follow me back\ncheck my page'}
-            />
-          </Field>
-        </Row>
-        <Row>
-          <Field label="Blocked regex" hint="One JS regex per line, case-insensitive. Invalid lines are ignored.">
-            <ListEditor
-              values={filters.blockedRegex}
-              onChange={(blockedRegex) => setFilters({ blockedRegex })}
-              placeholder={'\\bdiscord\\.gg/\\S+\\n^\\W+$'}
-            />
-          </Field>
-          <Field
-            label="Blocked users"
-            hint="Dropped entirely — no TTS, no overlay, no stats. A bare @handle blocks it on every platform; write tiktok:name or twitch:name to block just one person."
-          >
-            <ListEditor
-              values={filters.blockedUsers}
-              onChange={(blockedUsers) => setFilters({ blockedUsers })}
-              placeholder={'spambot123\ntwitch:troll_account'}
-            />
-          </Field>
-        </Row>
-      </Panel>
+          <Toggle
+            label="Drop words that mix two writing systems"
+            hint="ᏣΟᏒΝ spells “corn” from Cherokee and Greek letters. Words like that are spoofs by construction. Left off, they still count as evasion for strikes — this just also drops the message."
+            checked={filters.blockMixedScriptWords}
+            onChange={(blockMixedScriptWords) => setFilters({ blockMixedScriptWords })}
+          />
 
-      <ReviewPanel />
+          <Toggle
+            label="Refuse scripts that aren't on the allowlist"
+            hint="The backstop for writing systems that can't be romanized at all. Turn this on if you get targeted; leave it off if your audience writes in many languages."
+            checked={filters.blockDisallowedScripts}
+            onChange={(blockDisallowedScripts) => setFilters({ blockDisallowedScripts })}
+          />
 
-      <Panel
-        title="Test a message"
-        description="Runs the exact chain a real comment goes through, including every romanized view."
-      >
-        <Row>
-          <Field label="Message">
-            <TextInput value={testText} onChange={setTestText} placeholder="Type or paste a comment" />
-          </Field>
-          <Field label=" ">
-            <Button variant="primary" onClick={() => void runTest()}>
-              Test
-            </Button>
-          </Field>
-        </Row>
-
-        {testResult ? (
-          <div className="test-result">
-            <div className={testResult.result.text === null ? 'banner banner-error' : 'banner banner-ok'}>
-              {testResult.result.text === null
-                ? `Dropped — ${testResult.result.reason ?? 'blocked'}`
-                : `TTS would say: “${testResult.result.text}”`}
-            </div>
-
-            {testResult.result.severity === 'severe' ? (
-              <div className="banner banner-error">
-                Severe-list hit
-                {testResult.result.evasion
-                  ? ' via a disguised spelling — this would record a strike against the sender.'
-                  : ' typed plainly. With “only count disguised attempts” on, this records no strike.'}
+          {filters.blockDisallowedScripts ? (
+            <Field label="Allowed scripts">
+              <div className="chips">
+                {SCRIPTS.map((script) => {
+                  const active = filters.allowedScripts.includes(script);
+                  return (
+                    <button
+                      key={script}
+                      type="button"
+                      className={active ? 'chip chip-on' : 'chip'}
+                      onClick={() =>
+                        setFilters({
+                          allowedScripts: active
+                            ? filters.allowedScripts.filter((s) => s !== script)
+                            : [...filters.allowedScripts, script],
+                        })
+                      }
+                    >
+                      {script}
+                    </button>
+                  );
+                })}
               </div>
-            ) : null}
+            </Field>
+          ) : null}
+        </Panel>
+      ) : null}
 
-            {testResult.mixedScriptWords.length > 0 ? (
-              <div className="banner banner-error">
-                Mixed-script word{testResult.mixedScriptWords.length > 1 ? 's' : ''}:{' '}
-                <code>{testResult.mixedScriptWords.join(', ')}</code> — letters from two writing
-                systems inside one word, which is a spoof by construction.
+      {sub === 'review' ? (
+        <>
+          <Panel title="Collecting" description="Whether sound-alikes are collected into the list below at all.">
+            <Toggle
+              label="Collect sound-alikes"
+              hint="Reports “deal dough”-style bypasses below. Never blocks on its own."
+              checked={filters.reviewNearMatches}
+              onChange={(reviewNearMatches) => setFilters({ reviewNearMatches })}
+            />
+          </Panel>
+          <ReviewPanel />
+        </>
+      ) : null}
+
+      {sub === 'test' ? (
+        <Panel
+          title="Test a message"
+          description="Runs the exact chain a real comment goes through, including every romanized view."
+        >
+          <Row>
+            <Field label="Message">
+              <TextInput value={testText} onChange={setTestText} placeholder="Type or paste a comment" />
+            </Field>
+            <Field label=" ">
+              <Button variant="primary" onClick={() => void runTest()}>
+                Test
+              </Button>
+            </Field>
+          </Row>
+
+          {testResult ? (
+            <div className="test-result">
+              <div className={testResult.result.text === null ? 'banner banner-error' : 'banner banner-ok'}>
+                {testResult.result.text === null
+                  ? `Dropped — ${testResult.result.reason ?? 'blocked'}`
+                  : `TTS would say: “${testResult.result.text}”`}
               </div>
-            ) : null}
 
-            {testResult.matches.length > 0 ? (
-              <Field label="Matched">
-                <ul className="plain-list">
-                  {testResult.matches.map((match) => (
-                    <li key={match} className="mono">
-                      {match}
-                    </li>
-                  ))}
-                </ul>
-              </Field>
-            ) : null}
-
-            <Row>
-              <Field label="Scripts detected">
-                <div className="chips">
-                  {testResult.scripts.length === 0 ? (
-                    <span className="muted">none</span>
-                  ) : (
-                    testResult.scripts.map((script) => (
-                      <span key={script} className="chip chip-static">
-                        {script}
-                      </span>
-                    ))
-                  )}
+              {testResult.result.severity === 'severe' ? (
+                <div className="banner banner-error">
+                  Severe-list hit
+                  {testResult.result.evasion
+                    ? ' via a disguised spelling — this would record a strike against the sender.'
+                    : ' typed plainly. With “only count disguised attempts” on, this records no strike.'}
                 </div>
-              </Field>
-              <Field label="Romanized views checked">
-                <ul className="plain-list">
-                  {testResult.variants.map((variant, index) => (
-                    <li key={`${variant}-${index}`} className="mono">
-                      {variant}
-                    </li>
-                  ))}
-                </ul>
-              </Field>
-            </Row>
-          </div>
-        ) : null}
-      </Panel>
-    </>
+              ) : null}
+
+              {testResult.mixedScriptWords.length > 0 ? (
+                <div className="banner banner-error">
+                  Mixed-script word{testResult.mixedScriptWords.length > 1 ? 's' : ''}:{' '}
+                  <code>{testResult.mixedScriptWords.join(', ')}</code> — letters from two writing
+                  systems inside one word, which is a spoof by construction.
+                </div>
+              ) : null}
+
+              {testResult.matches.length > 0 ? (
+                <Field label="Matched">
+                  <ul className="plain-list">
+                    {testResult.matches.map((match) => (
+                      <li key={match} className="mono">
+                        {match}
+                      </li>
+                    ))}
+                  </ul>
+                </Field>
+              ) : null}
+
+              <Row>
+                <Field label="Scripts detected">
+                  <div className="chips">
+                    {testResult.scripts.length === 0 ? (
+                      <span className="muted">none</span>
+                    ) : (
+                      testResult.scripts.map((script) => (
+                        <span key={script} className="chip chip-static chip-action">
+                          {script}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </Field>
+                <Field label="Romanized views checked">
+                  <ul className="plain-list">
+                    {testResult.variants.map((variant, index) => (
+                      <li key={`${variant}-${index}`} className="mono">
+                        {variant}
+                      </li>
+                    ))}
+                  </ul>
+                </Field>
+              </Row>
+            </div>
+          ) : null}
+        </Panel>
+      ) : null}
+    </Page>
   );
 }
 

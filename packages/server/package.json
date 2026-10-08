@@ -23,6 +23,7 @@
     "check:cooldown": "tsx src/checks/cooldown.ts",
     "check:test-events": "tsx src/checks/test-events.ts",
     "check:roles": "tsx src/checks/roles.ts",
+    "check:rules-model": "tsx src/checks/rules-model.ts",
     "check:palette": "tsx src/checks/palette.ts",
     "check:highlights": "tsx src/checks/highlights.ts",
     "preview:chat": "tsx src/checks/chat-preview.ts",

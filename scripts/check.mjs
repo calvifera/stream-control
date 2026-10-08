@@ -35,6 +35,7 @@ const OFFLINE = [
   'cooldown',
   'test-events',
   'roles',
+  'rules-model',
   'palette',
   'highlights',
   'session',
