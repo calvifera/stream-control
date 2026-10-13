@@ -8,6 +8,7 @@ import {
   findMixedScriptWords,
   lettersOutsideScripts,
   matchVariants,
+  stripLettersOutsideScripts,
 } from '../text/unicode.js';
 
 const EMPTY_SEVERE: SevereTermsConfig = { words: [], phrases: [], regex: [] };
@@ -85,8 +86,22 @@ const LEET_CLASSES: Record<string, string> = {
   z: 'z2',
 };
 
-/** Characters people wedge between letters: `f.u.c.k`, `f u c k`, `f-u-c-k`. */
-const SEPARATOR = '[\\s\\-_.,*·•~^`\'"\\\\/|]{0,3}';
+/**
+ * Characters people wedge between letters: `f.u.c.k`, `f u c k`, `f-u-c-k`.
+ *
+ * Also `WORD_BREAK`, which only a name ever contains (see `speakableName`).
+ * Messages are canonicalized before matching, and that strips it.
+ */
+const SEPARATOR = '[\\s\\-_.,*·•~^`\'"\\\\/|\\u2063]{0,3}';
+
+/**
+ * An invisible separator, put where a name glues two words together:
+ * `BigDumbGuy` and `dumb99` read as separate words to a person and to TTS,
+ * but as one unbroken word to a whole-word pattern. It counts as a word edge
+ * for those patterns, and `canonicalize` strips it again.
+ */
+const WORD_BREAK = '⁣';
+const GLUED_WORDS = /(?<=\p{Ll})(?=\p{Lu})|(?<=\p{L})(?=\p{N})|(?<=\p{N})(?=\p{L})/gu;
 
 const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -534,6 +549,58 @@ export class FilterEngine {
       evasion: mixedScriptWords.length > 0,
       redact: false,
     };
+  }
+
+  /**
+   * The part of a viewer's name that is safe to say out loud, or '' when no
+   * part of it is.
+   *
+   * Names used to skip the filter entirely, so a gift thank-you read out
+   * whatever the gifter had typed into their profile. A name is cleaned
+   * rather than refused, because one bad part should not cost a gifter their
+   * thank-you: blocklist hits are cut out, and so are letters from scripts
+   * the host has not allowed. Only a hit that is visible nowhere in the name
+   * itself — found by romanizing or folding look-alikes — throws the whole
+   * name away, since there is no part of it to cut.
+   */
+  speakableName(name: string): string {
+    if (!this.config.enabled) return name;
+
+    // Before any letters go: `Ꮑ` is a Cherokee letter that the folded copy
+    // reads as N, and stripping it first would leave the rest of the word.
+    let working = this.removeTerms(capCombiningMarks(canonicalize(name)), name);
+    if (working === null) return '';
+
+    if (this.config.blockDisallowedScripts) {
+      working = stripLettersOutsideScripts(working, this.config.allowedScripts);
+      // Taking letters out can close up what was on either side of them.
+      working = this.removeTerms(working, working);
+      if (working === null) return '';
+    }
+
+    working = working.replace(/\s+/g, ' ').replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, '');
+    return /[\p{L}\p{N}]/u.test(working) ? working : '';
+  }
+
+  /**
+   * Cuts every blocklist hit out of `text`, or returns null when a hit only
+   * shows up in a romanized or folded copy.
+   */
+  private removeTerms(text: string, original: string): string | null {
+    let working = text.replace(GLUED_WORDS, WORD_BREAK);
+
+    for (let pass = 0; pass < 8; pass += 1) {
+      const match = this.findMatch(working, original);
+      if (!match) return working.replaceAll(WORD_BREAK, '');
+      if (!match.inOriginal) return null;
+
+      const pattern = this.compiled.patterns.find((p) => p.label === match.label);
+      if (!pattern) return null;
+      pattern.regex.lastIndex = 0;
+      working = working.replace(pattern.regex, ' ');
+    }
+    // Still matching after every pass: refuse it rather than say what is left.
+    return null;
   }
 
   /**

@@ -479,21 +479,54 @@ export function canonicalize(text: string): string {
  * is this letter in something I permit? — so an unknown script fails closed.
  */
 export function lettersOutsideScripts(text: string, allowed: readonly string[]): string[] {
-  const tests = allowed
-    .filter((name) => (SCRIPT_NAMES as readonly string[]).includes(name))
-    .map((name) => new RegExp(`\\p{Script=${name}}`, 'u'));
+  const tests = allowedScriptTests(allowed);
 
   const offenders = new Set<string>();
   for (const char of text) {
     if (!/\p{L}/u.test(char)) continue;
     // Marks and script-neutral letters ride along with whatever they attach to.
-    if (/[\p{Script=Common}\p{Script=Inherited}]/u.test(char)) continue;
+    if (SHARED_SCRIPT.test(char)) continue;
     if (tests.some((test) => test.test(char))) continue;
     offenders.add(char);
     if (offenders.size >= 8) break;
   }
   return [...offenders];
 }
+
+/**
+ * Removes the letters `lettersOutsideScripts` reports and keeps the rest.
+ *
+ * For text where dropping the whole thing costs too much, which is a name: a
+ * gifter called `Sam ⵏⵉⴳⵔ` should still be thanked as Sam. A script's own
+ * vowel signs go with it, and a shared accent goes with the letter it sits on
+ * rather than being left stranded on the space before it.
+ */
+export function stripLettersOutsideScripts(text: string, allowed: readonly string[]): string {
+  const tests = allowedScriptTests(allowed);
+
+  let out = '';
+  let dropping = false;
+  for (const char of text) {
+    const isMark = /\p{M}/u.test(char);
+    if (isMark && SHARED_SCRIPT.test(char)) {
+      if (!dropping) out += char;
+      continue;
+    }
+    dropping =
+      (isMark || /\p{L}/u.test(char)) &&
+      !SHARED_SCRIPT.test(char) &&
+      !tests.some((test) => test.test(char));
+    if (!dropping) out += char;
+  }
+  return out;
+}
+
+const SHARED_SCRIPT = /[\p{Script=Common}\p{Script=Inherited}]/u;
+
+const allowedScriptTests = (allowed: readonly string[]): RegExp[] =>
+  allowed
+    .filter((name) => (SCRIPT_NAMES as readonly string[]).includes(name))
+    .map((name) => new RegExp(`\\p{Script=${name}}`, 'u'));
 
 /**
  * Decodes Unicode tag characters back into the ASCII they stand for.

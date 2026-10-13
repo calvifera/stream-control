@@ -281,6 +281,34 @@ console.log('\nthe message that comes with a gift');
   check('a gift with no message has none to show', [tiktok.detail.message, tiktok.detail.displayMessage], [null, null]);
 }
 
+console.log('\na gifter\'s name, read aloud');
+{
+  const thank = (displayName: string, username = 'gifter'): string | undefined => {
+    queued.length = 0;
+    hub.handleEvent(
+      createTestEvent({ type: 'gift', platform: 'tiktok', username, displayName, giftName: 'Rose', diamonds: 1, repeatCount: 1 }),
+    );
+    return queued[0];
+  };
+
+  reset({
+    filters: { blockedWords: ['fiddlesticks'], blockDisallowedScripts: true, allowedScripts: ['Latin', 'Greek'] },
+  });
+  check('an ordinary name is read as it is', thank('Sam'), 'Thank you Sam for the 1 Rose!');
+  check('letters from a script not on the allowlist are left out', thank('Sam ⵏⵉⴳⵔ'), 'Thank you Sam for the 1 Rose!');
+  check('a blocked word is cut out of the name', thank('Sam fiddlesticks'), 'Thank you Sam for the 1 Rose!');
+  check('including one glued to the words around it', thank('BigFiddlesticksGuy'), 'Thank you Big Guy for the 1 Rose!');
+  check('a severe term too', thank('gebeta Sam'), 'Thank you Sam for the 1 Rose!');
+  check('a name with nothing left falls back to the handle', thank('ⵏⵉⴳⵔ', 'samuel99'), 'Thank you samuel99 for the 1 Rose!');
+  // The Cyrillic е is not on the allowlist. Stripping it first would leave
+  // "gbta" to be read out; the term has to be caught before any letter goes.
+  check('a disguised term costs the whole name', thank('Sam gеbеta', 'samuel99'), 'Thank you samuel99 for the 1 Rose!');
+  check('and when the handle is no better either, it says someone', thank('ⵏⵉⴳⵔ', 'gebeta'), 'Thank you someone for the 1 Rose!');
+
+  reset({ filters: { enabled: false, blockDisallowedScripts: true, allowedScripts: ['Latin'] } });
+  check('with the filter off the name is read untouched', thank('Sam ⵏⵉⴳⵔ'), 'Thank you Sam ⵏⵉⴳⵔ for the 1 Rose!');
+}
+
 console.log('\nconnecting Twitch and YouTube');
 reset();
 {

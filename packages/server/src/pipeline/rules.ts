@@ -117,8 +117,37 @@ function clamp(text: string, max: number): string {
   return (lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice).trimEnd();
 }
 
+/** Turns a viewer's name into what may be said aloud; '' when nothing may. */
+export type NameCleaner = (name: string) => string;
+
+/**
+ * The event as speech should see it: every name in it cleaned.
+ *
+ * A name with nothing speakable left falls back to the handle, which on
+ * TikTok and Twitch is plain latin, and then to "someone", so a template
+ * never opens with a gap where the name was.
+ */
+function withSpokenNames(event: StreamEvent, clean: NameCleaner): StreamEvent {
+  const spoken = { ...event };
+  if (event.user) {
+    const handle = clean(event.user.uniqueId);
+    spoken.user = {
+      ...event.user,
+      uniqueId: handle || 'someone',
+      nickname: clean(event.user.nickname) || handle || 'someone',
+    };
+  }
+  if (spoken.type === 'subscribe' && spoken.recipient) {
+    spoken.recipient = clean(spoken.recipient) || 'someone';
+  }
+  return spoken;
+}
+
 export class RuleEngine {
   private cooldowns = new CooldownTable();
+
+  /** Defaults to speaking names as they are, for callers with no filter. */
+  constructor(private readonly cleanName: NameCleaner = (name) => name) {}
 
   resetCooldowns(): void {
     this.cooldowns.clear();
@@ -174,6 +203,9 @@ export class RuleEngine {
     const profile = handle
       ? users.voiceProfiles.find((p) => listKey(p.username) === handle)
       : undefined;
+    // Only for the template, and only once a rule is about to speak: the
+    // matching and gating use the real names.
+    let spoken: StreamEvent | null = null;
 
     /*
      * The account-wide cooldown, checked once per event rather than per rule.
@@ -298,7 +330,8 @@ export class RuleEngine {
       }
 
       // --- render -----------------------------------------------------------
-      const vars = buildTemplateVars(event, messageText !== null ? { message: messageText } : {});
+      spoken ??= withSpokenNames(event, this.cleanName);
+      const vars = buildTemplateVars(spoken, messageText !== null ? { message: messageText } : {});
       const rendered = renderTemplate(rule.template, vars).replace(/\s+/g, ' ').trim();
       if (!rendered) {
         reject('template rendered empty');
