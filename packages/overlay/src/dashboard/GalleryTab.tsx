@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  OVERLAY_TYPE_LABELS,
   OVERLAY_TYPES,
   overlayUrl,
   type AppConfig,
@@ -21,7 +22,7 @@ interface Props {
 const BLURB: Record<OverlayType, string> = {
   chat: 'Scrolling comments, with badges and avatars.',
   alerts: 'Full-size pop-ups for gifts, follows and subs.',
-  tts: 'Plays speech into the stream. Add it once — it has no visuals to speak of.',
+  tts: 'Carries speech into your stream. Add it once. It shows nothing on screen.',
   goal: 'A progress bar toward a like, follow or diamond target.',
   ticker: 'A single-line crawl of recent events.',
   leaderboard: 'Top gifters for the session, ranked.',
@@ -98,7 +99,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
   return (
     <Page
       title="Overlays"
-      lead="Each overlay is a browser source for your streaming software. Pick one to see it running against invented data, then adjust where it sits, how it looks and what it does."
+      lead="Each overlay is a web page you add to your streaming software as a browser source. Pick one to preview it with sample data, then change its size, look and behaviour."
       actions={
         <Button onClick={() => setNudge((n) => n + 1)} title="Reload the preview">
           Refresh preview
@@ -109,7 +110,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
 
       <div className="split overlays-split">
         <div className="stack">
-          <Panel title="Your overlays" description={`${config.overlays.length} browser ${config.overlays.length === 1 ? 'source' : 'sources'}`}>
+          <Panel title="Your overlays" description={`${config.overlays.length} ${config.overlays.length === 1 ? 'overlay' : 'overlays'}`}>
             {config.overlays.length === 0 ? (
               <p className="muted">None yet. Add one below.</p>
             ) : (
@@ -128,7 +129,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
                           <span className="src-main">
                             <span className={overlay.enabled ? 'src-name' : 'src-name src-name-off'}>{overlay.name}</span>
                             <span className="src-meta">
-                              {overlay.type} · {overlay.width}×{overlay.height}
+                              {OVERLAY_TYPE_LABELS[overlay.type]} · {overlay.width}×{overlay.height}
                             </span>
                           </span>
                           <span className="src-state">
@@ -150,7 +151,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
                 <Select
                   value={newType}
                   onChange={setNewType}
-                  options={OVERLAY_TYPES.map((type) => ({ value: type, label: type }))}
+                  options={OVERLAY_TYPES.map((type) => ({ value: type, label: OVERLAY_TYPE_LABELS[type] }))}
                 />
               </Field>
               <Field label="Name">
@@ -165,7 +166,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
             </div>
 
             {missingTypes.length > 0 ? (
-              <Disclosure summary="Types you have not set up yet">
+              <Disclosure summary="Overlay types you have not added yet">
                 <div className="chips">
                   {missingTypes.map((type) => (
                     <button
@@ -175,7 +176,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
                       title={BLURB[type]}
                       onClick={() => run(api.addOverlay(type).then((c) => setPickedId(c.id)))}
                     >
-                      Add {type}
+                      Add {OVERLAY_TYPE_LABELS[type].toLowerCase()}
                     </button>
                   ))}
                 </div>
@@ -206,7 +207,7 @@ export function GalleryTab({ config, patch }: Props): JSX.Element {
         ) : (
           <div className="empty">
             <strong>No overlays yet</strong>
-            <p>Add a chat overlay to start. You can add alerts, goals and the TTS audio source after.</p>
+            <p>Add a chat overlay to start. You can add alerts, goals and the TTS audio overlay afterward.</p>
           </div>
         )}
       </div>
@@ -247,7 +248,8 @@ function Workspace({
         <div>
           <h2>{overlay.name}</h2>
           <p className="muted">
-            {overlay.type} source. Add it to your streaming software at {overlay.width}×{overlay.height}.
+            {OVERLAY_TYPE_LABELS[overlay.type]} overlay. Add its URL to your streaming software as a
+            browser source, {overlay.width}×{overlay.height}.
           </p>
         </div>
         <div className="panel-actions">

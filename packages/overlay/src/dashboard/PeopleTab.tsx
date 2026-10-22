@@ -66,8 +66,8 @@ export function PeopleTab({ config, patch }: Props): JSX.Element {
         onChange={setSub}
         tabs={[
           { id: 'viewers', label: 'Viewers', note: countViewers(users) || null },
-          { id: 'automatic', label: 'Automatic protection' },
-          { id: 'enforcement', label: 'Platform enforcement' },
+          { id: 'automatic', label: 'Auto-mute' },
+          { id: 'enforcement', label: 'Platform actions' },
         ]}
       />
 
@@ -318,13 +318,13 @@ function ViewersTable({
                       <div className="vtags">
                         {row.allowed ? <span className="vtag">Allowed</span> : null}
                         {row.penalty ? (
-                          <span className="vtag vtag-muted">{row.penalty.automatic ? 'Muted (automatic)' : 'Muted'}</span>
+                          <span className="vtag vtag-muted">{row.penalty.automatic ? 'Muted automatically' : 'Muted'}</span>
                         ) : null}
                         {!row.allowed && !row.penalty ? <span className="rules-cell-sub">Normal</span> : null}
                       </div>
                     </td>
                     <td data-label="Voice">
-                      {row.profile ? <span className="vtag">Own voice</span> : <span className="rules-cell-sub">Follows the rule</span>}
+                      {row.profile ? <span className="vtag">Own voice</span> : <span className="rules-cell-sub">Voice set by the rule</span>}
                     </td>
                     <td className="viewer-col-open">
                       <Button variant={open ? 'primary' : 'default'} onClick={() => setOpenKey(open ? null : row.key)}>
@@ -426,7 +426,7 @@ function ViewerDetail({
 }
 
 /* ------------------------------------------------------------------ *
- * Automatic protection
+ * Auto-mute
  * ------------------------------------------------------------------ */
 
 function AutoPenaltyPanel({
@@ -442,19 +442,19 @@ function AutoPenaltyPanel({
 
   return (
     <Panel
-      title="Automatic penalties"
-      description="Strikes are only recorded for the severe list below, and by default only when someone disguises the term to get past the filter. Ordinary swearing never lands anyone here."
+      title="Automatic muting"
+      description="A viewer gets a strike only for a term on the severe list below, and by default only when they disguise it to get past the filter. Ordinary swearing never mutes anyone."
     >
       <Row>
         <Toggle label="Enabled" checked={users.autoPenalty.enabled} onChange={(enabled) => set({ enabled })} />
         <Toggle
           label="Only count disguised attempts"
-          hint="Cross-script, homoglyph or mixed-script spellings. Off means plainly typing a severe term also counts."
+          hint="Disguised means look-alike letters or letters from other alphabets. When this is off, typing a severe term plainly also earns a strike."
           checked={users.autoPenalty.onlyCountEvasion}
           onChange={(onlyCountEvasion) => set({ onlyCountEvasion })}
         />
         <Toggle
-          label="People on the allow list are exempt"
+          label="Exempt viewers on the allow list"
           checked={users.autoPenalty.exemptTrusted}
           onChange={(exemptTrusted) => set({ exemptTrusted })}
         />

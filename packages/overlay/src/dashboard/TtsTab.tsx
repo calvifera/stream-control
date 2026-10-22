@@ -90,7 +90,7 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
         <>
           <Panel
             title="Voice engine"
-            description="Clips are made on the server and played by the TTS browser source, so your streaming software captures the audio."
+            description="This server generates the speech, and the TTS audio overlay plays it, so your streaming software can capture the sound."
           >
             <Row>
               <Field label="Provider">
@@ -120,10 +120,11 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
 
             {mismatchedRules.length > 0 ? (
               <div className="banner banner-warn">
-                {mismatchedRules.length} rule{mismatchedRules.length === 1 ? '' : 's'} still
-                {mismatchedRules.length === 1 ? ' uses a voice' : ' use voices'} from another backend
-                (<code>{mismatchedRules.map((r) => r.voice).join('</code>, <code>')}</code>). They'll
-                fall back to the default voice until you repick them under Speech rules.
+                {mismatchedRules.length} speech rule{mismatchedRules.length === 1 ? '' : 's'}{' '}
+                {mismatchedRules.length === 1 ? 'uses a voice' : 'use voices'} that this provider
+                doesn't have (<code>{mismatchedRules.map((r) => r.voice).join('</code>, <code>')}</code>).{' '}
+                {mismatchedRules.length === 1 ? 'It speaks' : 'They speak'} in the default voice until
+                you pick a new one under Speech rules.
               </div>
             ) : null}
 
@@ -158,7 +159,7 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
             {tts.provider === 'google-legacy' ? (
               <>
                 <Row>
-                  <Field label="Default voice" hint="Two per language — this engine has no others">
+                  <Field label="Default voice" hint="This provider offers two voices per language, one male and one female">
                     <Select
                       value={tts.googleLegacy.defaultVoice}
                       onChange={(defaultVoice) => setTts({ googleLegacy: { defaultVoice } })}
@@ -171,11 +172,11 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
                   </Field>
                 </Row>
                 <div className="banner banner-warn">
-                  This is the engine behind other tools' "default male/female" voices. It needs no key
-                  because it rides <strong>Chromium's public API key</strong> — the quota isn't yours,
-                  so Google can throttle or revoke it without warning, and using it sits outside their
-                  terms. Speed and pitch are real parameters here, but there are only two voices per
-                  language. Keep <strong>Google Cloud TTS</strong> configured as your fallback.
+                  These are the "default male/female" voices many other stream tools use. They need no
+                  key because they borrow a key that Google publishes inside Chromium, so the quota
+                  isn't yours. Google can limit or revoke it at any time, and using it goes against
+                  Google's terms. Speed and pitch work, but each language has only two voices. Set up{' '}
+                  <strong>Google Cloud TTS</strong> as a backup.
                 </div>
               </>
             ) : null}
@@ -205,12 +206,12 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
 
           <Panel
             title="Loudness and delivery"
-            description="How clips are levelled, how long the queue may grow, and what happens when something goes wrong."
+            description="How loud speech is, how many messages can wait to be read, and what happens when something goes wrong."
           >
             <Row>
               <Toggle
-                label="Match loudness to your stream"
-                hint="Speech arrives peak-normalised but quiet on average, so it sits under game audio even at full volume. This compresses it and makes up the difference — turning the volume up alone would only clip."
+                label="Make speech louder and more even"
+                hint="Generated speech is quiet on average, so game audio drowns it out even at full volume. This evens out the quiet and loud parts and raises the overall level. Turning the volume up alone would distort it."
                 checked={tts.normalizeLoudness}
                 onChange={(normalizeLoudness) => setTts({ normalizeLoudness })}
               />
@@ -232,7 +233,7 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
 
             <h3>Queue</h3>
             <Row>
-              <Field label="Max queue length">
+              <Field label="Most messages waiting">
                 <NumberInput
                   value={tts.maxQueueLength}
                   onChange={(maxQueueLength) => setTts({ maxQueueLength })}
@@ -240,7 +241,7 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
                   max={500}
                 />
               </Field>
-              <Field label="Drop items older than (s)">
+              <Field label="Skip messages waiting longer than (seconds)">
                 <NumberInput
                   value={tts.itemTtlSeconds}
                   onChange={(itemTtlSeconds) => setTts({ itemTtlSeconds })}
@@ -248,15 +249,15 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
                   max={3600}
                 />
               </Field>
-              <Field label="Gap between clips (ms)">
+              <Field label="Pause between messages (milliseconds)">
                 <NumberInput value={tts.gapMs} onChange={(gapMs) => setTts({ gapMs })} min={0} max={10000} step={50} />
               </Field>
               <Field
-                label="Per-user cooldown (s)"
+                label="Cooldown per viewer (seconds)"
                 hint={
                   tts.userCooldownSeconds > 0
-                    ? `Anyone spoken is silent for ${tts.userCooldownSeconds}s afterwards, across every rule. Trusted users are exempt.`
-                    : 'Off. Set above 0 to stop one person holding the queue by triggering different rules back to back.'
+                    ? `After someone is read aloud, they are skipped for ${tts.userCooldownSeconds} seconds, whichever rule matches. Allowed viewers are exempt.`
+                    : 'Off. Set it above 0 to stop one viewer taking over the queue by triggering several rules in a row.'
                 }
               >
                 <NumberInput
@@ -271,13 +272,13 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
             <h3>When things go wrong</h3>
             <Toggle
               label="Fall back to browser speech"
-              hint="Keeps talking when TikTok refuses a clip (expired session, region block)"
+              hint="Uses your browser's built-in voice when the chosen provider fails, for example with an expired TikTok session or a regional block"
               checked={tts.fallbackToBrowser}
               onChange={(fallbackToBrowser) => setTts({ fallbackToBrowser })}
             />
             <Toggle
-              label="Discard queue when no TTS overlay is open"
-              hint="Off means the queue waits, and everything backs up the moment you open the source"
+              label="Skip speech while the TTS audio overlay is closed"
+              hint="When this is off, messages wait in the queue and all play at once when you open the overlay"
               checked={tts.skipWhenNoListener}
               onChange={(skipWhenNoListener) => setTts({ skipWhenNoListener })}
             />
@@ -285,8 +286,8 @@ export function TtsTab({ config, patch, meta, onCredentialsChanged }: Props): JS
               label="Also play speech in this dashboard"
               hint={
                 listeners > 0
-                  ? 'A monitor feed for hearing what your viewers hear. Doubles up only if your streaming software also monitors that source to your speakers'
-                  : 'No source is open, so speech already plays here. This only matters once one is running'
+                  ? 'Lets you hear what viewers hear. You will hear it twice if your streaming software also plays the TTS audio overlay through your speakers'
+                  : 'No TTS audio overlay is open, so speech already plays here. This matters once an overlay is running'
               }
               checked={tts.monitorInDashboard}
               onChange={(monitorInDashboard) => setTts({ monitorInDashboard })}

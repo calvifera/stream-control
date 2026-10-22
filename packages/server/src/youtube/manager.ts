@@ -156,7 +156,7 @@ export class YouTubeManager extends EventEmitter {
       this.patch({
         status: 'error',
         lastError:
-          'The Data API source needs a Google sign-in. Switch the source to "No sign-in needed" on the Setup tab, or sign in.',
+          'The Data API source needs a Google sign-in. Switch the source to "Watch page (no sign-in)" on the Go live screen, or sign in.',
         connectedAt: null,
       });
       this.push(systemEvent('youtube', 'error', 'YouTube: not signed in'));

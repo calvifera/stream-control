@@ -211,7 +211,7 @@ export function Dashboard(): JSX.Element {
               </strong>
               <span>
                 {playingHere
-                  ? 'Your stream will not hear it'
+                  ? 'Only heard if this browser or your desktop audio is captured'
                   : monitoring
                     ? 'Click to stop monitoring'
                     : 'Click to also hear it here'}
@@ -327,7 +327,7 @@ function statusWord(status: ConnectionState['status'] | undefined): string {
 
 function audioHint(overlayListeners: number, monitoring: boolean): string {
   if (overlayListeners === 0) {
-    return 'No TTS browser source is open — speech plays in this tab so you can hear it, but it is not going into your stream. Add the TTS audio source and it takes over.';
+    return 'No TTS browser source is open, so speech plays in this tab. Your stream hears it only if your streaming software captures this browser or your desktop audio. Adding the TTS audio browser source sends it to the stream directly.';
   }
   return monitoring
     ? 'Speech is going to your TTS browser source and also playing here. Click to stop monitoring.'

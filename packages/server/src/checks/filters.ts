@@ -13,6 +13,7 @@ import {
   detectScripts,
   findMixedScriptWords,
   foldHomoglyphs,
+  stripLettersOutsideScripts,
   transliterate,
 } from '../text/unicode.js';
 import { stripEmoteCodes } from '../text/shortcodes.js';
@@ -396,6 +397,46 @@ check('ordinary bracketed writing is left alone', () => {
 
 check('text with no brackets is returned as-is', () => {
   assert.equal(stripEmoteCodes('no codes here'), 'no codes here');
+});
+
+/* ------------------------------------------------------------------ *
+ * Names read aloud
+ *
+ * A name is cleaned, not dropped: the bad part goes and the rest is still
+ * spoken. The full gift path is checked in `check:hub-chat`.
+ * ------------------------------------------------------------------ */
+
+console.log('\nnames read aloud');
+
+const names = new FilterEngine({
+  ...DEFAULT_FILTERS,
+  blockedWords: ['babo'],
+  blockDisallowedScripts: true,
+  allowedScripts: ['Latin'],
+});
+
+check('accented latin is kept', () => {
+  assert.equal(stripLettersOutsideScripts('Zoë Café', ['Latin']), 'Zoë Café');
+});
+
+check("a script's own vowel signs go with its letters", () => {
+  assert.equal(stripLettersOutsideScripts('Sam नमस्ते', ['Latin']).trim(), 'Sam');
+});
+
+check('a shared accent goes with the letter it sits on', () => {
+  assert.equal(stripLettersOutsideScripts('Sam ⵏ́', ['Latin']), 'Sam ');
+});
+
+check('a styled-font name is read as plain letters', () => {
+  assert.equal(names.speakableName('𝐒𝐚𝐦'), 'Sam');
+});
+
+check('leetspeak glued to digits is cut out, not the whole name', () => {
+  assert.equal(names.speakableName('b4bo99'), '99');
+});
+
+check('a name of only refused letters leaves nothing', () => {
+  assert.equal(names.speakableName('ⵏⵉⴳⵔ ♥'), '');
 });
 
 

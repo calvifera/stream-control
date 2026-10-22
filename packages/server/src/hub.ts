@@ -77,7 +77,7 @@ export class Hub {
   readonly avatarPoller: AvatarPoller;
   readonly filters: FilterEngine;
   private readonly chatScreen: ChatScreen;
-  readonly rules = new RuleEngine();
+  readonly rules = new RuleEngine((name) => this.filters.speakableName(name));
   readonly tts: TtsEngine;
   readonly tiktok: TikTokManager;
   readonly twitch: TwitchManager;

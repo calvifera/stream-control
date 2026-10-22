@@ -566,6 +566,21 @@ export const OVERLAY_TYPES = [
 
 export type OverlayType = (typeof OVERLAY_TYPES)[number];
 
+/** What each overlay type is called on screen. The ids above are for code, not people. */
+export const OVERLAY_TYPE_LABELS: Record<OverlayType, string> = {
+  chat: 'Chat',
+  alerts: 'Alerts',
+  tts: 'TTS audio',
+  goal: 'Goal bar',
+  ticker: 'Event ticker',
+  leaderboard: 'Leaderboard',
+  counter: 'Stat counters',
+  slideshow: 'Slideshow',
+  giftSpotlight: 'Gift spotlight',
+  giftRain: 'Gift rain',
+  custom: 'Custom HTML',
+};
+
 export interface OverlayStyle {
   fontFamily: string;
   fontSize: number;
